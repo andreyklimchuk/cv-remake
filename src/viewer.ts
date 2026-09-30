@@ -1,0 +1,71 @@
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { ModelLibrary } from './game/assets/ModelLibrary';
+import { ClaireModel, type AnimParams } from './game/player/ClaireModel';
+import { ZombieModel, type ZombieOutfit } from './game/ai/ZombieModel';
+
+/** Model viewer: play.html?viewer=claire&pose=idle|aim|run|pain&yaw=0&shot=full|face|torso|feet */
+export async function runViewer(): Promise<void> {
+  const q = new URLSearchParams(location.search);
+  document.getElementById('ui')!.innerHTML = '';
+  const canvas = document.getElementById('game') as HTMLCanvasElement;
+  const r = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+  r.setPixelRatio(1); r.setSize(innerWidth, innerHeight);
+  r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap;
+  r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 1.0;
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x202328);
+  const pm = new THREE.PMREMGenerator(r);
+  scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture;
+  scene.environmentIntensity = 0.45;
+  const key = new THREE.DirectionalLight(0xfff1e0, 2.6); key.position.set(1.5, 3, 2.5); key.castShadow = true;
+  key.shadow.mapSize.set(2048, 2048); key.shadow.camera.left = -1.5; key.shadow.camera.right = 1.5; key.shadow.camera.top = 2.2; key.shadow.camera.bottom = -0.2;
+  key.shadow.bias = -0.0004; key.shadow.normalBias = 0.02;
+  scene.add(key);
+  const rim = new THREE.DirectionalLight(0x9fc0ff, 1.6); rim.position.set(-2, 2.5, -2.5); scene.add(rim);
+  const fill = new THREE.DirectionalLight(0xffd0b0, 0.5); fill.position.set(-2, 1, 2); scene.add(fill);
+  const floor = new THREE.Mesh(new THREE.CircleGeometry(3, 48), new THREE.MeshStandardMaterial({ color: 0x3a3b3e, roughness: 0.8 }));
+  floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+
+  await ModelLibrary.preload();
+  const which = q.get('viewer') || 'claire';
+  const pose = q.get('pose') || 'idle';
+  const claire = new ClaireModel(2048);
+  let zombie: ZombieModel | null = null;
+  if (which.startsWith('zombie')) {
+    zombie = new ZombieModel(which.replace('zombie_', '') as ZombieOutfit, 2048, Number(q.get('seed') || 0));
+    zombie.root.scale.setScalar(1);
+    scene.add(zombie.root);
+    const r = zombie.rig;
+    if (pose === 'chase') {
+      r.lUpperArm.rotation.set(-1.35, 0, -0.1); r.rUpperArm.rotation.set(-1.25, 0, 0.1); r.lForearm.rotation.x = -0.2; r.rForearm.rotation.x = -0.25;
+      r.spine.rotation.x = 0.25; r.neck.rotation.set(0.2, 0, 0.2); r.lThigh.rotation.x = -0.3; r.rThigh.rotation.x = 0.25; r.lShin.rotation.x = 0.3;
+    } else { r.lUpperArm.rotation.z = 0.08; r.rUpperArm.rotation.z = -0.08; r.spine.rotation.x = 0.12; r.neck.rotation.z = 0.25; }
+    r.hips.position.y = zombie.hipRest - 0.02;
+    if (q.get('sever')) { const piece = zombie.sever(q.get('sever') as any); if (piece) { piece.position.set(0.5, 0.1, 0.3); piece.rotation.z = 1.4; scene.add(piece); } }
+  } else scene.add(claire.root);
+  if (pose === 'aim' || pose === 'gun') claire.setWeapon(q.get('weapon') || 'm9f');
+  const yaw = (Number(q.get('yaw') || 0) * Math.PI) / 180;
+  const cam = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.05, 50);
+  const shots: Record<string, [number, number, number]> = { full: [0.95, 4.2, 0], torso: [1.2, 1.9, 0], face: [1.58, 0.62, 0], feet: [0.2, 1.4, 0], hands: [0.95, 1.4, 0] };
+  const [ty, dist] = shots[q.get('shot') || 'full'] ?? shots.full;
+  cam.position.set(Math.sin(yaw) * dist, ty + 0.05, Math.cos(yaw) * dist); cam.lookAt(0, ty, 0);
+  const p: AnimParams = {
+    speed: pose === 'run' ? 4 : 0, localMove: new THREE.Vector2(0, pose === 'run' ? 1 : 0), running: pose === 'run', aim: pose === 'aim',
+    aimPitch: 0, aimPoint: new THREE.Vector3(0, 1.4, 10), state: 'normal', stateT: 0, dodgeDir: new THREE.Vector2(),
+    hpRatio: 1, reloading: false, lookTarget: new THREE.Vector3(0, 1.55, 5),
+  };
+  if (pose === 'pain') claire.expressionPain = 5;
+  const t0 = performance.now();
+  let frames = 0;
+  const tick = () => {
+    const t = (performance.now() - t0) / 1000;
+    if (!zombie) claire.animate(1 / 60, t, p);
+    r.render(scene, cam);
+    frames++;
+    (window as any).__frames = frames; (window as any).__viewerReady = frames > 4 && !!ModelLibrary.has(which);
+    requestAnimationFrame(tick);
+  };
+  tick();
+  (window as any).__viewerInfo = () => ({ calls: r.info.render.calls, tris: r.info.render.triangles, detailed: zombie ? zombie.detailed : claire.detailed });
+}

@@ -1,0 +1,32 @@
+import { chromium } from 'playwright';
+const quality = process.argv[2] || 'low';
+const browser = await chromium.launch({ executablePath: '/usr/local/bin/chromium', args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'] });
+const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+const errors = [];
+page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(m.type() + ': ' + m.text()); });
+page.on('pageerror', (e) => errors.push('PAGEERROR: ' + e.message + '\n' + e.stack));
+await page.addInitScript((q) => localStorage.setItem('cv.settings', JSON.stringify({ quality: q, sensitivity: 1, aimAssist: 0.5, volume: 0, invertY: false })), quality);
+await page.goto('file:///data/cv-remake/dist/play.html');
+await page.waitForTimeout(1500);
+await page.screenshot({ path: `/data/cv-remake/shots/title.png` });
+await page.click('text=НОВАЯ ИГРА');
+await page.waitForTimeout(6000);
+await page.screenshot({ path: `/data/cv-remake/shots/${quality}_start.png` });
+// walk forward a bit
+await page.keyboard.down('KeyW'); await page.waitForTimeout(1500); await page.keyboard.up('KeyW');
+await page.evaluate(() => { const g = window.__game; g.debug = true; });
+await page.waitForTimeout(800);
+await page.screenshot({ path: `/data/cv-remake/shots/${quality}_walk.png` });
+// aim
+await page.mouse.move(640, 360);
+await page.mouse.down({ button: 'right' });
+await page.waitForTimeout(1200);
+await page.screenshot({ path: `/data/cv-remake/shots/${quality}_aim.png` });
+await page.mouse.down({ button: 'left' }); await page.mouse.up({ button: 'left' });
+await page.waitForTimeout(150);
+await page.screenshot({ path: `/data/cv-remake/shots/${quality}_fire.png` });
+await page.mouse.up({ button: 'right' });
+const info = await page.evaluate(() => { const g = window.__game; const w = g.world; return { mode: g.mode, pos: w.player.pos.toArray(), hp: w.player.hp, zombies: w.zombies.map(z => z.state + (z.alive ? '' : '(dead)')), calls: g.backend.stats(), fps: g.fps, shots: w.weapons.shots, mag: w.weapons.inMag() }; });
+console.log(JSON.stringify(info));
+console.log(errors.slice(0, 15).join('\n'));
+await browser.close();

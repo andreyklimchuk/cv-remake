@@ -1,0 +1,62 @@
+{
+ "assets/blender/claire.blend": {
+  "parts": 19,
+  "sha1": "10b239380d790c7ae685401f502c47feab549bdc",
+  "bytes": 9811653,
+  "gzip": true
+ },
+ "assets/blender/weapon_knife.blend": {
+  "parts": 1,
+  "sha1": "899539eab386d8872ee22c71368b126811ec69e5",
+  "bytes": 142481,
+  "gzip": true
+ },
+ "assets/blender/weapon_m9f.blend": {
+  "parts": 1,
+  "sha1": "b07762f90441182203d8ca9aced97e69e0158bf3",
+  "bytes": 284681,
+  "gzip": true
+ },
+ "assets/blender/zombie_guard.blend": {
+  "parts": 6,
+  "sha1": "0a7e10983714644ec0813a14e70d9e3a4d311e57",
+  "bytes": 2944885,
+  "gzip": true
+ },
+ "assets/blender/zombie_prisoner.blend": {
+  "parts": 6,
+  "sha1": "de81ea43d984777876d5fd27cf01bb9b97b4a1f1",
+  "bytes": 2920884,
+  "gzip": true
+ },
+ "src/assets/models/claire.glb": {
+  "parts": 18,
+  "sha1": "efaa1d40a58eb76329b5e870007b322b85801c3b",
+  "bytes": 15814972,
+  "gzip": true
+ },
+ "src/assets/models/weapon_knife.glb": {
+  "parts": 1,
+  "sha1": "a99cc6b1fcdc758b6b4fc249bd31362296789e86",
+  "bytes": 78992,
+  "gzip": true
+ },
+ "src/assets/models/weapon_m9f.glb": {
+  "parts": 1,
+  "sha1": "a4cfccfa63d67d0654387c4bda16510665cb8d38",
+  "bytes": 354768,
+  "gzip": true
+ },
+ "src/assets/models/zombie_guard.glb": {
+  "parts": 5,
+  "sha1": "59cae5e75f46447a49a643a8d784ba957a731e4a",
+  "bytes": 3365828,
+  "gzip": true
+ },
+ "src/assets/models/zombie_prisoner.glb": {
+  "parts": 5,
+  "sha1": "a90c3f0642d668831995d27c5e3caa08a27fa039",
+  "bytes": 3301192,
+  "gzip": true
+ }
+}
