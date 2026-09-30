@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { ITEMS } from '../inventory/Items';
 import { makeWeaponModel } from '../player/WeaponModels';
+import { ModelLibrary } from '../assets/ModelLibrary';
 
 const mat = (c: number, e = 0, metal = 0.1, rough = 0.6) => new THREE.MeshStandardMaterial({ color: c, emissive: e, metalness: metal, roughness: rough });
 
@@ -8,6 +9,14 @@ const mat = (c: number, e = 0, metal = 0.1, rough = 0.6) => new THREE.MeshStanda
 export function makeItemMesh(defId: string): THREE.Object3D {
   const def = ITEMS[defId];
   const g = new THREE.Group();
+  const glb = def.kind !== 'weapon' ? ModelLibrary.get('item_' + defId) : undefined;
+  if (glb) {
+    // Blender-authored detailed pickup (origin on the floor, real-world scale)
+    const m = glb.scene.clone(true);
+    m.rotation.y = (defId.length * 1.7) % (Math.PI * 2);
+    g.add(m);
+    return g;
+  }
   const add = (geo: THREE.BufferGeometry, m: THREE.Material, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0) => {
     const mesh = new THREE.Mesh(geo, m); mesh.position.set(x, y, z); mesh.rotation.set(rx, ry, rz); mesh.castShadow = true; g.add(mesh); return mesh;
   };

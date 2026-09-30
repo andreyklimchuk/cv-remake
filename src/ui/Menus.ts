@@ -15,7 +15,6 @@ const CONTROLS = `
 <tr><td>ПКМ (удерж.)</td><td>прицел от плеча</td></tr>
 <tr><td>ЛКМ</td><td>выстрел</td></tr>
 <tr><td>Shift</td><td>бег</td></tr>
-<tr><td>Space</td><td>уворот (i-frames)</td></tr>
 <tr><td>R</td><td>перезарядка / смена гранат</td></tr>
 <tr><td>F</td><td>нож · добивание лежачих · контратака</td></tr>
 <tr><td>Q</td><td>оттолкнуть зомби</td></tr>
@@ -24,7 +23,7 @@ const CONTROLS = `
 <tr><td>1–8 / колесо</td><td>смена оружия</td></tr>
 <tr><td>Esc</td><td>пауза</td></tr>
 <tr><td>F3</td><td>отладка (FPS, draw calls)</td></tr>
-<tr><td>Геймпад</td><td>LS/RS · LT прицел · RT огонь · A уворот · B нож · X перезарядка · Y действие · LB толчок</td></tr>
+<tr><td>Геймпад</td><td>LS/RS · LT прицел · RT огонь · B нож · X перезарядка · Y действие · LB толчок</td></tr>
 </table>`;
 
 /** Title / pause / settings / death / end screens and confirm dialogs (DOM). */

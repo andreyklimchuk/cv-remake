@@ -24,8 +24,8 @@ const ACTION_TIME: Partial<Record<ClaireState, number>> = {
 
 /**
  * Claire's third-person controller.
- * Walk / Run(Shift) / Aim-walk strafe / Dodge(Space, i-frames) / Shove(Q) / Knife(F) /
- * Knife finisher on downed enemies / Grab struggle + knife counter / stamina / limp at Danger.
+ * Walk / Run(Shift) / Aim-walk strafe / Shove(Q) / Knife(F) /
+ * Knife finisher on downed enemies / Grab struggle + knife counter / limp at Danger.
  */
 export class PlayerController {
   model: ClaireModel;
@@ -34,7 +34,8 @@ export class PlayerController {
   yaw = 0;
   hp = 100;
   maxHp = 100;
-  stamina = 100;
+  /** Stamina removed from design; kept constant for weapon-sway API compatibility. */
+  readonly stamina = 100;
   poisoned = false;
   defenseT = 0;
   state: ClaireState = 'normal';
@@ -48,7 +49,6 @@ export class PlayerController {
   private actionDone = false;
   private dodgeDir = new THREE.Vector2();
   private dodgeWorld = new THREE.Vector3();
-  private staminaLock = false;
   private heartbeatT = 0;
   private actionTarget: PlayerTarget | null = null;
   indoor = false;
@@ -127,7 +127,7 @@ export class PlayerController {
 
     const danger = this.status() === 'danger';
     let targetSpeed = 0;
-    const running = input.run() && !this.staminaLock && wishLen > 0.1;
+    const running = input.run() && wishLen > 0.1;
 
     if (this.state === 'normal') {
       this.aiming = input.aim() && weapons.def.type !== 'melee';
@@ -139,28 +139,16 @@ export class PlayerController {
         targetSpeed = (running ? (danger ? 2.9 : 4.3) : (danger ? 1.5 : 2.2)) * wishLen;
       }
       // actions
-      if (input.dodge() && this.stamina >= 20) this.startDodge(mx, my, wish, fwd);
-      else if (input.knife()) this.startKnife(targets);
-      else if (input.shove() && this.stamina >= 15) this.startShove(targets);
+      if (input.knife()) this.startKnife(targets);
+      else if (input.shove()) this.startShove(targets);
     } else {
       this.aiming = false;
     }
 
-    // stamina
-    if (running && this.state === 'normal' && !this.aiming) this.stamina -= 9 * dt;
-    else this.stamina = Math.min(100, this.stamina + (this.aiming ? 8 : 16) * dt);
-    if (this.stamina <= 0) { this.stamina = 0; this.staminaLock = true; }
-    if (this.staminaLock && this.stamina > 30) this.staminaLock = false;
 
     // ----- state machines --------------------------------------------------
     const desired = wish.clone().multiplyScalar(targetSpeed);
     switch (this.state) {
-      case 'dodge': {
-        const sp = 6.5 * Math.pow(1 - k, 1.6);
-        desired.copy(this.dodgeWorld).multiplyScalar(sp);
-        this.vel.copy(desired);
-        break;
-      }
       case 'knife':
         desired.set(0, 0, 0);
         if (!this.actionDone && this.stateTime > 0.14) {
@@ -276,18 +264,6 @@ export class PlayerController {
     return best ? best.position.clone().add(new THREE.Vector3(0, 1.5, 0)) : null;
   }
 
-  private startDodge(mx: number, my: number, wish: THREE.Vector3, camFwd: THREE.Vector3): void {
-    this.stamina -= 20;
-    if (Math.hypot(mx, my) < 0.1) {
-      this.dodgeWorld.copy(camFwd).negate();
-      my = -1; mx = 0;
-    } else this.dodgeWorld.copy(wish);
-    // dodge direction relative to body for the animation lean
-    const local = this.dodgeWorld.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), -this.yaw);
-    this.dodgeDir.set(local.x, local.z);
-    this.setState('dodge');
-    audio.footstep(this.pos, true, !this.indoor);
-  }
 
   private startKnife(targets: PlayerTarget[]): void {
     for (const z of targets) {
@@ -303,7 +279,6 @@ export class PlayerController {
   }
 
   private startShove(targets: PlayerTarget[]): void {
-    this.stamina -= 15;
     let best: PlayerTarget | null = null, bd = 2.2;
     for (const z of targets) {
       if (!z.alive) continue;

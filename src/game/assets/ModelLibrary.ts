@@ -12,6 +12,9 @@ const zombieUrls = import.meta.glob('../../assets/models/zombie_*.glb', { query:
 for (const [p, u] of Object.entries(zombieUrls)) URLS[p.split('/').pop()!.replace('.glb', '')] = u;
 const WEAPON_URLS = import.meta.glob('../../assets/models/weapon_*.glb', { query: '?url', import: 'default', eager: true }) as Record<string, string>;
 for (const [p, u] of Object.entries(WEAPON_URLS)) URLS[p.split('/').pop()!.replace('.glb', '')] = u;
+// detailed pickup items and level props (tools/blender/items.py, props.py)
+const PROP_URLS = import.meta.glob(['../../assets/models/item_*.glb', '../../assets/models/prop_*.glb'], { query: '?url', import: 'default', eager: true }) as Record<string, string>;
+for (const [p, u] of Object.entries(PROP_URLS)) URLS[p.split('/').pop()!.replace('.glb', '')] = u;
 
 const cache = new Map<string, GLTF>();
 

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { bus } from '../engine/Events';
+import { iconHTML } from './ItemIcons';
 
 /** In-game HUD: RE-style ECG health, ammo, dynamic reticle, prompts, messages, debug overlay. */
 export class HUD {
@@ -9,7 +10,9 @@ export class HUD {
   private ecg: HTMLCanvasElement;
   private ecgCtx: CanvasRenderingContext2D;
   private statusLabel: HTMLDivElement;
-  private stamina: HTMLDivElement;
+  private wicon = '';
+  private ammoShowT = 0;
+  private lastMag = -1;
   private reticle: HTMLCanvasElement;
   private prompt: HTMLDivElement;
   private msgs: HTMLDivElement;
@@ -24,8 +27,8 @@ export class HUD {
   constructor(parent: HTMLElement) {
     this.root = document.createElement('div');
     this.root.innerHTML = `
-      <div class="hud-health"><canvas width="400" height="112"></canvas><div class="label">FINE</div><div class="hud-stamina"><div></div></div></div>
-      <div class="hud-ammo"><div class="wname"></div><div class="count"></div><div class="sub"></div></div>
+      <div class="hud-health"><canvas width="400" height="112"></canvas><div class="label">FINE</div></div>
+      <div class="hud-ammo"><div class="wico"></div><div class="nums"><div class="wname"></div><div class="count"></div><div class="res"></div><div class="sub"></div></div></div>
       <canvas class="reticle" width="220" height="220"></canvas>
       <div class="prompt hidden"></div>
       <div class="messages"></div>
@@ -38,7 +41,6 @@ export class HUD {
     this.ecg = q('.hud-health canvas');
     this.ecgCtx = this.ecg.getContext('2d')!;
     this.statusLabel = q('.hud-health .label');
-    this.stamina = q('.hud-stamina > div');
     this.ammo = q('.hud-ammo');
     this.reticle = q('.reticle');
     this.prompt = q('.prompt');
@@ -77,14 +79,14 @@ export class HUD {
   }
 
   update(dt: number, s: {
-    hpRatio: number; status: 'fine' | 'caution' | 'danger'; poisoned: boolean; stamina: number; aiming: boolean;
-    weaponName: string; mag: number; reserve: number; melee: boolean; sub: string; reloading: boolean;
+    hpRatio: number; status: 'fine' | 'caution' | 'danger'; poisoned: boolean; aiming: boolean;
+    weaponId: string; weaponName: string; mag: number; reserve: number; melee: boolean; sub: string; reloading: boolean;
     spreadDeg: number; fov: number; onTarget: boolean;
   }): void {
     // ECG — always drawn, panel fades in when aiming / hurt / low
     this.healthShowT -= dt;
     const visible = s.aiming || this.healthShowT > 0 || s.status !== 'fine';
-    this.health.style.opacity = visible ? '1' : '0.25';
+    this.health.style.opacity = visible ? '1' : '0';
     const col = s.poisoned ? '#b05ce8' : s.status === 'fine' ? '#3ddc6a' : s.status === 'caution' ? '#e8c33a' : '#e8412e';
     const bpm = s.status === 'fine' ? 1.1 : s.status === 'caution' ? 1.5 : 2.2;
     const g = this.ecgCtx;
@@ -108,13 +110,17 @@ export class HUD {
     if (this.ecgX > W) { this.ecgX = 0; g.clearRect(0, 0, 20, H); }
     this.statusLabel.textContent = s.poisoned ? 'POISON' : s.status.toUpperCase();
     this.statusLabel.style.color = col;
-    this.stamina.style.width = `${s.stamina}%`;
-    this.stamina.style.background = s.stamina < 20 ? '#e8412e' : '#9ab';
 
-    // ammo
+    // ammo — RE2R style: weapon icon + loaded rounds (large) over reserve (green); fades out when idle
+    if (this.wicon !== s.weaponId) { this.wicon = s.weaponId; (this.ammo.querySelector('.wico') as HTMLElement).innerHTML = iconHTML(s.weaponId); this.ammoShowT = 3; }
+    if (s.mag !== this.lastMag) { this.lastMag = s.mag; this.ammoShowT = Math.max(this.ammoShowT, 2); }
+    this.ammoShowT -= dt;
+    this.ammo.style.opacity = s.aiming || s.reloading || this.ammoShowT > 0 ? '1' : '0.28';
     (this.ammo.querySelector('.wname') as HTMLElement).textContent = s.weaponName;
-    (this.ammo.querySelector('.count') as HTMLElement).innerHTML = s.melee ? '∞' : `${s.mag}<small> / ${s.reserve}</small>`;
-    (this.ammo.querySelector('.sub') as HTMLElement).textContent = s.reloading ? 'RELOADING…' : s.sub;
+    (this.ammo.querySelector('.count') as HTMLElement).textContent = s.melee ? '—' : `${s.mag}`;
+    (this.ammo.querySelector('.res') as HTMLElement).textContent = s.melee ? '' : `${s.reserve}`;
+    (this.ammo.querySelector('.res') as HTMLElement).style.display = s.melee ? 'none' : '';
+    (this.ammo.querySelector('.sub') as HTMLElement).textContent = s.reloading ? 'ПЕРЕЗАРЯДКА…' : s.sub;
     (this.ammo.querySelector('.count') as HTMLElement).style.color = !s.melee && s.mag === 0 ? '#e8412e' : '';
 
     // reticle — radius mirrors the real spread cone

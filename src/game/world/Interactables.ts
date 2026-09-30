@@ -48,7 +48,7 @@ export class ItemPickup implements Interactable {
   prompt(): string { return `Взять: ${ITEMS[this.defId].name}${this.qty > 1 ? ' ×' + this.qty : ''}`; }
   interact(g: GameAPI): void {
     const left = g.inventory.add(this.defId, this.qty);
-    if (left === this.qty) { g.message('Нет места в кейсе.'); return; }
+    if (left === this.qty) { g.message('Инвентарь полон. Освободите слот или оставьте предметы в сундуке.'); return; }
     audio.pickup();
     g.message(`Получено: ${ITEMS[this.defId].name}${this.qty - left > 1 ? ' ×' + (this.qty - left) : ''}`);
     if (left > 0) { this.qty = left; return; }

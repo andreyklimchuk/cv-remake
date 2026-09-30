@@ -23,7 +23,7 @@ export class World {
   physics = new PhysicsWorld();
   nav: NavGraph;
   streamer: ZoneStreamer;
-  inventory = new Inventory(8, 6);
+  inventory = new Inventory(4, 2);
   itemBox = new ItemBox();
   flags: Set<string>;
   player: PlayerController;
@@ -83,8 +83,8 @@ export class World {
       this.player.yaw = save.player.yaw;
       this.player.hp = save.player.hp;
       this.player.poisoned = save.player.poisoned;
-      this.inventory.load(save.inventory);
-      this.itemBox.items = save.box.map((i) => ({ ...i }));
+      const overflow = this.inventory.load(save.inventory);
+      this.itemBox.items = [...save.box.map((i) => ({ ...i })), ...overflow];
       this.stats = { ...save.stats };
     } else {
       this.player.pos.copy(this.level.spawn.pos);

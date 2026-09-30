@@ -11,7 +11,7 @@ import { HUD } from '../ui/HUD';
 import { InventoryUI } from '../ui/InventoryUI';
 import { Menus, loadSettings, saveSettings, type Settings } from '../ui/Menus';
 import { SaveSystem } from './SaveSystem';
-import { ITEMS, type ItemInstance } from './inventory/Items';
+import { ITEMS, newUid, type ItemInstance } from './inventory/Items';
 import { WEAPONS } from './combat/Weapons';
 import type { GameAPI } from './world/Interactables';
 
@@ -202,14 +202,16 @@ export class Game {
   private cheat(): void {
     const w = this.world!;
     const inv = w.inventory;
-    inv.cols = 8; inv.rows = 6;
     const give: [string, number, Partial<ItemInstance>][] = [
       ['m3', 1, { mag: 5 }], ['mp5', 1, { mag: 30 }], ['python', 1, { mag: 6 }], ['gl', 1, { mag: 1, loaded: 'gren_exp' }], ['linear', 1, { mag: 1 }], ['bowgun', 1, { mag: 18 }],
       ['ammo_smg', 90, {}], ['ammo_mag', 12, {}], ['gren_fire', 4, {}], ['gren_acid', 4, {}], ['gren_exp', 4, {}], ['ammo_sg', 20, {}], ['ammo_hg', 45, {}],
     ];
     let failed = 0;
-    for (const [id, q, ex] of give) if (!inv.has(id) || ITEMS[id].kind === 'ammo') failed += inv.add(id, q, ex) > 0 ? 1 : 0;
-    this.hud.message(failed ? 'DEBUG: арсенал выдан частично (кейс полон — используйте сундук).' : 'DEBUG: выдан весь арсенал Клэр.');
+    for (const [id, q, ex] of give) {
+      if (inv.has(id) && ITEMS[id].kind !== 'ammo') continue;
+      if (inv.add(id, q, ex) > 0) { failed++; w.itemBox.items.push({ uid: newUid(), defId: id, qty: q, x: 0, y: 0, rot: false, ...ex }); }
+    }
+    this.hud.message(failed ? 'DEBUG: часть арсенала отправлена в сундук (8 слотов заняты).' : 'DEBUG: выдан весь арсенал Клэр.');
   }
 
   // ---------------------------------------------------------------- frame
@@ -248,15 +250,15 @@ export class Game {
       this.backend.setDamage(Math.max(0, 0.55 - hp) * 1.4 + (p.state === 'grabbed' ? 0.3 : 0));
       const wp = w.weapons;
       this.hud.update(dt, {
-        hpRatio: hp, status: p.status(), poisoned: p.poisoned, stamina: p.stamina, aiming: p.aiming,
-        weaponName: wp.def.name, mag: wp.inMag(), reserve: wp.reserve(), melee: wp.def.type === 'melee',
+        hpRatio: hp, status: p.status(), poisoned: p.poisoned, aiming: p.aiming,
+        weaponId: wp.current?.defId ?? 'knife', weaponName: wp.def.name, mag: wp.inMag(), reserve: wp.reserve(), melee: wp.def.type === 'melee',
         sub: wp.def.id === 'gl' ? ITEMS[wp.ammoType()].name : wp.current?.mods?.length ? wp.current.mods.map((m) => ITEMS[m].name.replace('M9F ', '').replace('M3 ', '')).join(' · ') : '',
         reloading: wp.isReloading(), spreadDeg: wp.spreadDeg({ moveSpeed: p.speed(), hpRatio: hp, staminaRatio: p.stamina / 100 }), fov: this.camera.fov, onTarget: !!wp.aimTarget,
       });
       if (this.debug) {
         const st = this.backend.stats();
         const active = w.zombies.filter((z) => z.alive).length;
-        this.hud.setDebug(`FPS ${this.fps.toFixed(0)}  |  ${RenderCaps.backend.toUpperCase()}  |  ${this.backend.preset.label}\ndraw calls ${st.calls}  tris ${(st.triangles / 1000).toFixed(0)}k\nzone ${w.streamer.current?.id ?? '-'}  built ${[...w.streamer.zones.values()].filter((z) => z.built).map((z) => z.id).join(',')}\nzombies alive ${active}/${w.zombies.length}  nav ${w.nav.nodes.length}\npos ${p.pos.x.toFixed(1)}, ${p.pos.z.toFixed(1)}  hp ${p.hp.toFixed(0)}  st ${p.stamina.toFixed(0)}`);
+        this.hud.setDebug(`FPS ${this.fps.toFixed(0)}  |  ${RenderCaps.backend.toUpperCase()}  |  ${this.backend.preset.label}\ndraw calls ${st.calls}  tris ${(st.triangles / 1000).toFixed(0)}k\nzone ${w.streamer.current?.id ?? '-'}  built ${[...w.streamer.zones.values()].filter((z) => z.built).map((z) => z.id).join(',')}\nzombies alive ${active}/${w.zombies.length}  nav ${w.nav.nodes.length}\npos ${p.pos.x.toFixed(1)}, ${p.pos.z.toFixed(1)}  hp ${p.hp.toFixed(0)}`);
       }
     }
     if (this.input.debugToggle()) { this.debug = !this.debug; if (!this.debug) this.hud.setDebug(null); }

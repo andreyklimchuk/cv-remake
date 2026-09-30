@@ -1,7 +1,8 @@
-import { ITEMS, footprint, type ItemInstance } from '../game/inventory/Items';
+import { ITEMS, type ItemInstance } from '../game/inventory/Items';
 import type { Inventory, ItemBox } from '../game/inventory/Inventory';
 import { combine, magSize } from '../game/inventory/Crafting';
 import { audio } from '../engine/AudioEngine';
+import { iconHTML } from './ItemIcons';
 
 export interface InventoryHost {
   inventory: Inventory;
@@ -13,213 +14,267 @@ export interface InventoryHost {
   onClose(): void;
 }
 
-const CELL = 58;
+type Focus = { area: 'inv' | 'box'; index: number };
 
 /**
- * Attaché-case inventory (8×6 Tetris grid).
- * Drag & drop to move, R while dragging to rotate, drop an item onto another to combine,
- * side panel actions: Use / Equip / Combine / Examine / Discard / Store in box.
+ * RE2-Remake style inventory: condition ECG + equipped weapon on the left, 8 item slots (4×2)
+ * on the right, item name/description underneath, context menu per item
+ * (Use / Equip / Examine / Combine / Discard, Store in item-box mode).
+ * Mouse: click a slot → menu. Keyboard: arrows/WASD — move, Enter/E/Space — menu, Backspace — back.
  */
 export class InventoryUI {
   root: HTMLDivElement;
-  private grid!: HTMLDivElement;
-  private side!: HTMLDivElement;
-  private boxPanel!: HTMLDivElement;
-  private selected: ItemInstance | null = null;
+  private focus: Focus = { area: 'inv', index: 0 };
+  private menu: { it: ItemInstance; area: 'inv' | 'box'; index: number } | null = null;
+  private menuSel = 0;
   private combineSrc: ItemInstance | null = null;
-  private drag: { it: ItemInstance; el: HTMLDivElement; rot: boolean; offX: number; offY: number; ghost: HTMLDivElement } | null = null;
+  private examine: ItemInstance | null = null;
+  private note = '';
   private boxMode = false;
+  private raf = 0;
+  private ecgPhase = 0;
   isOpen = false;
 
   constructor(parent: HTMLElement, private host: InventoryHost) {
     this.root = document.createElement('div');
     this.root.className = 'inv hidden';
     parent.appendChild(this.root);
-    window.addEventListener('pointermove', (e) => this.onMove(e));
-    window.addEventListener('pointerup', (e) => this.onUp(e));
-    window.addEventListener('keydown', (e) => {
-      if (!this.isOpen) return;
-      if (e.code === 'KeyR' && this.drag) { this.drag.rot = !this.drag.rot; this.layoutDrag(e as unknown as PointerEvent); }
-      if (e.code === 'Tab') e.preventDefault(); // closing is handled by the game loop (Tab / I / Esc)
-    });
+    window.addEventListener('keydown', (e) => this.onKey(e), true);
   }
 
   open(boxMode = false): void {
     this.boxMode = boxMode;
     this.isOpen = true;
-    this.selected = null; this.combineSrc = null;
+    this.menu = null; this.combineSrc = null; this.examine = null; this.note = '';
+    this.focus = { area: 'inv', index: 0 };
     this.root.classList.remove('hidden');
     this.render();
+    const loop = () => { if (!this.isOpen) return; this.drawEcg(); this.raf = requestAnimationFrame(loop); };
+    cancelAnimationFrame(this.raf);
+    this.raf = requestAnimationFrame(loop);
   }
 
   close(): void {
     if (!this.isOpen) return;
     this.isOpen = false;
+    cancelAnimationFrame(this.raf);
     this.root.classList.add('hidden');
     this.host.onClose();
   }
 
+  // ------------------------------------------------------------------ render
   render(): void {
     const inv = this.host.inventory;
     const st = this.host.status();
-    this.root.innerHTML = `
-      <div class="inv-case"><h3>ATTACHÉ CASE — ${inv.cols}×${inv.rows}</h3>
-        <div class="inv-grid" style="width:${inv.cols * CELL}px;height:${inv.rows * CELL}px;background-size:${CELL}px ${CELL}px"></div></div>
-      <div class="inv-side">
-        <h3>CLAIRE REDFIELD</h3>
-        <div style="font-family:Georgia,serif;font-size:22px;letter-spacing:4px;color:${st.color};margin-bottom:14px">${st.label} <small style="font-size:13px;color:#888">${Math.ceil(st.hp)}%</small></div>
-        <div class="desc"></div>
-        <div class="actions" style="margin-top:10px;display:flex;flex-wrap:wrap;gap:4px"></div>
-        <div class="box-panel ${this.boxMode ? '' : 'hidden'}" style="margin-top:16px"><h3>СУНДУК</h3><div class="box-list"></div></div>
-        <div class="inv-hint">ЛКМ — выбрать · перетаскивание — переместить · R — повернуть<br/>Перетащите предмет на другой — совместить · Tab/Esc — закрыть</div>
-      </div>`;
-    this.grid = this.root.querySelector('.inv-grid')!;
-    this.side = this.root.querySelector('.inv-side')!;
-    this.boxPanel = this.root.querySelector('.box-list')!;
-    const eq = this.host.equippedUid();
-    for (const it of inv.items) {
-      const el = this.tile(it, eq === it.uid);
-      el.style.left = `${it.x * CELL}px`;
-      el.style.top = `${it.y * CELL}px`;
-      el.addEventListener('pointerdown', (e) => this.onDown(e, it, el));
-      el.addEventListener('dblclick', () => this.primary(it));
-      this.grid.appendChild(el);
-    }
-    this.renderSide();
-    if (this.boxMode) this.renderBox();
-  }
-
-  private tile(it: ItemInstance, equipped: boolean): HTMLDivElement {
-    const d = ITEMS[it.defId];
-    const { w, h } = footprint(it);
-    const el = document.createElement('div');
-    el.className = 'inv-item' + (equipped ? ' equipped' : '') + (this.combineSrc?.uid === it.uid ? ' combine-src' : '');
-    el.style.width = `${w * CELL - 2}px`;
-    el.style.height = `${h * CELL - 2}px`;
-    el.style.background = `linear-gradient(135deg, ${d.color}cc, #111c)`;
-    const qty = d.kind === 'weapon' && d.weaponId !== 'knife' ? `${it.mag ?? 0}` : d.maxStack > 1 ? `${it.qty}` : '';
-    el.innerHTML = `<span style="transform:${it.rot ? 'rotate(90deg)' : 'none'}">${d.glyph}</span><span class="nm">${d.name}</span><span class="qty">${qty}</span>`;
-    if (this.selected?.uid === it.uid) el.style.boxShadow = '0 0 0 2px #fff inset';
-    return el;
-  }
-
-  private renderSide(): void {
-    const desc = this.side.querySelector('.desc') as HTMLDivElement;
-    const actions = this.side.querySelector('.actions') as HTMLDivElement;
-    actions.innerHTML = '';
-    const it = this.selected;
-    if (this.combineSrc) { desc.innerHTML = `<b>Совместить:</b> ${ITEMS[this.combineSrc.defId].name}<br/>Выберите второй предмет.`; }
-    else if (!it) { desc.innerHTML = '<b>—</b><br/>Выберите предмет.'; return; }
-    else {
+    const eqUid = this.host.equippedUid();
+    const eq = eqUid != null ? inv.get(eqUid) : undefined;
+    const slots = inv.slots();
+    const focused = this.focusedItem();
+    const box = this.host.itemBox.items;
+    const slotHTML = (it: ItemInstance | null, area: 'inv' | 'box', i: number) => {
+      const f = this.focus.area === area && this.focus.index === i;
+      if (!it) return `<div class="slot empty${f ? ' focus' : ''}" data-a="${area}" data-i="${i}"></div>`;
       const d = ITEMS[it.defId];
-      let extra = '';
-      if (d.kind === 'weapon' && d.weaponId !== 'knife') extra = `<br/><span style="color:#9cc">Магазин: ${it.mag ?? 0}/${magSize(it)}${it.loaded ? ' · ' + ITEMS[it.loaded].name : ''}${it.mods?.length ? ' · Детали: ' + it.mods.map((m) => ITEMS[m].name).join(', ') : ''}</span>`;
-      desc.innerHTML = `<b>${d.name}</b><br/>${d.desc}${extra}`;
+      const qty = d.kind === 'weapon' && d.weaponId !== 'knife' ? `${it.mag ?? 0}` : d.maxStack > 1 ? `${it.qty}` : '';
+      const cls = ['slot', f ? 'focus' : '', it.uid === eqUid && area === 'inv' ? 'equipped' : '', this.combineSrc?.uid === it.uid ? 'combine-src' : '', d.kind === 'key' ? 'key' : ''].join(' ');
+      return `<div class="${cls}" data-a="${area}" data-i="${i}">${iconHTML(it.defId)}${qty ? `<span class="qty${d.kind === 'weapon' ? ' w' : ''}">${qty}</span>` : ''}</div>`;
+    };
+    let desc = '';
+    if (this.combineSrc) desc = `<h4>Совместить: ${ITEMS[this.combineSrc.defId].name}</h4><p>Выберите предмет для совмещения. Backspace — отмена.</p>`;
+    else if (this.note) desc = this.note;
+    else if (focused) desc = this.describe(focused);
+    this.root.innerHTML = `
+      <div class="inv-top"><span class="tab on">ПРЕДМЕТЫ</span><span class="tab">КАРТА</span><span class="tab">ФАЙЛЫ</span></div>
+      <div class="inv-body">
+        <div class="inv-left">
+          <div class="cond"><div class="cond-h">СОСТОЯНИЕ</div><canvas width="360" height="120"></canvas>
+            <div class="cond-l" style="color:${st.color}">${st.label}</div></div>
+          <div class="eqp"><div class="cond-h">ЭКИПИРОВАНО</div>
+            ${eq ? `<div class="eqp-row">${iconHTML(eq.defId, 'ico big')}<div><b>${ITEMS[eq.defId].name}</b>${ITEMS[eq.defId].weaponId !== 'knife' ? `<span class="am">${eq.mag ?? 0}<small> / ${magSize(eq)}</small></span>` : ''}</div></div>` : '<div class="eqp-row"><i>—</i></div>'}
+          </div>
+        </div>
+        ${this.boxMode ? `<div class="inv-box"><div class="cond-h">СУНДУК · ${box.length}</div><div class="box-grid">${box.map((it, i) => slotHTML(it, 'box', i)).join('') || '<div class="box-empty">пусто</div>'}</div></div>` : ''}
+        <div class="inv-right">
+          <div class="cond-h">ИНВЕНТАРЬ · ${inv.items.length}/${inv.capacity}</div>
+          <div class="slots" style="grid-template-columns:repeat(${inv.cols}, 1fr)">${slots.map((it, i) => slotHTML(it, 'inv', i)).join('')}</div>
+          <div class="inv-desc">${desc}</div>
+        </div>
+      </div>
+      <div class="inv-hint">ЛКМ / Enter — действия · ←↑→↓ — выбор · Backspace — назад · Tab / Esc — закрыть</div>
+      ${this.examine ? `<div class="examine"><div class="ex-ico">${iconHTML(this.examine.defId, 'ico huge')}</div><div class="ex-t">${this.describe(this.examine)}</div><div class="ex-h">ЛКМ / Backspace — назад</div></div>` : ''}`;
+    this.root.querySelectorAll<HTMLDivElement>('.slot').forEach((el) => {
+      const area = el.dataset.a as 'inv' | 'box', i = +el.dataset.i!;
+      el.addEventListener('pointerenter', () => { if (this.menu || this.examine) return; this.focus = { area, index: i }; this.refreshDesc(); this.markFocus(); });
+      el.addEventListener('pointerdown', (e) => { if (e.button !== 0) return; e.stopPropagation(); this.focus = { area, index: i }; this.activate(el); });
+      el.addEventListener('contextmenu', (e) => e.preventDefault());
+    });
+    this.root.onpointerdown = () => { if (this.examine) { this.examine = null; this.render(); } else if (this.menu) { this.menu = null; this.render(); } };
+    if (this.menu) this.renderMenu();
+    this.drawEcg(true);
+  }
+
+  private describe(it: ItemInstance): string {
+    const d = ITEMS[it.defId];
+    let extra = '';
+    if (d.kind === 'weapon' && d.weaponId !== 'knife') extra = `<p class="stat">Патроны: ${it.mag ?? 0}/${magSize(it)}${it.loaded ? ' · ' + ITEMS[it.loaded].name : ''}${it.mods?.length ? '<br/>Детали: ' + it.mods.map((m) => ITEMS[m].name).join(', ') : ''}</p>`;
+    else if (d.maxStack > 1) extra = `<p class="stat">Количество: ${it.qty}</p>`;
+    return `<h4>${d.name}</h4><p>${d.desc}</p>${extra}`;
+  }
+
+  private focusedItem(): ItemInstance | null {
+    if (this.focus.area === 'box') return this.host.itemBox.items[this.focus.index] ?? null;
+    return this.host.inventory.slots()[this.focus.index] ?? null;
+  }
+
+  private refreshDesc(): void {
+    const el = this.root.querySelector('.inv-desc');
+    const it = this.focusedItem();
+    if (el && !this.combineSrc) el.innerHTML = this.note || (it ? this.describe(it) : '');
+  }
+
+  private markFocus(): void {
+    this.root.querySelectorAll<HTMLDivElement>('.slot').forEach((el) => el.classList.toggle('focus', el.dataset.a === this.focus.area && +el.dataset.i! === this.focus.index));
+  }
+
+  // ------------------------------------------------------------------ actions
+  private actions(it: ItemInstance, area: 'inv' | 'box'): [string, () => void][] {
+    const d = ITEMS[it.defId];
+    const out: [string, () => void][] = [];
+    if (area === 'box') {
+      out.push(['Взять', () => { if (!this.host.itemBox.retrieve(this.host.inventory, it.uid)) this.flash('Инвентарь полон.'); else audio.ui(); }]);
+      out.push(['Осмотреть', () => { this.examine = it; }]);
+      return out;
     }
-    if (!it || this.combineSrc) {
-      if (this.combineSrc) this.btn(actions, 'Отмена', () => { this.combineSrc = null; this.render(); });
+    if (d.kind === 'herb') out.push(['Использовать', () => { this.host.use(it); audio.ui(); }]);
+    if (d.kind === 'weapon') out.push([this.host.equippedUid() === it.uid ? 'Экипировано' : 'Экипировать', () => { this.host.equip(it); audio.ui(); }]);
+    out.push(['Осмотреть', () => { this.examine = it; }]);
+    out.push(['Совместить', () => { this.combineSrc = it; }]);
+    if (this.boxMode) out.push(['В сундук', () => { this.host.itemBox.store(this.host.inventory, it.uid); audio.ui(); }]);
+    if (d.kind !== 'key' && d.weaponId !== 'knife') out.push(['Выбросить', () => { this.host.inventory.remove(it.uid); audio.click(); }]);
+    return out;
+  }
+
+  private activate(el?: HTMLElement): void {
+    this.note = '';
+    const it = this.focusedItem();
+    if (this.combineSrc) {
+      if (it && it.uid !== this.combineSrc.uid && this.focus.area === 'inv') {
+        const r = combine(this.host.inventory, this.combineSrc, it);
+        this.combineSrc = null;
+        if (r.ok) audio.pickup(); else audio.click();
+        this.note = `<h4>${r.ok ? 'Готово' : 'Нельзя'}</h4><p>${r.text}</p>`;
+      } else this.combineSrc = null;
+      this.render();
       return;
     }
-    const d = ITEMS[it.defId];
-    if (d.kind === 'herb' && d.heal !== undefined || d.cure) this.btn(actions, 'Использовать', () => this.primary(it));
-    if (d.kind === 'weapon') this.btn(actions, 'Экипировать', () => this.primary(it));
-    this.btn(actions, 'Совместить', () => { this.combineSrc = it; this.render(); });
-    if (this.boxMode) this.btn(actions, 'В сундук', () => { this.host.itemBox.store(this.host.inventory, it.uid); this.selected = null; audio.ui(); this.render(); });
-    if (d.kind !== 'key' && d.weaponId !== 'knife') this.btn(actions, 'Выбросить', () => { this.host.inventory.remove(it.uid); this.selected = null; this.render(); });
+    if (!it) return;
+    this.menu = { it, area: this.focus.area, index: this.focus.index };
+    this.menuSel = 0;
+    this.render();
+    void el;
   }
 
-  private renderBox(): void {
-    this.boxPanel.innerHTML = '';
-    if (!this.host.itemBox.items.length) this.boxPanel.innerHTML = '<div style="color:#666;cursor:default">пусто</div>';
-    for (const it of this.host.itemBox.items) {
-      const row = document.createElement('div');
-      const d = ITEMS[it.defId];
-      row.textContent = `${d.glyph}  ${d.name}${d.maxStack > 1 ? ' ×' + it.qty : ''}`;
-      row.onclick = () => {
-        if (!this.host.itemBox.retrieve(this.host.inventory, it.uid)) row.style.color = '#e8412e';
-        else { audio.ui(); this.render(); }
-      };
-      this.boxPanel.appendChild(row);
+  private renderMenu(): void {
+    const m = this.menu!;
+    const slot = this.root.querySelector<HTMLDivElement>(`.slot[data-a="${m.area}"][data-i="${m.index}"]`);
+    if (!slot) return;
+    const acts = this.actions(m.it, m.area);
+    const r = slot.getBoundingClientRect();
+    const box = document.createElement('div');
+    box.className = 'ctx';
+    box.style.left = `${r.right + 6}px`; box.style.top = `${r.top}px`;
+    acts.forEach(([label, fn], i) => {
+      const b = document.createElement('div');
+      b.className = 'ctx-i' + (i === this.menuSel ? ' on' : '');
+      b.textContent = label;
+      b.onpointerenter = () => { this.menuSel = i; box.querySelectorAll('.ctx-i').forEach((x, j) => x.classList.toggle('on', j === i)); };
+      b.onpointerdown = (e) => { e.stopPropagation(); this.runAction(fn); };
+      box.appendChild(b);
+    });
+    this.root.appendChild(box);
+    const br = box.getBoundingClientRect();
+    if (br.right > window.innerWidth - 8) box.style.left = `${r.left - br.width - 6}px`;
+  }
+
+  private runAction(fn: () => void): void {
+    this.menu = null;
+    fn();
+    const n = this.focus.area === 'box' ? this.host.itemBox.items.length : this.host.inventory.capacity;
+    if (this.focus.area === 'box' && this.focus.index >= n) this.focus.index = Math.max(0, n - 1);
+    this.render();
+  }
+
+  private flash(text: string): void { this.note = `<h4>—</h4><p>${text}</p>`; }
+
+  private onKey(e: KeyboardEvent): void {
+    if (!this.isOpen) return;
+    const k = e.code;
+    if (k === 'Tab') e.preventDefault();
+    const back = k === 'Backspace' || (k === 'Escape' && (this.menu || this.examine || this.combineSrc));
+    if (back) {
+      e.preventDefault(); e.stopImmediatePropagation();
+      this.menu = null; this.examine = null; this.combineSrc = null; this.render();
+      return;
     }
-  }
-
-  private btn(parent: HTMLElement, label: string, fn: () => void): void {
-    const b = document.createElement('button');
-    b.className = 'btn'; b.style.fontSize = '13px'; b.style.padding = '6px 12px'; b.style.border = '1px solid #333';
-    b.textContent = label;
-    b.onclick = (e) => { e.stopPropagation(); fn(); };
-    parent.appendChild(b);
-  }
-
-  private primary(it: ItemInstance): void {
-    const d = ITEMS[it.defId];
-    if (d.kind === 'weapon') this.host.equip(it);
-    else if (d.kind === 'herb') this.host.use(it);
-    if (!this.host.inventory.get(it.uid)) this.selected = null;
-    audio.ui();
-    this.render();
-  }
-
-  private tryCombine(a: ItemInstance, b: ItemInstance): void {
-    const r = combine(this.host.inventory, a, b);
-    const desc = this.side.querySelector('.desc') as HTMLDivElement;
-    this.combineSrc = null;
-    this.selected = r.ok ? null : this.selected;
-    if (r.ok) audio.pickup(); else audio.click();
-    this.render();
-    (this.side.querySelector('.desc') as HTMLDivElement).innerHTML = `<b>${r.ok ? 'Готово' : 'Нельзя'}</b><br/>${r.text}`;
-    void desc;
-  }
-
-  // ---------------------------------------------------------------- drag & drop
-  private onDown(e: PointerEvent, it: ItemInstance, el: HTMLDivElement): void {
-    if (e.button !== 0) return;
-    e.preventDefault();
-    if (this.combineSrc) { this.tryCombine(this.combineSrc, it); return; }
-    this.selected = it;
-    const rect = el.getBoundingClientRect();
-    const ghost = document.createElement('div');
-    ghost.className = 'inv-ghost';
-    this.grid.appendChild(ghost);
-    this.drag = { it, el, rot: it.rot, offX: e.clientX - rect.left, offY: e.clientY - rect.top, ghost };
-    el.classList.add('dragging');
-    this.renderSide();
-  }
-
-  private cellUnder(e: PointerEvent, d = this.drag!): { x: number; y: number } {
-    const g = this.grid.getBoundingClientRect();
-    return { x: Math.round((e.clientX - d.offX - g.left) / CELL), y: Math.round((e.clientY - d.offY - g.top) / CELL) };
-  }
-
-  private layoutDrag(e: PointerEvent): void {
-    if (!this.drag || e.clientX === undefined) return;
-    const d = this.drag;
-    const g = this.grid.getBoundingClientRect();
-    const { w, h } = footprint({ defId: d.it.defId, rot: d.rot });
-    d.el.style.width = `${w * CELL - 2}px`; d.el.style.height = `${h * CELL - 2}px`;
-    d.el.style.left = `${e.clientX - d.offX - g.left}px`;
-    d.el.style.top = `${e.clientY - d.offY - g.top}px`;
-    const c = this.cellUnder(e);
-    const ok = this.host.inventory.canPlace(d.it.defId, c.x, c.y, d.rot, d.it.uid);
-    Object.assign(d.ghost.style, { left: `${c.x * CELL}px`, top: `${c.y * CELL}px`, width: `${w * CELL}px`, height: `${h * CELL}px`, borderColor: ok ? '#3ddc6a' : '#e8412e' });
-  }
-
-  private onMove(e: PointerEvent): void { if (this.drag) this.layoutDrag(e); }
-
-  private onUp(e: PointerEvent): void {
-    if (!this.drag) return;
-    const d = this.drag;
-    this.drag = null;
-    const c = this.cellUnder(e, d);
+    if (this.examine) { if (k === 'Enter' || k === 'Space' || k === 'KeyE') { this.examine = null; this.render(); } return; }
+    if (this.menu) {
+      const acts = this.actions(this.menu.it, this.menu.area);
+      if (k === 'ArrowDown' || k === 'KeyS') { this.menuSel = (this.menuSel + 1) % acts.length; this.render(); }
+      else if (k === 'ArrowUp' || k === 'KeyW') { this.menuSel = (this.menuSel + acts.length - 1) % acts.length; this.render(); }
+      else if (k === 'Enter' || k === 'Space' || k === 'KeyE') this.runAction(acts[this.menuSel][1]);
+      e.preventDefault();
+      return;
+    }
     const inv = this.host.inventory;
-    const moved = c.x !== d.it.x || c.y !== d.it.y || d.rot !== d.it.rot;
-    if (moved && !inv.move(d.it.uid, c.x, c.y, d.rot)) {
-      // dropped on another item → combine
-      const g = this.grid.getBoundingClientRect();
-      const cx = Math.floor((e.clientX - g.left) / CELL), cy = Math.floor((e.clientY - g.top) / CELL);
-      const target = inv.itemAt(cx, cy);
-      if (target && target.uid !== d.it.uid) { this.tryCombine(d.it, target); return; }
+    const f = this.focus;
+    const cols = f.area === 'inv' ? inv.cols : 6;
+    const n = f.area === 'inv' ? inv.capacity : this.host.itemBox.items.length;
+    let moved = true;
+    if (k === 'ArrowRight' || k === 'KeyD') {
+      if (f.area === 'box' && (f.index % cols === cols - 1 || f.index === n - 1)) this.focus = { area: 'inv', index: 0 };
+      else f.index = Math.min(n - 1, f.index + 1);
+    } else if (k === 'ArrowLeft' || k === 'KeyA') {
+      if (f.area === 'inv' && f.index % cols === 0 && this.boxMode && this.host.itemBox.items.length) this.focus = { area: 'box', index: 0 };
+      else f.index = Math.max(0, f.index - 1);
+    } else if (k === 'ArrowDown' || k === 'KeyS') f.index = Math.min(n - 1, f.index + cols);
+    else if (k === 'ArrowUp' || k === 'KeyW') f.index = Math.max(0, f.index - cols);
+    else if (k === 'Enter' || k === 'Space' || k === 'KeyE') { this.activate(); moved = false; e.preventDefault(); }
+    else moved = false;
+    if (moved) { this.note = ''; this.markFocus(); this.refreshDesc(); e.preventDefault(); }
+  }
+
+  // ------------------------------------------------------------------ ECG
+  private drawEcg(reset = false): void {
+    const c = this.root.querySelector<HTMLCanvasElement>('.cond canvas');
+    if (!c) return;
+    const g = c.getContext('2d')!;
+    const st = this.host.status();
+    const W = c.width, H = c.height;
+    if (reset) g.clearRect(0, 0, W, H);
+    this.ecgPhase += st.label === 'FINE' ? 0.006 : st.label === 'CAUTION' ? 0.009 : 0.013;
+    g.clearRect(0, 0, W, H);
+    g.strokeStyle = 'rgba(120,160,200,.12)'; g.lineWidth = 1;
+    for (let x = 0; x < W; x += 20) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke(); }
+    for (let y = 0; y < H; y += 20) { g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); }
+    const head = (this.ecgPhase % 1) * W;
+    const amp = st.label === 'DANGER' ? 0.55 : 1;
+    const wave = (x: number) => {
+      const ph = ((x / W) * 2.5) % 1;
+      let y = H / 2;
+      if (ph < 0.06) y -= Math.sin(ph / 0.06 * Math.PI) * 6;
+      else if (ph > 0.12 && ph < 0.16) y += 9 * amp;
+      else if (ph >= 0.16 && ph < 0.21) y -= 44 * amp * Math.sin((ph - 0.16) / 0.05 * Math.PI);
+      else if (ph >= 0.21 && ph < 0.25) y += 13 * amp;
+      else if (ph > 0.4 && ph < 0.52) y -= Math.sin((ph - 0.4) / 0.12 * Math.PI) * 9;
+      return y;
+    };
+    g.lineWidth = 3; g.shadowColor = st.color; g.shadowBlur = 10;
+    for (let x = 0; x < W; x += 3) {
+      const age = (head - x + W) % W;
+      const alpha = Math.max(0, 1 - age / W);
+      g.strokeStyle = st.color; g.globalAlpha = alpha;
+      g.beginPath(); g.moveTo(x, wave(x)); g.lineTo(x + 3, wave(x + 3)); g.stroke();
     }
-    this.render();
+    g.globalAlpha = 1; g.shadowBlur = 0;
   }
 }

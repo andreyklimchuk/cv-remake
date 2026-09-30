@@ -1,4 +1,4 @@
-/** Item database. Sizes are in inventory grid cells (the attaché case is 8×6). */
+/** Item database. RE2-Remake style inventory: 8 slots, every item (or stack) occupies exactly one slot. */
 export type ItemKind = 'weapon' | 'ammo' | 'herb' | 'gunpowder' | 'key' | 'part' | 'misc';
 
 export interface ItemDef {
@@ -77,7 +77,7 @@ let uidCounter = 1;
 export function newUid(): number { return uidCounter++; }
 export function bumpUid(min: number): void { uidCounter = Math.max(uidCounter, min + 1); }
 
-export function footprint(inst: { defId: string; rot: boolean }): { w: number; h: number } {
-  const d = ITEMS[inst.defId];
-  return inst.rot ? { w: d.h, h: d.w } : { w: d.w, h: d.h };
+/** Every item occupies a single slot (w/h in ItemDef are kept only as legacy data). */
+export function footprint(_inst: { defId: string; rot: boolean }): { w: number; h: number } {
+  return { w: 1, h: 1 };
 }

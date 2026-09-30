@@ -6,16 +6,18 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #000; font-f
 .hidden { display: none !important; }
 
 /* ---------- HUD ---------- */
-.hud-ammo { position: absolute; right: 42px; bottom: 36px; text-align: right; text-shadow: 0 2px 6px #000; }
-.hud-ammo .wname { font-size: 13px; letter-spacing: 3px; color: var(--dim); text-transform: uppercase; }
-.hud-ammo .count { font-size: 44px; font-weight: 300; font-family: Georgia, serif; }
-.hud-ammo .count small { font-size: 20px; color: var(--dim); }
-.hud-ammo .sub { font-size: 12px; color: #9cc; letter-spacing: 2px; }
-.hud-health { position: absolute; right: 36px; top: 30px; width: 200px; transition: opacity .4s; }
-.hud-health canvas { width: 200px; height: 56px; display: block; }
-.hud-health .label { font-size: 12px; letter-spacing: 4px; text-align: right; margin-top: 2px; }
-.hud-stamina { height: 3px; background: rgba(255,255,255,.12); margin-top: 6px; }
-.hud-stamina > div { height: 100%; background: #9ab; transition: width .1s; }
+.hud-ammo { position: absolute; right: 40px; bottom: 34px; display: flex; align-items: center; gap: 14px; transition: opacity .35s; text-shadow: 0 2px 6px #000; }
+.hud-ammo .wico { width: 112px; height: 112px; position: relative; opacity: .95; filter: drop-shadow(0 4px 10px #000); }
+.hud-ammo .wico .ico { width: 100%; height: 100%; object-fit: contain; border-radius: 4px; mask-image: radial-gradient(circle, #000 55%, transparent 72%); -webkit-mask-image: radial-gradient(circle, #000 55%, transparent 72%); }
+.hud-ammo .wico .ico.glyph { font-size: 44px; display: flex; }
+.hud-ammo .nums { text-align: left; min-width: 90px; }
+.hud-ammo .wname { font-size: 11px; letter-spacing: 3px; color: #9aa3ab; text-transform: uppercase; }
+.hud-ammo .count { font-size: 52px; line-height: 1; font-family: Georgia, serif; color: #fff; }
+.hud-ammo .res { font-size: 22px; font-family: Georgia, serif; color: #8ff09c; border-top: 1px solid rgba(255,255,255,.35); padding-top: 2px; margin-top: 2px; }
+.hud-ammo .sub { font-size: 11px; color: #9cc; letter-spacing: 2px; }
+.hud-health { position: absolute; right: 44px; bottom: 164px; width: 190px; transition: opacity .4s; }
+.hud-health canvas { width: 190px; height: 54px; display: block; background: linear-gradient(90deg, transparent, rgba(0,0,0,.45)); }
+.hud-health .label { font-size: 12px; letter-spacing: 4px; text-align: right; margin-top: 2px; font-family: Georgia, serif; }
 .reticle { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
 .prompt { position: absolute; left: 50%; bottom: 18%; transform: translateX(-50%); font-size: 16px; padding: 8px 18px; background: rgba(0,0,0,.55); border-left: 2px solid var(--accent); letter-spacing: 1px; }
 .prompt kbd { display: inline-block; border: 1px solid var(--fg); padding: 0 6px; margin-right: 8px; font-size: 13px; border-radius: 3px; }
@@ -48,23 +50,57 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #000; font-f
 .dialog { background: var(--panel); border: 1px solid #333; padding: 26px 34px; text-align: center; font-family: Georgia, serif; font-size: 18px; }
 .dialog .row { margin-top: 18px; display: flex; gap: 16px; justify-content: center; }
 
-/* ---------- inventory ---------- */
-.inv { position: absolute; inset: 0; pointer-events: auto; background: rgba(4,5,7,.9); display: flex; align-items: center; justify-content: center; gap: 38px; }
-.inv-case { position: relative; background: linear-gradient(#2a2622, #1a1714); padding: 18px; border: 2px solid #4a4036; border-radius: 6px; box-shadow: 0 20px 60px #000, inset 0 0 40px rgba(0,0,0,.6); }
-.inv-case h3, .inv-side h3 { margin: 0 0 10px; font-family: Georgia, serif; font-weight: normal; letter-spacing: 5px; font-size: 14px; color: var(--dim); }
-.inv-grid { position: relative; background-image: linear-gradient(rgba(255,255,255,.06) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.06) 1px, transparent 1px); background-color: #121110; border: 1px solid #000; }
-.inv-item { position: absolute; border: 1px solid rgba(255,255,255,.18); border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 22px; cursor: grab; transition: box-shadow .1s; overflow: hidden; }
-.inv-item:hover { box-shadow: 0 0 0 2px #d8d2c4 inset; }
-.inv-item.equipped::after { content: 'E'; position: absolute; left: 3px; top: 1px; font-size: 10px; color: #fff; background: var(--accent); padding: 0 3px; border-radius: 2px; }
-.inv-item .qty { position: absolute; right: 3px; bottom: 1px; font-size: 12px; font-family: monospace; color: #fff; text-shadow: 0 0 3px #000; }
-.inv-item .nm { position: absolute; left: 3px; bottom: 1px; font-size: 9px; color: rgba(255,255,255,.55); white-space: nowrap; }
-.inv-item.dragging { opacity: .85; z-index: 10; pointer-events: none; box-shadow: 0 10px 30px #000; }
-.inv-item.combine-src { box-shadow: 0 0 0 2px var(--caution) inset; }
-.inv-ghost { position: absolute; pointer-events: none; border: 2px dashed; border-radius: 3px; }
-.inv-side { width: 320px; }
-.inv-side .desc { min-height: 110px; font-size: 14px; line-height: 1.5; color: #bdb6a8; background: rgba(0,0,0,.4); padding: 12px; border-left: 2px solid var(--accent); }
-.inv-side .desc b { color: #fff; font-family: Georgia, serif; font-size: 16px; font-weight: normal; letter-spacing: 1px; }
-.inv-hint { font-size: 12px; color: var(--dim); margin-top: 14px; line-height: 1.7; }
+/* ---------- inventory (RE2 Remake style) ---------- */
+.inv { position: absolute; inset: 0; pointer-events: auto; background: radial-gradient(ellipse at 60% 45%, rgba(18,26,34,.93), rgba(2,3,5,.97) 75%); display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: 'Trebuchet MS', Arial, sans-serif; user-select: none; }
+.inv-top { display: flex; gap: 48px; margin-bottom: 28px; letter-spacing: 6px; font-size: 14px; color: #5d6670; }
+.inv-top .tab { padding-bottom: 6px; border-bottom: 2px solid transparent; }
+.inv-top .tab.on { color: #e9e4d6; border-bottom-color: #c8b98a; }
+.inv-body { display: flex; gap: 40px; align-items: flex-start; }
+.cond-h { font-size: 11px; letter-spacing: 4px; color: #7d8893; margin: 0 0 8px; }
+.inv-left { width: 300px; display: flex; flex-direction: column; gap: 22px; }
+.cond { background: linear-gradient(180deg, rgba(8,14,20,.9), rgba(4,8,12,.9)); border: 1px solid #26323c; padding: 12px 14px; }
+.cond canvas { width: 100%; height: 100px; display: block; }
+.cond-l { font-family: Georgia, serif; font-size: 26px; letter-spacing: 6px; text-align: right; margin-top: 4px; text-shadow: 0 0 12px currentColor; }
+.eqp { background: rgba(8,12,16,.85); border: 1px solid #26323c; padding: 12px 14px; }
+.eqp-row { display: flex; align-items: center; gap: 12px; color: #cfc9bb; font-size: 14px; }
+.eqp-row b { display: block; font-weight: normal; letter-spacing: 1px; margin-bottom: 4px; }
+.eqp-row .am { font-family: Georgia, serif; font-size: 26px; color: #fff; }
+.eqp-row .am small { font-size: 14px; color: #7fd18a; }
+.inv-right { width: 520px; }
+.slots { display: grid; gap: 8px; }
+.slot { position: relative; aspect-ratio: 1; background: linear-gradient(160deg, rgba(30,38,46,.75), rgba(10,14,18,.85)); border: 1px solid #3a4652; box-shadow: inset 0 0 18px rgba(0,0,0,.7); cursor: pointer; overflow: hidden; transition: border-color .12s, box-shadow .12s; }
+.slot.empty { background: rgba(10,13,16,.55); border-color: #222b33; }
+.slot.focus { border-color: #f2ead0; box-shadow: 0 0 0 1px #f2ead0, 0 0 18px rgba(242,234,208,.35), inset 0 0 18px rgba(0,0,0,.5); }
+.slot.key { border-color: #7a6a3a; }
+.slot.equipped::before { content: 'E'; position: absolute; left: 5px; top: 4px; z-index: 2; font-size: 11px; font-weight: bold; color: #10161b; background: #d9d2b8; padding: 0 4px; }
+.slot.combine-src { border-color: #e8c33a; box-shadow: 0 0 14px rgba(232,195,58,.5); }
+.slot .ico { position: absolute; inset: 4px; width: calc(100% - 8px); height: calc(100% - 8px); object-fit: contain; }
+.ico.glyph { display: flex; align-items: center; justify-content: center; font-size: 34px; border-radius: 2px; }
+.slot .qty { position: absolute; right: 6px; bottom: 3px; z-index: 2; font-family: Georgia, serif; font-size: 20px; color: #8ff09c; text-shadow: 0 0 4px #000, 0 0 2px #000; }
+.slot .qty.w { color: #fff; }
+.ico.big { position: static; width: 96px; height: 96px; object-fit: contain; flex: none; border: 1px solid #2a343e; }
+.ico.big.glyph { font-size: 40px; }
+.inv-desc { margin-top: 18px; min-height: 104px; padding: 14px 18px; background: linear-gradient(90deg, rgba(0,0,0,.6), rgba(0,0,0,.2)); border-top: 1px solid #3a4652; color: #b9b4a6; font-size: 14px; line-height: 1.55; }
+.inv-desc h4 { margin: 0 0 6px; font-family: Georgia, serif; font-weight: normal; font-size: 20px; letter-spacing: 1px; color: #f2ead0; }
+.inv-desc p { margin: 0; }
+.inv-desc .stat { margin-top: 6px; color: #8fc7d9; }
+.inv-box { width: 330px; }
+.box-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; max-height: 360px; overflow-y: auto; padding-right: 4px; }
+.box-grid .slot .qty { font-size: 13px; right: 3px; bottom: 1px; }
+.box-empty { grid-column: 1 / -1; color: #55606a; font-size: 13px; padding: 10px; }
+.ctx { position: fixed; z-index: 30; min-width: 170px; background: rgba(12,16,20,.97); border: 1px solid #56626e; box-shadow: 0 10px 30px #000; padding: 4px 0; }
+.ctx-i { padding: 8px 18px; font-size: 15px; letter-spacing: 1px; color: #bdb7a8; cursor: pointer; }
+.ctx-i.on { background: linear-gradient(90deg, rgba(242,234,208,.22), rgba(242,234,208,0)); color: #fff; border-left: 2px solid #f2ead0; }
+.examine { position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,.88); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; }
+.ex-ico .ico.huge { width: 380px; height: 380px; object-fit: contain; animation: exfloat 4s ease-in-out infinite; }
+.ex-ico .ico.huge.glyph { font-size: 120px; display: flex; }
+@keyframes exfloat { 0%,100% { transform: perspective(700px) rotateY(-10deg) translateY(0); } 50% { transform: perspective(700px) rotateY(10deg) translateY(-6px); } }
+.ex-t { max-width: 620px; text-align: center; color: #c9c3b4; font-size: 15px; line-height: 1.6; }
+.ex-t h4 { margin: 0 0 8px; font-family: Georgia, serif; font-weight: normal; font-size: 26px; color: #f2ead0; }
+.ex-t p { margin: 0; }
+.ex-t .stat { color: #8fc7d9; margin-top: 6px; }
+.ex-h { font-size: 12px; letter-spacing: 3px; color: #66707a; }
+.inv-hint { font-size: 12px; color: #5d6670; margin-top: 26px; letter-spacing: 2px; }
 .ctx { position: absolute; background: #111; border: 1px solid #444; z-index: 20; min-width: 170px; }
 .ctx button { display: block; width: 100%; background: none; border: none; color: var(--fg); text-align: left; padding: 8px 14px; cursor: pointer; font-size: 14px; letter-spacing: 1px; }
 .ctx button:hover { background: var(--accent); color: #fff; }

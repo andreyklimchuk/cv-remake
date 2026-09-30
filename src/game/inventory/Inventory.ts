@@ -1,11 +1,14 @@
 import { ITEMS, footprint, newUid, bumpUid, type ItemInstance } from './Items';
 
-/** RE4-style "attaché case" Tetris inventory (default 8×6). */
+/** RE2-Remake style slot inventory: cols×rows slots (default 4×2 = 8), one item/stack per slot. */
 export class Inventory {
   items: ItemInstance[] = [];
   onChange?: () => void;
 
-  constructor(public cols = 8, public rows = 6) {}
+  constructor(public cols = 4, public rows = 2) {}
+
+  get capacity(): number { return this.cols * this.rows; }
+  freeSlots(): number { return this.capacity - this.items.length; }
 
   private occupied(ignoreUid = -1): (number | null)[][] {
     const g: (number | null)[][] = Array.from({ length: this.rows }, () => Array(this.cols).fill(null));
@@ -106,10 +109,28 @@ export class Inventory {
   }
 
   serialize(): ItemInstance[] { return JSON.parse(JSON.stringify(this.items)); }
-  load(items: ItemInstance[]): void {
-    this.items = items.map((i) => ({ ...i }));
-    bumpUid(Math.max(0, ...this.items.map((i) => i.uid)));
+  /** Loads a saved inventory; re-slots items from older (grid) saves. Returns items that no longer fit. */
+  load(items: ItemInstance[]): ItemInstance[] {
+    this.items = [];
+    const overflow: ItemInstance[] = [];
+    bumpUid(Math.max(0, ...items.map((i) => i.uid)));
+    for (const src of items) {
+      const it = { ...src, rot: false };
+      if (!(it.x < this.cols && it.y < this.rows && !this.itemAt(it.x, it.y))) {
+        const spot = this.findSpot(it.defId);
+        if (!spot) { overflow.push(it); continue; }
+        it.x = spot.x; it.y = spot.y;
+      }
+      this.items.push(it);
+    }
     this.onChange?.();
+    return overflow;
+  }
+  /** Items ordered by slot index (row-major). */
+  slots(): (ItemInstance | null)[] {
+    const out: (ItemInstance | null)[] = Array(this.capacity).fill(null);
+    for (const it of this.items) out[it.y * this.cols + it.x] = it;
+    return out;
   }
 }
 
