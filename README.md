@@ -46,6 +46,9 @@ src/
 * **Оружие** — M9F и нож, hard-surface.
 * Просмотрщик моделей: `play.html?viewer=claire&pose=idle|aim|run|pain&shot=full|face|torso|hands|feet&yaw=0`,
   `play.html?viewer=zombie_prisoner&pose=chase&sever=lArm`.
+* Клэр — готовая модель из *Resident Evil: Survival Unit* (Sketchfab, прислана пользователем; конвертация
+  `tools/import/claire_su.py`). Старая Blender-Клэр: `play.html?classic`. Права на модель принадлежат их владельцам
+  (Capcom / автор загрузки), проект некоммерческий фанатский.
 * Если GLB не загрузился — автоматически используется старая процедурная модель.
 
 ## Тестовый уровень: тюрьма острова Рокфорт
