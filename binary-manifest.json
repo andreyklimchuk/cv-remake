@@ -1,8 +1,8 @@
 {
  "assets/blender/claire.blend": {
-  "parts": 19,
-  "sha1": "10b239380d790c7ae685401f502c47feab549bdc",
-  "bytes": 9811653,
+  "parts": 14,
+  "sha1": "2d558abd6326555221dc493eabe707967a5252d2",
+  "bytes": 10300194,
   "gzip": true
  },
  "assets/blender/weapon_knife.blend": {
@@ -18,21 +18,21 @@
   "gzip": true
  },
  "assets/blender/zombie_guard.blend": {
-  "parts": 6,
+  "parts": 4,
   "sha1": "0a7e10983714644ec0813a14e70d9e3a4d311e57",
   "bytes": 2944885,
   "gzip": true
  },
  "assets/blender/zombie_prisoner.blend": {
-  "parts": 6,
+  "parts": 4,
   "sha1": "de81ea43d984777876d5fd27cf01bb9b97b4a1f1",
   "bytes": 2920884,
   "gzip": true
  },
  "src/assets/models/claire.glb": {
-  "parts": 18,
-  "sha1": "efaa1d40a58eb76329b5e870007b322b85801c3b",
-  "bytes": 15814972,
+  "parts": 15,
+  "sha1": "dc56df9423b0ad46f7b87e212e8a9d72dd3d7cf0",
+  "bytes": 20709656,
   "gzip": true
  },
  "src/assets/models/weapon_knife.glb": {
@@ -48,15 +48,639 @@
   "gzip": true
  },
  "src/assets/models/zombie_guard.glb": {
-  "parts": 5,
+  "parts": 4,
   "sha1": "59cae5e75f46447a49a643a8d784ba957a731e4a",
   "bytes": 3365828,
   "gzip": true
  },
  "src/assets/models/zombie_prisoner.glb": {
-  "parts": 5,
+  "parts": 4,
   "sha1": "a90c3f0642d668831995d27c5e3caa08a27fa039",
   "bytes": 3301192,
+  "gzip": true
+ },
+ "assets/blender/item_ammo_hg.blend": {
+  "parts": 1,
+  "sha1": "96724cd261692e3959a06454701993bc03b9da67",
+  "bytes": 324457,
+  "gzip": true
+ },
+ "assets/blender/item_emblem.blend": {
+  "parts": 1,
+  "sha1": "bf8a755cbd2749f03a454953521c25c3c6aba47f",
+  "bytes": 154662,
+  "gzip": true
+ },
+ "assets/blender/item_extinguisher.blend": {
+  "parts": 1,
+  "sha1": "b62410d28bd6774aee108e7c04743ca95db6c14d",
+  "bytes": 163372,
+  "gzip": true
+ },
+ "assets/blender/item_herb_g.blend": {
+  "parts": 1,
+  "sha1": "f6f88b93f60b600ee579d025da6fa1ee9e9f5937",
+  "bytes": 139486,
+  "gzip": true
+ },
+ "assets/blender/item_keycard.blend": {
+  "parts": 1,
+  "sha1": "a6dc9a5ea7d2b32b8463bd9e0e5fc662d96b8d1c",
+  "bytes": 117982,
+  "gzip": true
+ },
+ "src/assets/icons/ammo_bolt.jpg": {
+  "parts": 1,
+  "sha1": "51b678df8f57bc40c58249303813c5301a6b981a",
+  "bytes": 12300,
+  "gzip": true
+ },
+ "src/assets/icons/ammo_hg.jpg": {
+  "parts": 1,
+  "sha1": "2a3f4d430fb5fb9485ef763678bd7698ff1fdc5b",
+  "bytes": 15801,
+  "gzip": true
+ },
+ "src/assets/icons/ammo_linear.jpg": {
+  "parts": 1,
+  "sha1": "813f6512310fb6847eba497338c18eabc71d2b63",
+  "bytes": 11182,
+  "gzip": true
+ },
+ "src/assets/icons/ammo_mag.jpg": {
+  "parts": 1,
+  "sha1": "4fabe12d274f93ccdcc614a7392bf3c4c5afb01d",
+  "bytes": 15168,
+  "gzip": true
+ },
+ "src/assets/icons/ammo_sg.jpg": {
+  "parts": 1,
+  "sha1": "70fd37eca41059fc84aa896571073fa95a98ffd5",
+  "bytes": 13060,
+  "gzip": true
+ },
+ "src/assets/icons/ammo_smg.jpg": {
+  "parts": 1,
+  "sha1": "aa55d563662b169586f83c394ac68fbe3e922d5d",
+  "bytes": 12703,
+  "gzip": true
+ },
+ "src/assets/icons/bowgun.jpg": {
+  "parts": 1,
+  "sha1": "a876fa9144507fe62d6a717a3a39c0feb12dda54",
+  "bytes": 9905,
+  "gzip": true
+ },
+ "src/assets/icons/emblem.jpg": {
+  "parts": 1,
+  "sha1": "fe51b252585c62175041a45d339ee88814026df8",
+  "bytes": 15563,
+  "gzip": true
+ },
+ "src/assets/icons/extinguisher.jpg": {
+  "parts": 1,
+  "sha1": "39ba672681b4be85981b4598ab719ec064bd64bb",
+  "bytes": 11888,
+  "gzip": true
+ },
+ "src/assets/icons/gl.jpg": {
+  "parts": 1,
+  "sha1": "8050ba66081c4f31dff31584eb1805afe9c6f0be",
+  "bytes": 9683,
+  "gzip": true
+ },
+ "src/assets/icons/gp_a.jpg": {
+  "parts": 1,
+  "sha1": "5f95f8b503b7ef72daa514f286e00b87a5d7e28a",
+  "bytes": 11829,
+  "gzip": true
+ },
+ "src/assets/icons/gp_b.jpg": {
+  "parts": 1,
+  "sha1": "80d7b3040a710367779667b3da4d71b8f7452bca",
+  "bytes": 12170,
+  "gzip": true
+ },
+ "src/assets/icons/gp_c.jpg": {
+  "parts": 1,
+  "sha1": "160c6a6f177cd9feecf225866beba5dec6e2b23b",
+  "bytes": 11996,
+  "gzip": true
+ },
+ "src/assets/icons/gren_acid.jpg": {
+  "parts": 1,
+  "sha1": "626f7df68bc5c07471c519325b30268dab71bb77",
+  "bytes": 14243,
+  "gzip": true
+ },
+ "src/assets/icons/gren_exp.jpg": {
+  "parts": 1,
+  "sha1": "458ebaa73c2f16bb071be676fae614524e295074",
+  "bytes": 14460,
+  "gzip": true
+ },
+ "src/assets/icons/gren_fire.jpg": {
+  "parts": 1,
+  "sha1": "4bd46d3b7052076c4825653d7f80c27ed21d2f9b",
+  "bytes": 13982,
+  "gzip": true
+ },
+ "src/assets/icons/herb_b.jpg": {
+  "parts": 1,
+  "sha1": "cd0abb0f64649075e0fe52a1e8d1020fdf36990c",
+  "bytes": 13196,
+  "gzip": true
+ },
+ "src/assets/icons/herb_g.jpg": {
+  "parts": 1,
+  "sha1": "40fc51fbd28a4a358041deb61e604ab2e8504309",
+  "bytes": 12793,
+  "gzip": true
+ },
+ "src/assets/icons/herb_gb.jpg": {
+  "parts": 1,
+  "sha1": "6ff742fbd1dc7d859ce5ea8ffa3d3035596fb6f5",
+  "bytes": 12864,
+  "gzip": true
+ },
+ "src/assets/icons/herb_gg.jpg": {
+  "parts": 1,
+  "sha1": "d8cd64c03791e408cafa390cf5d7997771e1422e",
+  "bytes": 12266,
+  "gzip": true
+ },
+ "src/assets/icons/herb_ggg.jpg": {
+  "parts": 1,
+  "sha1": "5a378be13ca4f0528b9e37c6416a3141720c47c2",
+  "bytes": 12476,
+  "gzip": true
+ },
+ "src/assets/icons/herb_gr.jpg": {
+  "parts": 1,
+  "sha1": "30421b90acc89c1fb522565d94687e69b4708787",
+  "bytes": 12007,
+  "gzip": true
+ },
+ "src/assets/icons/herb_grb.jpg": {
+  "parts": 1,
+  "sha1": "268dbfb40b1a35d5dc2fd025202f941b5624197e",
+  "bytes": 13152,
+  "gzip": true
+ },
+ "src/assets/icons/herb_r.jpg": {
+  "parts": 1,
+  "sha1": "0b82bf694efeb8e230f7cc3f06ced2950e10ea91",
+  "bytes": 12929,
+  "gzip": true
+ },
+ "src/assets/icons/keycard.jpg": {
+  "parts": 1,
+  "sha1": "30a6ce1fda50cb7e8f5db581bb249cafb7b1df4d",
+  "bytes": 17758,
+  "gzip": true
+ },
+ "src/assets/icons/knife.jpg": {
+  "parts": 1,
+  "sha1": "05a592c6a8ebca5a9f165eddb2688253b621fa14",
+  "bytes": 9578,
+  "gzip": true
+ },
+ "src/assets/icons/lighter.jpg": {
+  "parts": 1,
+  "sha1": "d3f75bc7877e9b2fa342d26578df7a5b04f2c861",
+  "bytes": 10588,
+  "gzip": true
+ },
+ "src/assets/icons/linear.jpg": {
+  "parts": 1,
+  "sha1": "aaca75f3c8aa84f70c2b4502b251b55f6ea3bea9",
+  "bytes": 10896,
+  "gzip": true
+ },
+ "src/assets/icons/m3.jpg": {
+  "parts": 1,
+  "sha1": "71132e8b54473584dfd403267e7094e445a6c880",
+  "bytes": 9447,
+  "gzip": true
+ },
+ "src/assets/icons/m9f.jpg": {
+  "parts": 1,
+  "sha1": "a5313d982d5ad2f2af94dd9605afea98a8c82a68",
+  "bytes": 11092,
+  "gzip": true
+ },
+ "src/assets/icons/mp5.jpg": {
+  "parts": 1,
+  "sha1": "f33b4804c352481d58fac28deca0821429dbcbac",
+  "bytes": 10057,
+  "gzip": true
+ },
+ "src/assets/icons/musicbox.jpg": {
+  "parts": 1,
+  "sha1": "161dc758b32ad16399dd9854b5bbcea6910ed772",
+  "bytes": 19938,
+  "gzip": true
+ },
+ "src/assets/icons/part_brake.jpg": {
+  "parts": 1,
+  "sha1": "7c976e264077d5bd42159a6cb46db4548289e2d3",
+  "bytes": 11098,
+  "gzip": true
+ },
+ "src/assets/icons/part_mag.jpg": {
+  "parts": 1,
+  "sha1": "bbf14ec902c2e3b1057eac82d11872b45ba99e98",
+  "bytes": 10071,
+  "gzip": true
+ },
+ "src/assets/icons/part_stock.jpg": {
+  "parts": 1,
+  "sha1": "1e01df56da342cca68ed8811d7a4d2beb84052e0",
+  "bytes": 10368,
+  "gzip": true
+ },
+ "src/assets/icons/python.jpg": {
+  "parts": 1,
+  "sha1": "001094549a2083d1b7dce90866caa0becd0b491d",
+  "bytes": 11344,
+  "gzip": true
+ },
+ "src/assets/icons/valve_handle.jpg": {
+  "parts": 1,
+  "sha1": "4f6f6135c0090a568696403d16142b37b65c813f",
+  "bytes": 15032,
+  "gzip": true
+ },
+ "src/assets/models/item_ammo_bolt.glb": {
+  "parts": 1,
+  "sha1": "d0769a8e395218e08eab05bb59fb2c06b8449a48",
+  "bytes": 38804,
+  "gzip": true
+ },
+ "src/assets/models/item_ammo_hg.glb": {
+  "parts": 1,
+  "sha1": "3545b70eddebf546d8a63453078a222cd96dd4ba",
+  "bytes": 66452,
+  "gzip": true
+ },
+ "src/assets/models/item_ammo_linear.glb": {
+  "parts": 1,
+  "sha1": "9725d234629046d26c781cc19247d54cb3fac7b5",
+  "bytes": 30084,
+  "gzip": true
+ },
+ "src/assets/models/item_ammo_mag.glb": {
+  "parts": 1,
+  "sha1": "8ca2905a25a289cd196f7bb8b9c7969f2ea84bb1",
+  "bytes": 62196,
+  "gzip": true
+ },
+ "src/assets/models/item_ammo_sg.glb": {
+  "parts": 1,
+  "sha1": "c6eeab3ec331e3a8d376fda9899c9e089a1964f8",
+  "bytes": 55080,
+  "gzip": true
+ },
+ "src/assets/models/item_ammo_smg.glb": {
+  "parts": 1,
+  "sha1": "f4f6805952afdc6d5d608c76700b04026500e895",
+  "bytes": 31988,
+  "gzip": true
+ },
+ "src/assets/models/item_emblem.glb": {
+  "parts": 1,
+  "sha1": "18fd871e2abf9fb9546e1707237515ed0d2b98dd",
+  "bytes": 83828,
+  "gzip": true
+ },
+ "src/assets/models/item_extinguisher.glb": {
+  "parts": 1,
+  "sha1": "afbab5853e8e61e3d7a5b1697cd1855bd4a3dfbf",
+  "bytes": 102296,
+  "gzip": true
+ },
+ "src/assets/models/item_gp_a.glb": {
+  "parts": 1,
+  "sha1": "51f25379cf3a37d5e3e1a0c008f7ff9704ef7f16",
+  "bytes": 42056,
+  "gzip": true
+ },
+ "src/assets/models/item_gp_b.glb": {
+  "parts": 1,
+  "sha1": "a8afd1f908bfbb845d6f5c89af0e52ae85b5799a",
+  "bytes": 41848,
+  "gzip": true
+ },
+ "src/assets/models/item_gp_c.glb": {
+  "parts": 1,
+  "sha1": "abc1302a6e51a9572ebd02948795d25aa9d264b3",
+  "bytes": 41868,
+  "gzip": true
+ },
+ "src/assets/models/item_gren_acid.glb": {
+  "parts": 1,
+  "sha1": "f354115fed26746465b2410e8a02442a5a0e1a9d",
+  "bytes": 67180,
+  "gzip": true
+ },
+ "src/assets/models/item_gren_exp.glb": {
+  "parts": 1,
+  "sha1": "70d16af7ab21b2f7a309af76bd0463d850100535",
+  "bytes": 66788,
+  "gzip": true
+ },
+ "src/assets/models/item_gren_fire.glb": {
+  "parts": 1,
+  "sha1": "3d2feb1a9704c05caa24a63a0f39afa7b18f77f4",
+  "bytes": 67548,
+  "gzip": true
+ },
+ "src/assets/models/item_herb_b.glb": {
+  "parts": 1,
+  "sha1": "cf379b53283fc53ccbba9a63dcec9310f0d366bb",
+  "bytes": 63176,
+  "gzip": true
+ },
+ "src/assets/models/item_herb_g.glb": {
+  "parts": 1,
+  "sha1": "63f8f1ac106c7ea57245ec9195e4c4ba5cde7d13",
+  "bytes": 63192,
+  "gzip": true
+ },
+ "src/assets/models/item_herb_gb.glb": {
+  "parts": 1,
+  "sha1": "a92006d873a584dbea26d2b3a008923025587e05",
+  "bytes": 79864,
+  "gzip": true
+ },
+ "src/assets/models/item_herb_gg.glb": {
+  "parts": 1,
+  "sha1": "8f448846dc5382c6e86ba5cd0a2596d478bd84b4",
+  "bytes": 78940,
+  "gzip": true
+ },
+ "src/assets/models/item_herb_ggg.glb": {
+  "parts": 1,
+  "sha1": "ee6cc5941a63cc84ce26375aa4e15d18c019f886",
+  "bytes": 90752,
+  "gzip": true
+ },
+ "src/assets/models/item_herb_gr.glb": {
+  "parts": 1,
+  "sha1": "f311ce7a07cca4cc12912bfab0a7ff4ba9c5adb6",
+  "bytes": 79884,
+  "gzip": true
+ },
+ "src/assets/models/item_herb_grb.glb": {
+  "parts": 1,
+  "sha1": "67ea79354b33c69b12d92fc7f08a1289010c4145",
+  "bytes": 92616,
+  "gzip": true
+ },
+ "src/assets/models/item_herb_r.glb": {
+  "parts": 1,
+  "sha1": "971a4de3e48eeb6bea720ea5f6140d6c23acf567",
+  "bytes": 63196,
+  "gzip": true
+ },
+ "src/assets/models/item_keycard.glb": {
+  "parts": 1,
+  "sha1": "9535d470dd74d0e8af697e49f572ddc10e4fd8c6",
+  "bytes": 40112,
+  "gzip": true
+ },
+ "src/assets/models/item_lighter.glb": {
+  "parts": 1,
+  "sha1": "b930910a16ad94d4a469abe0c3671aa8a6a1abd9",
+  "bytes": 30708,
+  "gzip": true
+ },
+ "src/assets/models/item_musicbox.glb": {
+  "parts": 1,
+  "sha1": "24fad20492867e4d60244c5a67ff51c5ef886f18",
+  "bytes": 404768,
+  "gzip": true
+ },
+ "src/assets/models/item_part_brake.glb": {
+  "parts": 1,
+  "sha1": "b2e70966748d55e85591b82237c909925f9d1121",
+  "bytes": 16860,
+  "gzip": true
+ },
+ "src/assets/models/item_part_mag.glb": {
+  "parts": 1,
+  "sha1": "c0fb47aafce27cda589305a230d001b9f5bfd3cc",
+  "bytes": 27712,
+  "gzip": true
+ },
+ "src/assets/models/item_part_stock.glb": {
+  "parts": 1,
+  "sha1": "c9d24665c683350f793abcd51035cf225661727f",
+  "bytes": 26124,
+  "gzip": true
+ },
+ "src/assets/models/item_valve_handle.glb": {
+  "parts": 1,
+  "sha1": "36f0555c53a5956f5275d307f0194ddee1ba9c16",
+  "bytes": 64412,
+  "gzip": true
+ },
+ "src/assets/models/prop_barrel.glb": {
+  "parts": 1,
+  "sha1": "a0bfd3601800837946603f6309f90d24c5753ae4",
+  "bytes": 58912,
+  "gzip": true
+ },
+ "src/assets/models/prop_bed.glb": {
+  "parts": 1,
+  "sha1": "66fc8484179e0a8cdbe8b1599ca85b78ba9dbeb4",
+  "bytes": 237576,
+  "gzip": true
+ },
+ "src/assets/models/prop_bench.glb": {
+  "parts": 1,
+  "sha1": "c5cc4e2c9520e10a16a983b6f6e6104251f7a641",
+  "bytes": 87248,
+  "gzip": true
+ },
+ "src/assets/models/prop_bookshelf.glb": {
+  "parts": 1,
+  "sha1": "ca09b21fcef1be9afeb63ae1acba7aa624fea170",
+  "bytes": 349684,
+  "gzip": true
+ },
+ "src/assets/models/prop_cabinet.glb": {
+  "parts": 1,
+  "sha1": "3b348a7f9ab19abe6127f9dc600c8b9d7f5e0d68",
+  "bytes": 50108,
+  "gzip": true
+ },
+ "src/assets/models/prop_chair.glb": {
+  "parts": 1,
+  "sha1": "bb8b54b4c461c3da97fb5434daab9a3d12e0f553",
+  "bytes": 65832,
+  "gzip": true
+ },
+ "src/assets/models/prop_crate.glb": {
+  "parts": 1,
+  "sha1": "dea8b79bcf40abad0e495d5282b744124d9b5aa5",
+  "bytes": 128844,
+  "gzip": true
+ },
+ "src/assets/models/prop_desk.glb": {
+  "parts": 1,
+  "sha1": "a0ee038a6cf98a67b3d55db5378e49a23284ef61",
+  "bytes": 118564,
+  "gzip": true
+ },
+ "src/assets/models/prop_door_metal.glb": {
+  "parts": 1,
+  "sha1": "3d29bf6e125a5b04b6ed5e297783f69132463c93",
+  "bytes": 51444,
+  "gzip": true
+ },
+ "src/assets/models/prop_fluoro.glb": {
+  "parts": 1,
+  "sha1": "c64bf8009a0c6ffdffe502c3d11397165929a268",
+  "bytes": 13968,
+  "gzip": true
+ },
+ "src/assets/models/prop_itembox.glb": {
+  "parts": 1,
+  "sha1": "a2daf37f2e496c5cb56cfaf56fa3a47de5a167bb",
+  "bytes": 190692,
+  "gzip": true
+ },
+ "src/assets/models/prop_lamp_cage.glb": {
+  "parts": 1,
+  "sha1": "1d840049d32de158ff8335c595341fe863b3c855",
+  "bytes": 54712,
+  "gzip": true
+ },
+ "src/assets/models/prop_locker.glb": {
+  "parts": 1,
+  "sha1": "a072dac19e907f0f38f3559c923fec018f2857b7",
+  "bytes": 56840,
+  "gzip": true
+ },
+ "src/assets/models/prop_monitor.glb": {
+  "parts": 1,
+  "sha1": "464a07786f82e74a7815dfe8e09b7865679ad63f",
+  "bytes": 19996,
+  "gzip": true
+ },
+ "src/assets/models/prop_musicbox.glb": {
+  "parts": 1,
+  "sha1": "8bcf2f4b8ec7570d83b585497b915f4597a79525",
+  "bytes": 71680,
+  "gzip": true
+ },
+ "src/assets/models/prop_musicbox_lid.glb": {
+  "parts": 1,
+  "sha1": "f68347d807b5243112b867cff366a53d5f62a8b8",
+  "bytes": 47496,
+  "gzip": true
+ },
+ "src/assets/models/prop_painting_eagle.glb": {
+  "parts": 1,
+  "sha1": "eb9fa2ae36bb603a25142195fa1a35bbfaaa27d4",
+  "bytes": 44424,
+  "gzip": true
+ },
+ "src/assets/models/prop_painting_snake.glb": {
+  "parts": 1,
+  "sha1": "74b30e260ba121aa32f411368e20235ecf16247a",
+  "bytes": 41684,
+  "gzip": true
+ },
+ "src/assets/models/prop_painting_warden.glb": {
+  "parts": 1,
+  "sha1": "9f259a38b4a20ea5e365e9ecc8762780ac2bcca4",
+  "bytes": 40992,
+  "gzip": true
+ },
+ "src/assets/models/prop_painting_wolf.glb": {
+  "parts": 1,
+  "sha1": "e2428808f1b69ab0d085e04ce6831c20bfea393a",
+  "bytes": 36756,
+  "gzip": true
+ },
+ "src/assets/models/prop_pedestal.glb": {
+  "parts": 1,
+  "sha1": "35d28b30740c7c561451d665f92522ad41b431ac",
+  "bytes": 22092,
+  "gzip": true
+ },
+ "src/assets/models/prop_pipe.glb": {
+  "parts": 1,
+  "sha1": "85e0075022f20858b380106ea467b636976e3289",
+  "bytes": 45084,
+  "gzip": true
+ },
+ "src/assets/models/prop_safe.glb": {
+  "parts": 1,
+  "sha1": "e02435d8f972b083362cfe2f2767892a291a637e",
+  "bytes": 26308,
+  "gzip": true
+ },
+ "src/assets/models/prop_safe_door.glb": {
+  "parts": 1,
+  "sha1": "2ee1f65fab26a4829418d68437c121ab95cd5732",
+  "bytes": 62148,
+  "gzip": true
+ },
+ "src/assets/models/prop_toilet.glb": {
+  "parts": 1,
+  "sha1": "cd6c0122860f8087f3e2b25e9bf0c63ca40984ed",
+  "bytes": 30936,
+  "gzip": true
+ },
+ "src/assets/models/prop_typewriter.glb": {
+  "parts": 1,
+  "sha1": "5349f1039d93c5cc2e66a659ae42dec6361d3909",
+  "bytes": 186216,
+  "gzip": true
+ },
+ "src/assets/models/prop_valve_pipe.glb": {
+  "parts": 1,
+  "sha1": "91374913cb9e8bb08d2a6447264eee25bc95f25c",
+  "bytes": 60804,
+  "gzip": true
+ },
+ "src/assets/models/weapon_bowgun.glb": {
+  "parts": 1,
+  "sha1": "2d887c9fd7fcd40b934d881a19e3345b63b3cee0",
+  "bytes": 128572,
+  "gzip": true
+ },
+ "src/assets/models/weapon_gl.glb": {
+  "parts": 1,
+  "sha1": "57069d7121cab04ab60ef0e6a80292c13034dde8",
+  "bytes": 79828,
+  "gzip": true
+ },
+ "src/assets/models/weapon_linear.glb": {
+  "parts": 1,
+  "sha1": "dbef1c1033bd9477eeda46fc98ba797c0daf6f8d",
+  "bytes": 108036,
+  "gzip": true
+ },
+ "src/assets/models/weapon_m3.glb": {
+  "parts": 1,
+  "sha1": "a4bc52608298f5aaddf59a877074d453297890b1",
+  "bytes": 203220,
+  "gzip": true
+ },
+ "src/assets/models/weapon_mp5.glb": {
+  "parts": 1,
+  "sha1": "a34bff420cd204feb16f18a8c71685527c6c479d",
+  "bytes": 137056,
+  "gzip": true
+ },
+ "src/assets/models/weapon_python.glb": {
+  "parts": 1,
+  "sha1": "aa9a11660ce0e1ceb1e60974a8211998b5eb6d04",
+  "bytes": 115004,
   "gzip": true
  }
 }
