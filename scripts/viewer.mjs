@@ -10,7 +10,7 @@ for (const q of qs) {
   await page.goto('file:///data/cv-remake/dist/play.html?' + (q.includes('viewer=') ? '' : 'viewer=claire&') + q);
   await page.waitForFunction(() => window.__viewerReady, null, { timeout: 600000 });
   console.log(q, JSON.stringify(await page.evaluate(() => window.__viewerInfo())));
-  await page.screenshot({ path: `/data/cv-remake/shots/${prefix}_${i++}.png` });
+  await page.screenshot({ path: `/data/cv-remake/shots/${prefix}_${i++}.png`, timeout: 180000 });
 }
 await browser.close();
 process.exit(0);
