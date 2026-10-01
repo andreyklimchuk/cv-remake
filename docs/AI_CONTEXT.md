@@ -106,6 +106,29 @@ Linux (Amazon Linux 2023), Node 24, Python 3.13, `node_modules` уже стоя�
 
 ---
 
+### 3.1 Второй сброс (01.10.2026, ~11:05 UTC) — полное восстановление
+
+`/data` оказался **полностью пустым** (нет ни `/data/cv-remake`, ни `/data/assets_src`, bpy не установлен).
+Восстановление (≈20 минут):
+1. Пользователь временно сделал репозиторий **публичным** → `git clone https://github.com/andreyklimchuk/cv-remake.git`
+   (через MCP `get_file_contents` восстанавливать нереально — ~150 файлов + ~80 МБ base64 не влезают в контекст).
+   После клонирования репозиторий нужно вернуть в private.
+2. `node scripts/restore-binaries.mjs` (теперь пропускает файлы с недостающими частями, напр. `cv-remake-play.zip`).
+3. `npm install` (не `npm ci` — lock-файл был рассинхронизирован), `npx tsc --noEmit` — OK.
+4. `sh tools/blender/setup_env.sh`; база анатомии: `curl -L -A Mozilla/5.0 -o hbm.zip
+   https://download.blender.org/demo/asset-bundles/human-base-meshes/human-base-meshes-bundle-v1.4.1.zip`
+   → распаковать в `/data/assets_src/hbm/` (без `-A` сервер отдаёт HTML-страницу вместо zip).
+   `cp -r tools/blender /data/assets_src/tools`.
+5. `/data/assets_src/regen.sh` последовательно: luger (1 с) → иконка (2 с) → cerberus (83 с) → bandersnatch (75 с) →
+   steve (175 с). Все 4 модели + `gold_lugers.jpg` перегенерированы, **полностью забэкаплены** (30 батчей, проверено
+   побайтно через свежий клон + restore).
+6. `npm run build` → `dist/play.html` 64 МБ. Проверено: viewer (Стив с двумя Люгерами, лицо Стива, Цербер, Бандерснэтч),
+   tour (hall, barracks, pcorr, dining, fireplace), `node scripts/func.mjs` — смена персонажа, набор Стива
+   (`gold_lugers, knife, ammo_hg×24, herb_g`), 36 зомби + 4 существа, камин зажигается → дверь → `mode === 'end'`.
+
+**Совет на будущее:** если `/data` снова пуст — попросить пользователя временно открыть репозиторий (или дать
+fine-grained токен) и клонировать, а не тянуть файлы по одному через MCP.
+
 ## 4. Бэкап в GitHub (как делать)
 
 В sandbox **нет git-репозитория** — пушим через GitHub MCP (`push_files`), который принимает только текст.
@@ -285,6 +308,7 @@ ICON_GLOB=weapon_luger.glb python3 tools/icons.py     # иконки (без ICO
   terrace, tyard, training, passage, pyard, hall, hall2, hall3, **barracks, armory, pcorr, dining, dining2, fireplace**,
   плюс `inv` (инвентарь, меню, документ, кодовый замок, item box, прицел).
   Первая точка тура может выйти пустой (зоны ещё не построены/туман) — это не баг.
+- `node scripts/func.mjs` — функциональный тест (смена персонажа, набор Стива, существа, камин → финал).
 - `node scripts/smoke.mjs medium`, `node scripts/hitch.mjs`, `node scripts/walk.mjs` — прогон уровня, замеры фризов,
   проход по маршруту.
 - Headless очень медленный: игровое время идёт сильно медленнее реального; для проверок AI лучше крутить симуляцию
@@ -301,12 +325,9 @@ ICON_GLOB=weapon_luger.glb python3 tools/icons.py     # иконки (без ICO
 с последними правками делалась до сброса sandbox).
 
 Осталось / в работе:
-1. **Перегенерировать потерянные ассеты** (выполняется сейчас): `steve.glb`, `enemy_cerberus.glb`,
-   `enemy_bandersnatch.glb`, `weapon_luger.glb`, `src/assets/icons/gold_lugers.jpg`.
-2. Пересобрать `dist/play.html` (`npm run build`) и заново протестировать (viewer/tour/smoke), снять скриншоты
-   (Стив с двумя Люгерами, зажигалка, собаки, Бандерснэтч, новые залы, камин).
-3. Довести **двоичный бэкап**: новых ассетов в GitHub нет (кроме 5 частичных батчей), нужно
-   `node scripts/backup.mjs "Assets: steve, cerberus, bandersnatch, gold luger" bin` и последовательно запушить все батчи.
+1. ~~Перегенерировать потерянные ассеты~~ — сделано (см. §3.1).
+2. ~~Пересобрать `dist/play.html` и протестировать~~ — сделано (см. §3.1).
+3. ~~Довести двоичный бэкап~~ — сделано, все бинарники в `binary/` + `binary-manifest.json`.
 4. Мелкая полировка (по желанию): детализация головы Bandersnatch; проверка скриншотов `shots/tz_fire1.png`,
    `shots/tz_dogs.png` (не отсмотрены); возможная оптимизация размера GLB.
 5. Дальше по роадмапу: военная база/Антарктида, Hunter/Nosferatu/Tyrant, Крис, апгрейды оружия, сохранения по слотам.
