@@ -11,6 +11,8 @@ import { makeItemMesh } from '../world/ItemMeshes';
 import type { ZombieSpawn } from '../ai/Zombie';
 import { audio } from '../../engine/AudioEngine';
 import { bus } from '../../engine/Events';
+import { buildAnnex, doorLeaf } from './PrisonAnnex';
+import { placeProp, propInstances } from '../world/Props';
 
 export interface LevelContext {
   scene: THREE.Scene;
@@ -35,7 +37,11 @@ export interface Level {
  * TEST LEVEL — "Rockfort Island: Prison Compound" (Claire's opening area).
  * Zones (streamed): Courtyard (outdoor, burning truck, watchtower) → Guard House (save room,
  * keycard) → Cell Block (extinguisher, bow gun) and West Yard (behind fire: shotgun, Hawk Emblem).
- * Puzzle chain: Keycard → Cell Block → Extinguisher → put out fire → Hawk Emblem → Main Gate.
+ * + Administration wing (steam valve, warden's safe, music box, hidden emblem) and Trophy Gallery
+ *   (optional "Song of three beasts" painting puzzle) — see PrisonAnnex.ts.
+ * Puzzle chain: Keycard → Cell Block (prisoner's note: safe code) → Extinguisher → put out fire →
+ * West Yard: Valve Handle → close steam valve → Warden's office: safe 0419 → Music Box Plate →
+ * music box → portrait rises → Hawk Emblem → Main Gate.
  */
 export function buildPrisonLevel(ctx: LevelContext): Level {
   const { scene, physics, nav, streamer, quality: q, flags } = ctx;
@@ -123,6 +129,12 @@ export function buildPrisonLevel(ctx: LevelContext): Level {
     });
   };
 
+  const annex = buildAnnex(ctx, {
+    M: M as unknown as Record<string, THREE.Material>, item,
+    flicker: (l, base, mat, broken) => flickerLight(l, base, mat, broken),
+    onUpdate: (fn) => lightsForUpdate.push({ update: fn }),
+  });
+
   // =====================================================================
   // ZONE 1 — COURTYARD (outdoor)
   // =====================================================================
@@ -178,8 +190,11 @@ export function buildPrisonLevel(ctx: LevelContext): Level {
       b.cyl(14, 6, 36.5, 0.14, 12, M.steel, true, 8);
       b.box(14, 12.1, 36.3, 1.4, 0.5, 0.4, M.steel, { collide: false });
       // crates, barrels, debris, body bags
-      b.box(8.5, 0.45, 5, 0.9, 0.9, 0.9, M.wood, { tile: 1 }); b.box(9.5, 0.4, 5.6, 0.8, 0.8, 0.8, M.wood, { tile: 1, rotY: 0.3 }); b.box(8.9, 1.25, 5.2, 0.7, 0.7, 0.7, M.wood, { tile: 1, rotY: 0.6 });
-      for (const [bx, bz] of [[15, 15], [15.8, 16.1], [16.6, 15.2], [-4, 36.8]]) b.cyl(bx, 0.45, bz, 0.3, 0.9, M.rust, true, 12);
+      if (!placeProp(G, physics, 'crate', 8.5, 0, 5, 0)) b.box(8.5, 0.45, 5, 0.9, 0.9, 0.9, M.wood, { tile: 1 });
+      if (!placeProp(G, physics, 'crate', 9.5, 0, 5.6, 0.3, { scale: 0.89 })) b.box(9.5, 0.4, 5.6, 0.8, 0.8, 0.8, M.wood, { tile: 1, rotY: 0.3 });
+      if (!placeProp(G, physics, 'crate', 8.9, 0.9, 5.2, 0.6, { scale: 0.78 })) b.box(8.9, 1.25, 5.2, 0.7, 0.7, 0.7, M.wood, { tile: 1, rotY: 0.6 });
+      const yb: [number, number, number, number][] = [[15, 0, 15, 0], [15.8, 0, 16.1, 1], [16.6, 0, 15.2, 2], [-4, 0, 36.8, 3]];
+      if (!propInstances(G, physics, 'barrel', yb)) for (const [bx, , bz] of yb) b.cyl(bx, 0.45, bz, 0.3, 0.9, M.rust, true, 12);
       b.box(-6, 0.15, 20, 1.8, 0.3, 0.6, M.corpse, { collide: false, rotY: 0.7 });
       b.box(5, 0.15, 26, 1.8, 0.3, 0.6, M.corpse, { collide: false, rotY: -1.1 });
       b.box(-1.5, 0.3, 30, 3, 0.6, 0.3, M.concrete, { rotY: 0.2 }); // fallen slab
@@ -314,7 +329,7 @@ export function buildPrisonLevel(ctx: LevelContext): Level {
 
       // guard-house door (hinged at z = 8, swings inward)
       const pivot = new THREE.Group(); pivot.position.set(20.3, 0, 8);
-      const leaf = new THREE.Mesh(new THREE.BoxGeometry(0.08, 2.5, 2), M.rust); leaf.position.set(0, 1.25, 1); leaf.castShadow = true; pivot.add(leaf);
+      pivot.add(doorLeaf(true, 2, 2.5, M.rust));
       G.add(pivot);
       const dcol = physics.addMinMax(20.15, 8, 20.45, 10, 0, 2.5, 'door', true);
       guardDoor = new Door('guardDoor', new THREE.Vector3(19.4, 0, 9), pivot, dcol, null, '', -Math.PI * 0.55);
@@ -327,13 +342,16 @@ export function buildPrisonLevel(ctx: LevelContext): Level {
   // ZONE 2 — GUARD HOUSE (save room + keycard)
   // =====================================================================
   streamer.add({
-    id: 'guard', bounds: guardBounds, neighbors: ['yard', 'cells'], outdoor: false,
-    portalOpen: (n) => (n === 'yard' ? !!guardDoor?.open : !!cellDoor?.open),
+    id: 'guard', bounds: guardBounds, neighbors: ['yard', 'cells', 'admin'], outdoor: false,
+    portalOpen: (n) => (n === 'yard' ? !!guardDoor?.open : n === 'admin' ? !!annex.doors.admin?.open : !!cellDoor?.open),
     build: (G) => {
       const b = new LevelBuilder(physics);
       b.box(26.3, -0.05, 11, 11.4, 0.1, 18, M.tiles, { collide: false, tile: 2, shadow: false });
       b.box(26, 1.8, 1.85, 12.6, 3.6, 0.3, M.plaster);
-      b.box(32.15, 1.8, 11, 0.3, 3.6, 18.6, M.plaster);
+      // east wall with the doorway to the administration wing (z 4–6)
+      b.box(32.15, 1.8, 2.85, 0.3, 3.6, 2.3, M.plaster);
+      b.box(32.15, 1.8, 13.15, 0.3, 3.6, 14.3, M.plaster);
+      b.box(32.15, 3.05, 5, 0.3, 1.1, 2, M.plaster);
       b.box(22.8, 1.8, 20, 4.4, 3.6, 0.3, M.plaster);
       b.box(29.5, 1.8, 20, 5, 3.6, 0.3, M.plaster);
       b.box(26, 3.05, 20, 2, 1.1, 0.3, M.plaster);
@@ -343,21 +361,31 @@ export function buildPrisonLevel(ctx: LevelContext): Level {
       b.box(25.25, 1.8, 7, 1.5, 3.6, 0.2, M.plaster);
       b.box(26, 1.8, 4.5, 0.2, 3.6, 5, M.plaster);
       // save room props: typewriter desk, item box, bench
-      b.box(21.6, 0.4, 3, 1.4, 0.8, 0.7, M.wood, { tile: 1 });
-      b.box(21.6, 0.9, 3, 0.45, 0.2, 0.35, M.dark, { collide: false });
-      b.box(25, 0.4, 2.6, 1.3, 0.8, 0.7, M.rust, { tile: 1 });
-      b.box(23.3, 0.25, 6.4, 1.6, 0.5, 0.45, M.wood, { tile: 1 });
+      if (placeProp(G, physics, 'desk', 21.65, 0, 2.55, 0, { scale: [0.8, 1, 0.85] })) placeProp(G, physics, 'typewriter', 21.6, 0.78, 2.55, 0, { collide: false });
+      else { b.box(21.6, 0.4, 3, 1.4, 0.8, 0.7, M.wood, { tile: 1 }); b.box(21.6, 0.9, 3, 0.45, 0.2, 0.35, M.dark, { collide: false }); }
+      if (!placeProp(G, physics, 'itembox', 25, 0, 2.55, 0)) b.box(25, 0.4, 2.6, 1.3, 0.8, 0.7, M.rust, { tile: 1 });
+      if (!placeProp(G, physics, 'bench', 23.3, 0, 6.4, 0)) b.box(23.3, 0.25, 6.4, 1.6, 0.5, 0.45, M.wood, { tile: 1 });
       // main room: desk with monitors, lockers, cabinet, chair
-      b.box(29.5, 0.4, 17.2, 2, 0.8, 0.9, M.wood, { tile: 1 });
-      b.box(29.2, 1.05, 17.5, 0.5, 0.4, 0.3, M.dark, { collide: false }); b.box(29.9, 1.05, 17.5, 0.5, 0.4, 0.3, M.dark, { collide: false });
-      for (let i = 0; i < 5; i++) b.box(31.7, 1, 9 + i * 0.75, 0.6, 2, 0.7, M.rust, { tile: 1 });
-      b.box(21.2, 0.7, 18.8, 0.8, 1.4, 0.6, M.steel, { tile: 1 });
-      b.box(28.2, 0.3, 15.4, 0.5, 0.6, 0.5, M.dark, { rotY: 0.6 });
+      const propsOk = !!placeProp(G, physics, 'desk', 29.5, 0, 17.3, Math.PI);
+      if (propsOk) {
+        placeProp(G, physics, 'monitor', 29.15, 0.78, 17.55, Math.PI + 0.1, { collide: false });
+        placeProp(G, physics, 'monitor', 29.9, 0.78, 17.55, Math.PI - 0.15, { collide: false });
+        propInstances(G, physics, 'locker', [0, 1, 2, 3, 4].map((i) => [31.72, 0, 9 + i * 0.62, -Math.PI / 2] as [number, number, number, number]));
+        placeProp(G, physics, 'cabinet', 20.95, 0, 18.8, Math.PI / 2);
+        placeProp(G, physics, 'chair', 28.2, 0, 15.4, 0.6 + Math.PI);
+        placeProp(G, physics, 'fluoro', 28.5, 3.52, 12, Math.PI / 2, { collide: false, shadow: false });
+      } else {
+        b.box(29.5, 0.4, 17.2, 2, 0.8, 0.9, M.wood, { tile: 1 });
+        b.box(29.2, 1.05, 17.5, 0.5, 0.4, 0.3, M.dark, { collide: false }); b.box(29.9, 1.05, 17.5, 0.5, 0.4, 0.3, M.dark, { collide: false });
+        for (let i = 0; i < 5; i++) b.box(31.7, 1, 9 + i * 0.75, 0.6, 2, 0.7, M.rust, { tile: 1 });
+        b.box(21.2, 0.7, 18.8, 0.8, 1.4, 0.6, M.steel, { tile: 1 });
+        b.box(28.2, 0.3, 15.4, 0.5, 0.6, 0.5, M.dark, { rotY: 0.6 });
+      }
       b.box(27, 0.15, 12, 1.8, 0.3, 0.6, M.corpse, { collide: false, rotY: 1.9 });
       b.flush(G);
       // monitors glow
       const b2 = new LevelBuilder(physics);
-      for (const x of [29.2, 29.9]) { const s = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.3), M.screen); s.position.set(x, 1.05, 17.34); s.rotation.y = Math.PI; b2.addMesh(s, false); }
+      if (!propsOk) for (const x of [29.2, 29.9]) { const s = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.3), M.screen); s.position.set(x, 1.05, 17.34); s.rotation.y = Math.PI; b2.addMesh(s, false); }
       // lights
       const warm = new THREE.PointLight(0xffc27a, 30, 10, 1.8); warm.position.set(23.3, 3.2, 4.5); warm.castShadow = q.shadowedLights >= 3; G.add(warm);
       const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 8), M.lampOn); lamp.position.copy(warm.position); b2.addMesh(lamp, false);
@@ -376,17 +404,16 @@ export function buildPrisonLevel(ctx: LevelContext): Level {
       item('g_mag', 'part_mag', 1, 28.9, 0.81, 16.9, G);
       item('g_herbR', 'herb_r', 1, 30.5, 0, 3.4, G);
       item('g_ammo', 'ammo_hg', 15, 31.2, 0, 8.3, G);
-      item('g_herbG', 'herb_g', 1, 23.3, 0.51, 6.4, G);
-      item('g_brake', 'part_brake', 1, 21.2, 1.41, 18.8, G);
+      item('g_herbG', 'herb_g', 1, 23.3, propsOk ? 0.47 : 0.51, 6.4, G);
+      item('g_brake', 'part_brake', 1, propsOk ? 20.95 : 21.2, propsOk ? 1.33 : 1.41, 18.8, G);
       // file / lore note
-      ctx.addInteractable(new ScriptedInteractable('note1', new THREE.Vector3(29.9, 0, 16.6), 1.2, () => 'Прочитать: журнал охраны',
-        (g) => g.message('«…заключённые в блоке B больше не отвечают. Кто-то включил тревогу. Ключ-карту оставляю на столе — Родриго»', 6)));
+      ctx.addInteractable(new ScriptedInteractable('note1', new THREE.Vector3(29.9, 0, 16.6), 1.2, () => 'Прочитать: журнал охраны', (g) => g.readDoc('guard_log')));
       // zombie
       ctx.spawnZombie({ id: 'guard_1', x: 28.8, z: 12.5, yaw: -Math.PI / 2, outfit: 'guard' }, G);
 
       // cell-block door (keycard)
       const pivot = new THREE.Group(); pivot.position.set(25, 0, 20);
-      const leaf = new THREE.Mesh(new THREE.BoxGeometry(2, 2.5, 0.08), M.steel); leaf.position.set(1, 1.25, 0); leaf.castShadow = true; pivot.add(leaf);
+      pivot.add(doorLeaf(false, 2, 2.5, M.steel));
       const reader = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.22, 0.05), M.dark); reader.position.set(27.35, 1.3, 19.8); b2.addMesh(reader, false);
       const led = new THREE.Mesh(new THREE.SphereGeometry(0.02, 6, 4), M.red); led.position.set(27.35, 1.4, 19.77); b2.addMesh(led, false);
       b2.flush(G);
@@ -395,6 +422,13 @@ export function buildPrisonLevel(ctx: LevelContext): Level {
       cellDoor = new Door('cellDoor', new THREE.Vector3(26, 0, 19.2), pivot, dcol, 'keycard', 'Электронный замок. Нужна ключ-карта охраны.', Math.PI * 0.55);
       if (flags.has('open:cellDoor')) cellDoor.openNow();
       ctx.addInteractable(cellDoor);
+
+      // door to the administration wing (east wall, z 4–6)
+      const apv = new THREE.Group(); apv.position.set(32.15, 0, 4); apv.add(doorLeaf(true, 2, 2.5, M.steel)); G.add(apv);
+      const acol = physics.addMinMax(32, 4, 32.3, 6, 0, 2.5, 'door', true);
+      annex.doors.admin = new Door('adminDoor', new THREE.Vector3(31.2, 0, 5), apv, acol, null, '', Math.PI * 0.55);
+      if (flags.has('open:adminDoor')) annex.doors.admin.openNow();
+      ctx.addInteractable(annex.doors.admin);
     },
   });
 
@@ -402,13 +436,16 @@ export function buildPrisonLevel(ctx: LevelContext): Level {
   // ZONE 3 — CELL BLOCK B
   // =====================================================================
   streamer.add({
-    id: 'cells', bounds: cellsBounds, neighbors: ['guard'], outdoor: false,
-    portalOpen: () => !!cellDoor?.open,
+    id: 'cells', bounds: cellsBounds, neighbors: ['guard', 'gallery'], outdoor: false,
+    portalOpen: (n) => n === 'gallery' ? !!annex.doors.gallery?.open : !!cellDoor?.open,
     build: (G) => {
       const b = new LevelBuilder(physics);
       b.box(32.3, -0.05, 32, 23.4, 0.1, 24, M.concrete, { collide: false, tile: 3, shadow: false });
       b.box(38, 2, 20, 12, 4, 0.3, M.plaster);
-      b.box(44.15, 2, 32, 0.3, 4, 24.3, M.plaster);
+      // east wall with the doorway to the trophy gallery (z 33–35)
+      b.box(44.15, 2, 26.43, 0.3, 4, 13.15, M.plaster);
+      b.box(44.15, 2, 39.58, 0.3, 4, 9.15, M.plaster);
+      b.box(44.15, 3.25, 34, 0.3, 1.5, 2, M.plaster);
       b.box(32, 2, 44.15, 24.3, 4, 0.3, M.plaster);
       b.box(20.3, 2, 42, 0.6, 4, 4, M.plaster);
       b.box(22.3, 2, 26, 3.4, 4, 12, M.tiles, { tile: 2 });
@@ -417,7 +454,13 @@ export function buildPrisonLevel(ctx: LevelContext): Level {
       b.box(32.3, 4.1, 32, 23.4, 0.2, 24, M.concrete, { tile: 3 });
       // cell dividers + beds + toilets
       for (const x of [24, 28, 32, 36, 40]) b.box(x, 2, 40, 0.2, 4, 8, M.plaster);
+      const beds: [number, number, number, number][] = [], toilets: [number, number, number, number][] = [];
       for (let c = 0; c < 6; c++) {
+        const x0 = 20.6 + c * 4 - (c === 0 ? 0.6 : 0);
+        beds.push([x0 + 0.9, 0, 42.9, Math.PI]); toilets.push([x0 + 3.1, 0, 43.62, Math.PI]);
+      }
+      const bedsOk = propInstances(G, physics, 'bed', beds) && propInstances(G, physics, 'toilet', toilets);
+      if (!bedsOk) for (let c = 0; c < 6; c++) {
         const x0 = 20.6 + c * 4 - (c === 0 ? 0.6 : 0);
         b.box(x0 + 0.9, 0.35, 42.5, 1.2, 0.7, 2.2, M.steel, { tile: 1 });
         b.box(x0 + 3.1, 0.3, 43.4, 0.5, 0.6, 0.6, M.white, { tile: 1 });
@@ -451,7 +494,7 @@ export function buildPrisonLevel(ctx: LevelContext): Level {
         flickerLight(l, broken ? 26 : 20, mat, broken);
       }
       // rotating red alarm light
-      const alarm = new THREE.SpotLight(0xff1a10, 120, 16, 0.5, 0.5, 1.5); alarm.position.set(43.6, 3.5, 34); G.add(alarm, alarm.target);
+      const alarm = new THREE.SpotLight(0xff1a10, 120, 16, 0.5, 0.5, 1.5); alarm.position.set(43.6, 3.5, 32.5); G.add(alarm, alarm.target);
       const alarmBulb = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), M.red); alarmBulb.position.copy(alarm.position); G.add(alarmBulb);
       lightsForUpdate.push({ update: (_d, t) => alarm.target.position.set(43.6 + Math.cos(t * 3) * 6, 1, 34 + Math.sin(t * 3) * 6) });
       if (q.volumetrics) {
@@ -462,8 +505,18 @@ export function buildPrisonLevel(ctx: LevelContext): Level {
       }
       // items
       item('c_ext', 'extinguisher', 1, 43.4, 0, 41.2, G);
-      item('c_bow', 'bowgun', 1, 25.5, 0.71, 42.5, G);
-      item('c_bolts', 'ammo_bolt', 18, 25.5, 0.71, 41.7, G);
+      item('c_bow', 'bowgun', 1, 25.5, bedsOk ? 0.6 : 0.71, 42.6, G);
+      item('c_bolts', 'ammo_bolt', 18, 25.5, bedsOk ? 0.6 : 0.71, 43.3, G);
+      // prisoner's note (safe code) on the bed in cell 5
+      const note = new THREE.Mesh(new THREE.PlaneGeometry(0.21, 0.28), new THREE.MeshStandardMaterial({ color: 0xd9d0b4, roughness: 0.9 }));
+      note.rotation.x = -Math.PI / 2; note.rotation.z = 0.5; note.position.set(37.5, bedsOk ? 0.585 : 0.71, 42.4); G.add(note);
+      ctx.addInteractable(new ScriptedInteractable('notePrisoner', new THREE.Vector3(37.5, 0, 41.2), 1.3, () => 'Прочитать: записка заключённого', (g) => g.readDoc('prisoner_note')));
+      // door to the trophy gallery
+      const gpv = new THREE.Group(); gpv.position.set(44.15, 0, 33); gpv.add(doorLeaf(true, 2, 2.5, M.steel)); G.add(gpv);
+      const gcol = physics.addMinMax(44, 33, 44.3, 35, 0, 2.5, 'door', true);
+      annex.doors.gallery = new Door('galleryDoor', new THREE.Vector3(43.3, 0, 34), gpv, gcol, null, '', Math.PI * 0.55);
+      if (flags.has('open:galleryDoor')) annex.doors.gallery.openNow();
+      ctx.addInteractable(annex.doors.gallery);
       item('c_gpb', 'gp_b', 1, 27.2, 0, 38.2, G);
       item('c_herbB', 'herb_b', 1, 37.2, 0, 38, G);
       item('c_herbG', 'herb_g', 1, 21.5, 0, 34.5, G);
@@ -490,10 +543,11 @@ export function buildPrisonLevel(ctx: LevelContext): Level {
       b.box(-28, 4, 28.3, 16.6, 8, 0.6, M.brick, { tile: 3 });
       b.box(-32, 1.6, 22, 5, 3.2, 5, M.wood, { tile: 2 });
       b.box(-32, 3.35, 22, 5.6, 0.3, 5.6, M.rust, { collide: false });
-      b.box(-33, 0.5, 8, 0.8, 1, 0.8, M.concrete, { tile: 1 });
-      b.box(-24, 0.45, 25, 1.4, 0.9, 0.9, M.wood, { tile: 1 });
-      b.box(-26.5, 0.45, 25.2, 0.9, 0.9, 0.9, M.wood, { tile: 1, rotY: 0.4 });
-      for (const [bx, bz] of [[-35, 5.5], [-34.4, 6.4], [-22, 6]]) b.cyl(bx, 0.45, bz, 0.3, 0.9, M.rust, true);
+      if (!placeProp(G, physics, 'pedestal', -33, 0, 8, 0)) b.box(-33, 0.5, 8, 0.8, 1, 0.8, M.concrete, { tile: 1 });
+      if (!placeProp(G, physics, 'crate', -24, 0, 25, 0, { scale: [1.5, 1, 1] })) b.box(-24, 0.45, 25, 1.4, 0.9, 0.9, M.wood, { tile: 1 });
+      if (!placeProp(G, physics, 'crate', -26.5, 0, 25.2, 0.4)) b.box(-26.5, 0.45, 25.2, 0.9, 0.9, 0.9, M.wood, { tile: 1, rotY: 0.4 });
+      const wb: [number, number, number, number][] = [[-35, 0, 5.5, 0.3], [-34.4, 0, 6.4, 1.2], [-22, 0, 6, 2.2]];
+      if (!propInstances(G, physics, 'barrel', wb)) for (const [bx, , bz] of wb) b.cyl(bx, 0.45, bz, 0.3, 0.9, M.rust, true);
       b.box(-29, 0.15, 10, 1.8, 0.3, 0.6, M.corpse, { collide: false, rotY: 0.3 });
       b.flush(G);
       G.add(instanced(wireGeo, M.steel, [...barbed(-36, 4, -36, 28, 8.2), ...barbed(-36, 4, -20, 4, 8.2), ...barbed(-36, 28, -20, 28, 8.2)], false));
@@ -501,7 +555,7 @@ export function buildPrisonLevel(ctx: LevelContext): Level {
       const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), M.lampOn); bulb.position.copy(lamp.position); bulb.updateMatrix(); bulb.castShadow = false; G.add(bulb);
       flickerLight(lamp, 35);
       const emblemLight = new THREE.PointLight(0xffc080, 8, 5, 2); emblemLight.position.set(-33, 1.8, 8); G.add(emblemLight);
-      item('w_emblem', 'emblem', 1, -33, 1.01, 8, G);
+      item('w_valve', 'valve_handle', 1, -33, 1.0, 8, G);
       item('w_m3', 'm3', 1, -24, 0.91, 25, G);
       item('w_shells', 'ammo_sg', 8, -26.5, 0.91, 25.2, G);
       item('w_gpb', 'gp_b', 1, -30, 0, 12.5, G);
@@ -517,6 +571,7 @@ export function buildPrisonLevel(ctx: LevelContext): Level {
   for (const x of [-17, -12, -7, -2, 3, 8, 13, 17.5]) for (const z of [2.5, 8, 13, 18, 23, 28, 33, 38]) navPts.push([x, z]);
   navPts.push([-18.6, 14], [-22, 14], [18.8, 9], [21.6, 9], [21.8, 11], [23.7, 5], [23.7, 8.2], [24.5, 11], [28, 11], [24, 15], [28, 15], [30, 5], [26, 18.8], [26, 21.2]);
   for (const x of [-34, -30, -26, -22]) for (const z of [6, 10, 14, 18, 22, 26]) navPts.push([x, z]);
+  navPts.push(...annex.navPts);
   navPts.push([26, 24], [26, 27.5], [26, 31], [22, 34], [26, 34], [30, 34], [34, 34], [38, 34], [42, 34], [26, 37.5], [26, 40], [38, 37.5], [38, 40], [42, 37.5], [42, 40], [0, 41.5]);
   const blockedStatic: THREE.Box3[] = [
     new THREE.Box3(new THREE.Vector3(-13.6, 0, 3.4), new THREE.Vector3(-10.4, 3, 10.9)),

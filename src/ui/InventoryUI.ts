@@ -11,6 +11,7 @@ export interface InventoryHost {
   use(it: ItemInstance): void;
   equip(it: ItemInstance): void;
   status(): { hp: number; label: string; color: string };
+  docs(): { title: string; body: string }[];
   onClose(): void;
 }
 
@@ -31,6 +32,8 @@ export class InventoryUI {
   private examine: ItemInstance | null = null;
   private note = '';
   private boxMode = false;
+  private tab: 'items' | 'files' = 'items';
+  private fileSel = 0;
   private raf = 0;
   private ecgPhase = 0;
   isOpen = false;
@@ -47,6 +50,7 @@ export class InventoryUI {
     this.isOpen = true;
     this.menu = null; this.combineSrc = null; this.examine = null; this.note = '';
     this.focus = { area: 'inv', index: 0 };
+    this.tab = 'items';
     this.root.classList.remove('hidden');
     this.render();
     const loop = () => { if (!this.isOpen) return; this.drawEcg(); this.raf = requestAnimationFrame(loop); };
@@ -63,7 +67,27 @@ export class InventoryUI {
   }
 
   // ------------------------------------------------------------------ render
+  private renderFiles(): void {
+    const docs = this.host.docs();
+    this.fileSel = Math.min(this.fileSel, Math.max(0, docs.length - 1));
+    const d = docs[this.fileSel];
+    this.root.innerHTML = `
+      <div class="inv-top"><span class="tab" data-t="items">ПРЕДМЕТЫ</span><span class="tab on" data-t="files">ФАЙЛЫ</span></div>
+      <div class="files"><div class="list">${docs.map((x, i) => `<div data-i="${i}" class="${i === this.fileSel ? 'on' : ''}">${x.title}</div>`).join('') || '<i style="color:#666">Пока нет файлов</i>'}</div>
+      <div class="page">${d ? `<h3>${d.title}</h3>${d.body}` : ''}</div></div>
+      <div class="inv-hint">↑/↓ — выбор файла · Q / E — вкладки · Tab / Esc — закрыть</div>`;
+    this.root.querySelectorAll<HTMLDivElement>('.list div[data-i]').forEach((el) => { el.onpointerdown = () => { this.fileSel = +el.dataset.i!; this.renderFiles(); }; });
+    this.bindTabs();
+  }
+
+  private bindTabs(): void {
+    this.root.querySelectorAll<HTMLSpanElement>('.inv-top .tab').forEach((el) => {
+      el.onpointerdown = (e) => { e.stopPropagation(); this.tab = el.dataset.t as 'items' | 'files'; this.menu = null; this.combineSrc = null; this.render(); };
+    });
+  }
+
   render(): void {
+    if (this.tab === 'files') { this.renderFiles(); return; }
     const inv = this.host.inventory;
     const st = this.host.status();
     const eqUid = this.host.equippedUid();
@@ -84,7 +108,7 @@ export class InventoryUI {
     else if (this.note) desc = this.note;
     else if (focused) desc = this.describe(focused);
     this.root.innerHTML = `
-      <div class="inv-top"><span class="tab on">ПРЕДМЕТЫ</span><span class="tab">КАРТА</span><span class="tab">ФАЙЛЫ</span></div>
+      <div class="inv-top"><span class="tab on" data-t="items">ПРЕДМЕТЫ</span><span class="tab" data-t="files">ФАЙЛЫ</span></div>
       <div class="inv-body">
         <div class="inv-left">
           <div class="cond"><div class="cond-h">СОСТОЯНИЕ</div><canvas width="360" height="120"></canvas>
@@ -100,7 +124,7 @@ export class InventoryUI {
           <div class="inv-desc">${desc}</div>
         </div>
       </div>
-      <div class="inv-hint">ЛКМ / Enter — действия · ←↑→↓ — выбор · Backspace — назад · Tab / Esc — закрыть</div>
+      <div class="inv-hint">ЛКМ / Enter — действия · ←↑→↓ — выбор · Backspace — назад · Q — файлы · Tab / Esc — закрыть</div>
       ${this.examine ? `<div class="examine"><div class="ex-ico">${iconHTML(this.examine.defId, 'ico huge')}</div><div class="ex-t">${this.describe(this.examine)}</div><div class="ex-h">ЛКМ / Backspace — назад</div></div>` : ''}`;
     this.root.querySelectorAll<HTMLDivElement>('.slot').forEach((el) => {
       const area = el.dataset.a as 'inv' | 'box', i = +el.dataset.i!;
@@ -110,6 +134,7 @@ export class InventoryUI {
     });
     this.root.onpointerdown = () => { if (this.examine) { this.examine = null; this.render(); } else if (this.menu) { this.menu = null; this.render(); } };
     if (this.menu) this.renderMenu();
+    this.bindTabs();
     this.drawEcg(true);
   }
 
@@ -214,6 +239,14 @@ export class InventoryUI {
     if (back) {
       e.preventDefault(); e.stopImmediatePropagation();
       this.menu = null; this.examine = null; this.combineSrc = null; this.render();
+      return;
+    }
+    if (k === 'KeyQ' && !this.menu && !this.examine) { this.tab = this.tab === 'items' ? 'files' : 'items'; this.render(); return; }
+    if (this.tab === 'files') {
+      const n = this.host.docs().length;
+      if (k === 'ArrowDown' || k === 'KeyS') { this.fileSel = Math.min(n - 1, this.fileSel + 1); this.renderFiles(); }
+      else if (k === 'ArrowUp' || k === 'KeyW') { this.fileSel = Math.max(0, this.fileSel - 1); this.renderFiles(); }
+      else if (k === 'KeyE') { this.tab = 'items'; this.render(); }
       return;
     }
     if (this.examine) { if (k === 'Enter' || k === 'Space' || k === 'KeyE') { this.examine = null; this.render(); } return; }

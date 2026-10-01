@@ -6,7 +6,7 @@ from lib import *
 from PIL import Image, ImageDraw, ImageFilter
 ONLY = set(sys.argv[1:])
 SRC = '/data/cv-remake/src/assets/models'
-DST = '/data/cv-remake/src/assets/icons'; os.makedirs(DST, exist_ok=True)
+DST = os.environ.get('ICON_DST', '/data/cv-remake/src/assets/icons'); os.makedirs(DST, exist_ok=True)
 RES = 256
 
 def tile():
@@ -78,9 +78,9 @@ def render(path, key, kind):
     base.convert('RGB').save(f'{DST}/{key}.jpg', quality=90)
     print('icon', key)
 
-files = sorted(glob.glob(f'{SRC}/item_*.glb') + glob.glob(f'{SRC}/weapon_*.glb'))
+files = sorted(glob.glob(f'{SRC}/item_*.glb') + glob.glob(f'{SRC}/weapon_*.glb')) if not os.environ.get('ICON_GLOB') else sorted(glob.glob(f"{SRC}/{os.environ['ICON_GLOB']}"))
 for f in files:
     name = os.path.basename(f)[:-4]
-    kind, key = ('weapon', name[7:]) if name.startswith('weapon_') else ('item', name[5:])
+    kind, key = ('weapon', name[7:]) if name.startswith('weapon_') else ('item', name[5:]) if name.startswith('item_') else ('item', name)
     if ONLY and key not in ONLY: continue
     render(f, key, kind)

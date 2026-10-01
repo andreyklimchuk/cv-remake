@@ -176,6 +176,18 @@ export class AudioEngine {
     this.tone(this.sfx, t + 0.09, 0.25, 'triangle', 990, 990, 0.12);
   }
 
+  /** Music-box melody (plucked comb tones) — plays ~5 s. */
+  melody(): void {
+    if (!this.ctx) return;
+    const t0 = this.ctx.currentTime + 0.1;
+    const notes = [76, 79, 83, 81, 79, 76, 74, 76, 79, 78, 74, 71, 72, 76, 79, 83];
+    notes.forEach((n, i) => {
+      const f = 440 * Math.pow(2, (n - 69) / 12);
+      this.tone(this.sfx, t0 + i * 0.3, 0.9, 'sine', f, f, 0.1);
+      this.tone(this.sfx, t0 + i * 0.3, 0.4, 'triangle', f * 2, f * 2, 0.025);
+    });
+  }
+
   ui(): void {
     if (!this.ctx) return;
     this.tone(this.sfx, this.ctx.currentTime, 0.06, 'square', 1200, 900, 0.05);

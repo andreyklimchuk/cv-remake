@@ -42,26 +42,43 @@ parts = {}
 def top_filter(C):
     x, y, zz = C.T
     return (zz < Z(1.075)) | ((y < 0) & (zz > Z(1.18)) & (np.abs(x) < 0.10)) | (np.abs(x) > 0.105)
-top = garment(body0, (z0 > Z(0.925)) & (z0 < Z(1.392)) & (arm0 < 0.45) & (nh0 < 0.35), 'top', top_filter)
+top = garment(body0, (z0 > Z(0.925)) & (z0 < Z(1.392)) & (arm0 < 0.45) & (nh0 < 0.35), 'top')   # open jacket: full top
 subdivide(top, 1)
 cloth_shell(top, bvh, 0.0028, smooth_iters=2, passes=2, pin=boundary_verts(top))
 make_high(top, 1, lambda p, n: 0.0004 * nz(p[0] * 60, p[1] * 60, p[2] * 30) + 0.0008 * nz(p[0] * 8, p[1] * 8, p[2] * 30))
 parts['top'] = top
 
-# ------------------------------------------------------------ red vest
-def vest_filter(C):
+# ------------------------------------------------------------ leather biker jacket (object keeps the pipeline name 'vest')
+JA = {k: np.array(joints[k + 'Forearm'][:]) for k in 'lr'}; JB = {k: np.array(joints[k + 'Hand'][:]) for k in 'lr'}
+SLEEVE_END = 0.8      # sleeves slightly pushed up: end at 80% of the forearm
+def forearm_t(P):
+    P = np.atleast_2d(P); t = np.full(len(P), -1.0)
+    for k, sg in (('l', 1), ('r', -1)):
+        ab = JB[k] - JA[k]; tt = ((P - JA[k]) @ ab) / (ab @ ab)
+        t = np.where(P[:, 0] * sg > 0.12, np.maximum(t, tt), t)
+    return t
+hand0 = wsum(W0, ['lHand', 'rHand']); ft0 = forearm_t(P0)
+def open_w(zz): return 0.03 + 0.05 * smoothstep(Z(1.0), Z(1.33), zz)
+def jacket_filter(C):
     x, y, zz = C.T
-    vcut = (y < 0) & (zz > Z(1.235)) & (np.abs(x) < 0.010 + (zz - Z(1.235)) * 0.40)
-    return ~vcut
-vest = garment(body0, (z0 > Z(0.995)) & (z0 < Z(1.392)) & (arm0 < 0.38) & (nh0 < 0.4), 'vest', vest_filter)
+    front_open = (y < -0.015) & (np.abs(x) < open_w(zz))
+    return ~front_open & (forearm_t(C) < SLEEVE_END)
+vest = garment(body0, ((z0 > Z(0.975)) | (arm0 > 0.3)) & (z0 < Z(1.40)) & (nh0 < 0.4) & (hand0 < 0.25) & (ft0 < SLEEVE_END + 0.05), 'vest', jacket_filter)
 subdivide(vest, 1)
-cloth_shell(vest, bvh, 0.0105, smooth_iters=5, passes=3, pin=boundary_verts(vest))
+cloth_shell(vest, bvh, 0.0095, smooth_iters=5, passes=3, pin=boundary_verts(vest))
 def vest_fold(p, n):
     x, y, z = p; zz = U(z)
     arm = smoothstep(0.09, 0.14, abs(x)) * smoothstep(1.12, 1.2, zz) * smoothstep(1.34, 1.26, zz)
     waist = smoothstep(1.08, 1.0, zz)
-    return (0.0009 * nz(x * 9, y * 9, z * 22) + 0.0022 * arm * nz(x * 20 + z * 20, y * 20, z * 12)
-            + 0.0016 * waist * nz(x * 5, y * 5, z * 60) + 0.00025 * nz(x * 90, y * 90, z * 90))
+    base = (0.0008 * nz(x * 9, y * 9, z * 22) + 0.0018 * arm * nz(x * 20 + z * 20, y * 20, z * 12)
+            + 0.0014 * waist * nz(x * 5, y * 5, z * 60) + 0.0002 * nz(x * 90, y * 90, z * 90))
+    if abs(x) > 0.16:   # sleeves: elbow creases + bunching of the pushed-up sleeve near the cuff
+        k = 'l' if x > 0 else 'r'; ab = JB[k] - JA[k]; t = float(((np.array(p) - JA[k]) @ ab) / (ab @ ab))
+        bunch = smoothstep(0.35, 0.75, t)
+        elbow = math.exp(-(t / 0.14) ** 2)
+        return (0.4 * base + 0.0032 * bunch * (0.5 + 0.5 * math.sin(t * 70 + 3 * nz(x * 12, y * 12, z * 12)))
+                + 0.0022 * elbow * nz(x * 45, y * 45, z * 45) + 0.0012 * nz(x * 16, y * 16, z * 16))
+    return base
 make_high(vest, 2, vest_fold)
 parts['vest'] = vest
 
@@ -222,24 +239,49 @@ nax = (nk1 - nk0).normalized()
 def neck_ring(zc, off):
     c = nk0 + nax * ((zc - nk0.z) / nax.z)
     return ray_ring(bvh, c, nax, Vector((0, 1, 0)), 40, off, reach=0.25, a0=-1.95, a1=1.95, closed=False)
-cb, cbn = neck_ring(Z(1.382), 0.0115)
-ct, ctn = neck_ring(Z(1.382) + 0.042, 0.0078)
-collar = band_mesh('collar', ct, cb, ctn, cbn, 0.0032, closed=False)
+cb, cbn = neck_ring(Z(1.382), 0.016)
+ct, ctn = neck_ring(Z(1.382) + 0.05, 0.0105)
+collar = band_mesh('collar', ct, cb, ctn, cbn, 0.0036, closed=False)
 vb = bvh_of(vest)
-zl, zr, znl, znr = [], [], [], []
-for k in range(26):
-    zz = Z(1.0) + (Z(1.235) - Z(1.0)) * k / 25
-    for sx, L, NL in ((-0.0065, zl, znl), (0.0065, zr, znr)):
-        hit, nr, _, _ = vb.ray_cast(Vector((sx, -0.4, zz)), Vector((0, 1, 0)), 0.6)
-        if hit is None: hit, nr = Vector((sx, -0.15, zz)), Vector((0, -1, 0))
-        if nr.y > 0: nr = -nr
-        L.append(hit + nr * 0.0004); NL.append(nr)
-zipper = band_mesh('zipper', zl, zr, znl, znr, 0.0016, closed=False)
-zp = zl[-1].lerp(zr[-1], 0.5)
-pull = box_mesh('zip_pull', (0.011, 0.0035, 0.026), bevel=0.0012)
-place(pull, zp + znl[-1] * 0.004 + Vector((0, 0, -0.012)), Vector((1, 0, 0)), Vector((0, 1, 0)), Vector((0, 0, 1)))
-zipper = join([zipper, pull], 'zipper')
-solidify(vest, 0.0034, offset=-1)
+# lapels: copy of the jacket's front edge strip on the chest, lifted off the surface (reads as folded-back leather)
+Cv = centers(vest)
+w_c = open_w(Cv[:, 2])
+lap_f = (Cv[:, 1] < -0.01) & (Cv[:, 2] > Z(1.16)) & (Cv[:, 2] < Z(1.375)) & (np.abs(Cv[:, 0]) > w_c) & (np.abs(Cv[:, 0]) < w_c + 0.02 + 0.035 * smoothstep(Z(1.16), Z(1.33), Cv[:, 2]))
+lapels = extract_faces(vest, lap_f, 'lapels')
+for m_ in list(lapels.modifiers): lapels.modifiers.remove(m_)
+lapels.parent = None
+if lapels.data.shape_keys: lapels.shape_key_clear()
+for g_ in list(lapels.vertex_groups): lapels.vertex_groups.remove(g_)
+Pl = V(lapels); Nl = N(lapels); setV(lapels, Pl + Nl * 0.0042)
+solidify(lapels, 0.0022, offset=-1)
+collar = join([collar, lapels], 'collar')
+# zip tapes on both open edges + pull on the wearer's left
+tapes = []
+for sgn in (1, -1):
+    zl, zr, znl, znr = [], [], [], []
+    for k in range(28):
+        zz = Z(0.985) + (Z(1.19) - Z(0.985)) * k / 27
+        w = open_w(zz)
+        for off, L, NL in ((w + 0.0012, zl, znl), (w + 0.0085, zr, znr)):
+            hit, nr, _, _ = vb.ray_cast(Vector((sgn * off, -0.4, zz)), Vector((0, 1, 0)), 0.6)
+            if hit is None: hit, nr = Vector((sgn * off, -0.15, zz)), Vector((0, -1, 0))
+            if nr.y > 0: nr = -nr
+            L.append(hit + nr * 0.0005); NL.append(nr)
+    tapes.append(band_mesh('ztape', zl, zr, znl, znr, 0.0016, closed=False))
+    if sgn == 1:
+        zp = zl[-6].lerp(zr[-6], 0.5)
+        pull = box_mesh('zip_pull', (0.009, 0.0035, 0.024), bevel=0.0012)
+        place(pull, zp + znl[-6] * 0.004 + Vector((0, 0, -0.012)), Vector((1, 0, 0)), Vector((0, 1, 0)), Vector((0, 0, 1)))
+        tapes.append(pull)
+# sleeve cuffs (leather band + snap)
+for k in 'lr':
+    a_, b_ = Vector(JA[k].tolist()), Vector(JB[k].tolist()); ax_ = (b_ - a_).normalized()
+    c0 = a_ + (b_ - a_) * (SLEEVE_END - 0.045); c1 = a_ + (b_ - a_) * (SLEEVE_END - 0.002)
+    r0, n0 = ray_ring(bvh, c0, ax_, Vector((0, 0, 1)), 32, 0.0115, reach=0.12)
+    r1, n1 = ray_ring(bvh, c1, ax_, Vector((0, 0, 1)), 32, 0.0115, reach=0.12)
+    tapes.append(band_mesh('cuff', r1, r0, n1, n0, 0.0028, closed=True))
+zipper = join(tapes, 'zipper')
+solidify(vest, 0.0036, offset=-1)
 solidify(top, 0.0012, offset=-1)
 for o in (collar, belt, buckle, pouches, holster, zipper):
     shade_smooth(o, math.radians(40)); recalc_normals(o)
@@ -249,7 +291,9 @@ for o in (collar, belt, buckle, pouches, holster, zipper):
 # ------------------------------------------------------------ hide body under clothes, shape keys
 W1 = weights(body, groups); P1 = V(body); z1 = P1[:, 2]
 arm1 = wsum(W1, ARM); nh1 = wsum(W1, ['neck', 'head'])
+hand1 = wsum(W1, ['lHand', 'rHand']); ft1 = forearm_t(P1)
 hide = (((z1 > Z(0.96)) & (z1 < Z(1.362)) & (arm1 < 0.22) & (nh1 < 0.25))
+        | ((arm1 > 0.22) & (hand1 < 0.04) & (ft1 < SLEEVE_END - 0.07) & (z1 > Z(0.85)) & (z1 < Z(1.36)))
         | ((z1 < Z(0.95)) & (z1 > Z(0.235)) & (arm1 < 0.1))
         | ((z1 < Z(0.29)) & (arm1 < 0.1)))
 delete_faces(body, face_mask_from_verts(body, hide, 'all'))

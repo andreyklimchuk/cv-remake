@@ -12,6 +12,7 @@ import { InventoryUI } from '../ui/InventoryUI';
 import { Menus, loadSettings, saveSettings, type Settings } from '../ui/Menus';
 import { SaveSystem } from './SaveSystem';
 import { ITEMS, newUid, type ItemInstance } from './inventory/Items';
+import { DOCS } from './levels/Docs';
 import { WEAPONS } from './combat/Weapons';
 import type { GameAPI } from './world/Interactables';
 
@@ -54,6 +55,7 @@ export class Game {
         const st = p.status();
         return { hp: p.hpRatio() * 100, label: p.poisoned ? 'POISON' : st.toUpperCase(), color: p.poisoned ? '#b05ce8' : st === 'fine' ? '#3ddc6a' : st === 'caution' ? '#e8c33a' : '#e8412e' };
       },
+      docs: () => Object.keys(DOCS).filter((k) => this.world?.flags.has('doc:' + k)).map((k) => DOCS[k]),
       onClose: () => { if (this.mode === 'inventory') { this.mode = 'playing'; this.input.lockPointer(); } },
     });
     this.menus = new Menus(ui);
@@ -67,6 +69,8 @@ export class Game {
       openItemBox: () => this.openInventory(true),
       confirm: (t, yes) => this.dialog(t, yes),
       completeLevel: () => this.complete(),
+      readDoc: (id) => this.readDoc(id),
+      codeLock: (title, digits, check, solved) => this.codeLock(title, digits, check, solved),
     };
     const game = this;
     document.addEventListener('pointerlockchange', () => {
@@ -145,6 +149,27 @@ export class Game {
     this.input.unlockPointer();
     const close = () => { this.menus.clear(); this.mode = prev === 'dialog' ? 'playing' : prev; this.input.lockPointer(); };
     this.menus.confirm(text, () => { close(); yes(); }, close);
+  }
+
+  private modal(open: (close: () => void) => void): void {
+    const prev = this.mode;
+    this.mode = 'dialog';
+    this.input.unlockPointer();
+    open(() => { this.menus.clear(); this.mode = prev === 'dialog' ? 'playing' : prev; if (this.mode === 'playing') this.input.lockPointer(); });
+  }
+
+  private readDoc(id: string): void {
+    const d = DOCS[id];
+    if (!d || !this.world) return;
+    this.world.flags.add('doc:' + id);
+    audio.ui();
+    this.modal((close) => this.menus.doc(d.title, d.body, close));
+  }
+
+  private codeLock(title: string, digits: number, check: (code: string) => boolean, solved: () => void): void {
+    this.menus.onTick = () => audio.click();
+    this.menus.onFail = () => audio.click(true);
+    this.modal((close) => this.menus.codeLock(title, digits, check, solved, close));
   }
 
   private saveDialog(): void {

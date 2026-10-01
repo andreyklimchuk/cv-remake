@@ -106,5 +106,62 @@ export class Menus {
     this.bind(el, { yes, no });
   }
 
+  private keyHandler: ((e: KeyboardEvent) => void) | null = null;
+  private setKeys(h: ((e: KeyboardEvent) => void) | null): void {
+    if (this.keyHandler) window.removeEventListener('keydown', this.keyHandler, true);
+    this.keyHandler = h;
+    if (h) window.addEventListener('keydown', h, true);
+  }
+
+  /** RE-style file reader (aged paper page). */
+  doc(title: string, body: string, close: () => void): void {
+    const el = this.screen(`<div class="doc"><div class="doc-page"><h3>${title}</h3><div class="doc-body">${body}</div></div>
+      <div class="doc-h">E / Enter / Esc — закрыть</div></div>`);
+    const done = () => { this.setKeys(null); close(); };
+    el.onclick = done;
+    this.setKeys((e) => { if (['Escape', 'Enter', 'KeyE', 'Space'].includes(e.code)) { e.preventDefault(); e.stopImmediatePropagation(); done(); } });
+  }
+
+  /** RE-style combination dial: ←/→ select dial, ↑/↓ (or mouse wheel / click) change digit, Enter — try. */
+  codeLock(title: string, digits: number, check: (code: string) => boolean, solved: () => void, close: () => void): void {
+    const val = Array(digits).fill(0);
+    let sel = 0;
+    const el = this.screen(`<div class="lock"><h3>${title}</h3><div class="dials"></div><div class="lock-msg">&nbsp;</div>
+      <div class="row"><button class="btn" data-a="try">ОТКРЫТЬ</button><button class="btn" data-a="no">ОТМЕНА</button></div>
+      <div class="doc-h">←/→ — диск · ↑/↓ — цифра · Enter — открыть · Esc — отмена</div></div>`);
+    const dials = el.querySelector('.dials') as HTMLDivElement;
+    const msg = el.querySelector('.lock-msg') as HTMLDivElement;
+    const draw = () => {
+      dials.innerHTML = val.map((v, i) => `<div class="dial${i === sel ? ' on' : ''}" data-i="${i}"><span class="up">▲</span><span class="n p">${(v + 9) % 10}</span><span class="n">${v}</span><span class="n p">${(v + 1) % 10}</span><span class="dn">▼</span></div>`).join('');
+      dials.querySelectorAll<HTMLDivElement>('.dial').forEach((d) => {
+        const i = +d.dataset.i!;
+        (d.querySelector('.up') as HTMLElement).onclick = (e) => { e.stopPropagation(); sel = i; val[i] = (val[i] + 1) % 10; tick(); };
+        (d.querySelector('.dn') as HTMLElement).onclick = (e) => { e.stopPropagation(); sel = i; val[i] = (val[i] + 9) % 10; tick(); };
+        d.onwheel = (e) => { e.preventDefault(); sel = i; val[i] = (val[i] + (e.deltaY < 0 ? 1 : 9)) % 10; tick(); };
+      });
+    };
+    const tick = () => { msg.innerHTML = '&nbsp;'; draw(); this.onTick?.(); };
+    const done = () => { this.setKeys(null); close(); };
+    const attempt = () => {
+      if (check(val.join(''))) { this.setKeys(null); msg.textContent = 'Щелчок… замок открыт.'; msg.style.color = '#8ff09c'; setTimeout(() => { close(); solved(); }, 700); }
+      else { msg.textContent = 'Не открывается.'; msg.style.color = '#e8412e'; el.querySelector('.lock')?.classList.remove('shake'); void (el as HTMLElement).offsetWidth; el.querySelector('.lock')?.classList.add('shake'); this.onFail?.(); }
+    };
+    this.bind(el, { try: attempt, no: done });
+    this.setKeys((e) => {
+      const k = e.code;
+      if (k === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); done(); return; }
+      if (k === 'ArrowLeft' || k === 'KeyA') sel = (sel + digits - 1) % digits;
+      else if (k === 'ArrowRight' || k === 'KeyD') sel = (sel + 1) % digits;
+      else if (k === 'ArrowUp' || k === 'KeyW') val[sel] = (val[sel] + 1) % 10;
+      else if (k === 'ArrowDown' || k === 'KeyS') val[sel] = (val[sel] + 9) % 10;
+      else if (k === 'Enter' || k === 'KeyE') { e.preventDefault(); attempt(); return; }
+      else return;
+      e.preventDefault(); e.stopImmediatePropagation(); tick();
+    });
+    draw();
+  }
+  onTick?: () => void;
+  onFail?: () => void;
+
   loading(text: string): void { this.screen(`<h2 style="margin:0">${text}</h2>`); }
 }

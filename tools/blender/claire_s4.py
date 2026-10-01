@@ -162,6 +162,15 @@ def sample_text(u, v):
     b = TXT[np.minimum(y0 + 1, H - 1), x0] * (1 - fx) + TXT[np.minimum(y0 + 1, H - 1), np.minimum(x0 + 1, W - 1)] * fx
     return (a * (1 - fy) + b * fy) * (u >= 0) * (u <= 1) * (v >= 0) * (v <= 1)
 
+VALK = np.array(Image.open('/data/assets_src/work/valkyrie.png').convert('RGBA'), np.float32) / 255.0
+VALK[..., :3] = VALK[..., :3] ** 2.2
+def sample_print(u, v):
+    H, W = VALK.shape[:2]; ui = np.clip(u, 0, 0.9999) * (W - 1); vi = np.clip(1 - v, 0, 0.9999) * (H - 1)
+    x0 = ui.astype(int); y0 = vi.astype(int); fx = (ui - x0)[:, None]; fy = (vi - y0)[:, None]
+    x1 = np.minimum(x0 + 1, W - 1); y1 = np.minimum(y0 + 1, H - 1)
+    p = (VALK[y0, x0] * (1 - fx) + VALK[y0, x1] * fx) * (1 - fy) + (VALK[y1, x0] * (1 - fx) + VALK[y1, x1] * fx) * fy
+    inside = ((u >= 0) & (u <= 1) & (v >= 0) & (v <= 1)).astype(np.float32)
+    return p[:, :3] * 0.8, p[:, 3] * inside
 band_z = Z(0.952)
 def outfit_shade(P, Nn, ids):
     n = len(P); x, y, z = P[:, 0], P[:, 1], P[:, 2]
@@ -169,33 +178,52 @@ def outfit_shade(P, Nn, ids):
     lo = fbm(P, 3, scale=7.0); mid = fbm(P, 3, scale=40.0); hi = fbm(P, 2, scale=260.0)
     def M(name): return ids == ID[name]
     theta = np.arctan2(x, -(y + 0.005))
-    # ---- vest + collar (red cotton/nylon twill)
+    # ---- biker jacket + collar/lapels (dark red-brown leather)
     m = M('vest') | M('collar')
     if np.any(m):
-        base = np.array([0.40, 0.013, 0.017], np.float32)
-        c = base * (1 + 0.10 * lo[:, None] + 0.06 * mid[:, None])
+        F1, F2 = worley(P, 1400.0)
+        pebble = ss(0.0, 0.5, F2 - F1)                      # leather pebble grain
+        crease = ss(0.55, 0.95, np.abs(fbm(P * np.array([60, 60, 160]), 3)))
+        base = np.array([0.062, 0.016, 0.011], np.float32)
+        c = base * (1 + 0.18 * lo[:, None] + 0.10 * mid[:, None] - 0.08 * pebble[:, None])
+        arm = np.abs(x) > 0.165
         side = (np.abs(np.abs(theta) - math.pi / 2)) * 0.13
-        xs = 0.068 - 0.018 * ss(Z(1.12), Z(1.32), z)
-        princ = np.where(y < 0, np.abs(np.abs(x) - xs), np.abs(np.abs(x) - 0.072))
-        hem = z - (Z(1.0) + 0.011)
-        zipl = np.where((y < 0) & (z < Z(1.237)), np.abs(np.abs(x) - 0.0125), 1.0)
-        vd = np.where((y < 0) & (z > Z(1.235)), np.abs(np.abs(x) - (0.010 + (z - Z(1.235)) * 0.40) - 0.007), 1.0)
+        princ = np.where(y < 0, np.abs(np.abs(x) - 0.075), np.abs(np.abs(x) - 0.085))
+        yoke = np.where((y > 0) & ~arm, np.abs(z - Z(1.30)), 1.0)
+        hemband = np.abs(z - (Z(1.0) + 0.045))
+        hem = z - (Z(1.0) + 0.006)
+        # zip pockets: diagonal chest pocket (wearer's left) + two horizontal waist pockets
+        cx_ = x - 0.075; cz_ = z - Z(1.24)
+        chest = np.where((y < 0) & (np.abs(cx_) < 0.035) & (np.abs(cz_) < 0.03), np.abs(cz_ - 0.45 * cx_), 1.0)
+        waist = np.where((y < 0) & (np.abs(np.abs(x) - 0.105) < 0.04), np.abs(z - Z(1.07) - 0.12 * (np.abs(x) - 0.105)), 1.0)
+        pocket = np.minimum(chest, waist)
+        pk_teeth = line_mask(pocket, 0.0018, 0.0012)
+        pk_lip = line_mask(pocket, 0.0045, 0.0015) - pk_teeth
+        sleeve_seam = np.where(arm, np.abs(y - 0.012), 1.0)
         along = z + 0.3 * x
-        groove = line_mask(side, 0.0025, 0.002) + line_mask(princ, 0.0022, 0.0018)
-        st = (stitches(side - 0.0035, along) + stitches(princ - 0.0032, along) + stitches(hem, x * np.sign(y + 1e-6) + y)
-              + stitches(zipl - 0.0, z) + stitches(vd, z))
-        wear = np.clip(ss(Z(1.03), Z(1.0), z) * 0.5 + groove * 0.4, 0, 1) * ss(-0.2, 0.6, hi)
-        c = mix3(c, c * np.array([1.35, 1.6, 1.6]) + 0.02, wear * 0.35)
-        c = mix3(c, np.array([0.22, 0.012, 0.014]), np.clip(st, 0, 1) * 0.75)
-        grime = ss(0.2, 0.8, lo) * 0.25 + ss(Z(1.05), Z(0.99), z) * 0.2
-        c = c * (1 - grime[:, None] * 0.35)
-        # back print
-        u = (0.098 - x) / 0.196; v = (z - Z(1.232)) / 0.047
-        txt = sample_text(u, v) * (y > 0) * (Nn[:, 1] > 0.35) * ss(-0.4, 0.2, mid + 0.3)
-        c = mix3(c, np.array([0.62, 0.58, 0.50]), txt * 0.92)
+        groove = (line_mask(side, 0.0025, 0.002) + line_mask(princ, 0.0022, 0.0018) + line_mask(yoke, 0.002, 0.0015)
+                  + line_mask(hemband, 0.002, 0.0015) + line_mask(sleeve_seam, 0.002, 0.0015))
+        st = (stitches(side - 0.0035, along) + stitches(princ - 0.0032, along) + stitches(yoke - 0.003, x)
+              + stitches(hemband - 0.003, x + y) + stitches(hem, x * np.sign(y + 1e-6) + y) + stitches(pocket - 0.006, x))
+        # worn edges / highlights on creases, darker in folds
+        wear = np.clip(groove * 0.5 + crease * 0.5, 0, 1) * ss(-0.2, 0.6, hi)
+        c = mix3(c, c * np.array([1.9, 1.7, 1.6]) + 0.01, wear * 0.35)
+        c = mix3(c, np.array([0.035, 0.010, 0.007]), np.clip(groove, 0, 1) * 0.6)
+        c = mix3(c, np.array([0.16, 0.10, 0.07]), np.clip(st, 0, 1) * 0.55)   # tan thread
+        c = mix3(c, np.array([0.03, 0.028, 0.027]), pk_teeth * 0.95)          # pocket zips (dark metal)
+        c = mix3(c, np.array([0.04, 0.012, 0.008]), np.clip(pk_lip, 0, 1) * 0.7)
+        grime = ss(0.2, 0.8, lo) * 0.2
+        c = c * (1 - grime[:, None] * 0.3)
+        # back print: Valkyrie patch
+        u = (0.12 - x) / 0.24; v = (z - Z(1.065)) / 0.245
+        pr, pa = sample_print(u, v)
+        pa = pa * (y > 0) * (Nn[:, 1] > 0.25) * ~arm * (0.82 + 0.18 * ss(-0.4, 0.3, mid + 0.4))
+        c = mix3(c, pr, pa * 0.95)
         col[m] = c[m]
-        rough[m] = (0.62 + 0.07 * mid - 0.1 * txt)[m]
-        h[m] = (0.00005 * hi - 0.0003 * groove + 0.00012 * st + 0.00008 * txt)[m]
+        rough[m] = (0.42 + 0.08 * mid + 0.10 * pebble - 0.10 * wear + 0.2 * pa)[m]
+        metal[m] = (0.9 * pk_teeth)[m]
+        h[m] = (0.00004 * hi - 0.00003 * pebble - 0.00025 * groove + 0.00010 * st - 0.0002 * pk_lip + 0.00012 * pk_teeth
+                + 0.00006 * pa - 0.00008 * crease)[m]
     # ---- black tank top (jersey)
     m = M('top')
     if np.any(m):
@@ -317,8 +345,14 @@ def outfit_shade(P, Nn, ids):
             c = np.array(c_) * (1 + 0.1 * mid[:, None]); c = mix3(c, np.array(c_) * 1.3, scratch * 0.4)
             col[m] = c[m]; rough[m] = (r_ + 0.1 * hi - 0.1 * scratch)[m]; metal[m] = me_
             if nm_ == 'zipper':
-                teeth = ss(0.2, 0.5, np.abs(np.sin(z * 2 * math.pi / 0.0032))) * (np.abs(x) < 0.0045)
-                h[m] = (0.0002 * teeth)[m]; col[m] = mix3(col, col * 0.4, 1 - teeth)[m]
+                cuff = np.abs(x) > 0.165
+                teeth = ss(0.2, 0.5, np.abs(np.sin(z * 2 * math.pi / 0.0032))) * ~cuff
+                h[m] = (0.0002 * teeth)[m]; col[m] = mix3(col, col * 0.35, 1 - teeth)[m]
+                mc = m & cuff
+                if np.any(mc):
+                    F1c, F2c = worley(P, 1400.0)
+                    cc = np.array([0.07, 0.017, 0.011]) * (1 + 0.15 * mid[:, None] - 0.1 * ss(0, 0.5, F2c - F1c)[:, None])
+                    col[mc] = cc[mc]; rough[mc] = 0.45; metal[mc] = 0.0; h[mc] = (-0.00003 * ss(0, 0.5, F2c - F1c))[mc]
     for nm_ in ('pouches', 'holster', 'hair_tie'):
         m = M(nm_)
         if np.any(m):

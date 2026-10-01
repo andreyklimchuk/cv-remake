@@ -18,6 +18,10 @@ export interface GameAPI {
   openItemBox(): void;
   confirm(text: string, onYes: () => void): void;
   completeLevel(): void;
+  /** Show an RE-style file (Docs.ts) and add it to the inventory "Files" tab. */
+  readDoc(id: string): void;
+  /** RE-style dial lock. `check` returns true when the combination is right. */
+  codeLock(title: string, digits: number, check: (code: string) => boolean, onSolved: () => void): void;
 }
 
 export interface Interactable {

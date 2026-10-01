@@ -56,8 +56,9 @@ export const ITEMS: Record<string, ItemDef> = {
   // --- key items / puzzle ------------------------------------------------
   keycard: { id: 'keycard', name: 'Security Keycard', kind: 'key', w: 1, h: 1, maxStack: 1, color: '#886', glyph: '▭', desc: 'Карта охраны тюрьмы Рокфорта. Открывает блок камер.' },
   extinguisher: { id: 'extinguisher', name: 'Extinguisher', kind: 'key', w: 1, h: 2, maxStack: 1, color: '#a11', glyph: '🧯', desc: 'Огнетушитель. Может потушить пожар.' },
-  emblem: { id: 'emblem', name: 'Hawk Emblem', kind: 'key', w: 2, h: 2, maxStack: 1, color: '#a83', glyph: '🦅', desc: 'Тяжёлая бронзовая эмблема с ястребом. Похожа на герб над главными воротами.' },
-  musicbox: { id: 'musicbox', name: 'Music Box Plate', kind: 'key', w: 2, h: 1, maxStack: 1, color: '#759', glyph: '♪', desc: 'Пластинка музыкальной шкатулки. (Используется на следующих уровнях.)' },
+  emblem: { id: 'emblem', name: 'Hawk Emblem', kind: 'key', w: 2, h: 2, maxStack: 1, color: '#a83', glyph: '🦅', desc: 'Тяжёлая бронзовая эмблема с ястребом. Похожа на герб над главными воротами — на панели ворот есть такое же углубление.' },
+  musicbox: { id: 'musicbox', name: 'Music Box Plate', kind: 'key', w: 2, h: 1, maxStack: 1, color: '#759', glyph: '♪', desc: 'Латунная пластинка музыкальной шкатулки с рядами штифтов. В кабинете начальника есть шкатулка с пустым гнездом.' },
+  valve_handle: { id: 'valve_handle', name: 'Valve Handle', kind: 'key', w: 1, h: 1, maxStack: 1, color: '#822', glyph: '⎈', desc: 'Чугунный маховик с квадратным отверстием. Подойдёт к запорному вентилю.' },
   lighter: { id: 'lighter', name: 'Lighter', kind: 'key', w: 1, h: 1, maxStack: 1, color: '#888', glyph: '🔥', desc: 'Зажигалка Клэр. Подарок Криса.' },
 };
 
