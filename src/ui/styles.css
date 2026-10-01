@@ -134,3 +134,15 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #000; font-f
 .files .page h3 { margin: 0 0 12px; font-weight: normal; letter-spacing: 2px; }
 .files .page p { margin: 0 0 10px; }
 .inv-top .tab { cursor: pointer; }
+/* ---- cutscenes ---- */
+.cinema { position: absolute; inset: 0; pointer-events: none; z-index: 8; }
+.cinema .cb { position: absolute; left: 0; right: 0; height: 11vh; background: #000; }
+.cinema .cb.top { top: 0; } .cinema .cb.bot { bottom: 0; }
+.cinema .csub { position: absolute; left: 10%; right: 10%; bottom: 13.5vh; text-align: center; font-size: 22px; line-height: 1.35; color: #f1ede4; text-shadow: 0 2px 4px #000, 0 0 12px #000; opacity: 0; transition: opacity .25s; }
+.cinema .csub.on { opacity: 1; }
+.cinema .csub b { display: block; font-size: 13px; letter-spacing: 4px; color: #e8c33a; text-transform: uppercase; margin-bottom: 4px; font-weight: normal; }
+.cinema .ccap { position: absolute; left: 6vw; top: 15vh; font-family: Georgia, serif; font-size: 24px; letter-spacing: 6px; color: #e6e0d2; text-shadow: 0 2px 10px #000; opacity: 0; transition: opacity 1.4s; }
+.cinema .ccap small { display: block; font-size: 12px; letter-spacing: 4px; color: #9aa3ab; margin-top: 6px; }
+.cinema .ccap.on { opacity: 1; }
+.cinema .cskip { position: absolute; right: 2.5vw; bottom: 3.6vh; font-size: 11px; letter-spacing: 2px; color: #777; }
+.cinema .cfade { position: absolute; inset: 0; background: #000; opacity: 0; }

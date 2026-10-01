@@ -269,6 +269,93 @@ export class AudioEngine {
     return h;
   }
 
+  /** Helicopter: blade "chop" (amplitude-modulated low noise) + turbine whine. Positional; `level` 0..1. */
+  heliLoop(pos: THREE.Vector3): { setPos: (p: THREE.Vector3) => void; setLevel: (v: number) => void; stop: () => void } {
+    if (!this.ctx) return { setPos: () => {}, setLevel: () => {}, stop: () => {} };
+    const ctx = this.ctx;
+    const pan = ctx.createPanner();
+    pan.panningModel = 'HRTF'; pan.distanceModel = 'inverse'; pan.refDistance = 9; pan.maxDistance = 300; pan.rolloffFactor = 0.8;
+    pan.connect(this.sfx);
+    const master = ctx.createGain(); master.gain.value = 0; master.connect(pan);
+    master.gain.setTargetAtTime(0.9, ctx.currentTime, 0.6);
+    // chop
+    const src = ctx.createBufferSource(); src.buffer = this.noise; src.loop = true;
+    const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 520; f.Q.value = 0.9;
+    const am = ctx.createGain(); am.gain.value = 0.45;
+    const lfo = ctx.createOscillator(); lfo.type = 'sawtooth'; lfo.frequency.value = 10.5;
+    const lg = ctx.createGain(); lg.gain.value = 0.55; lfo.connect(lg).connect(am.gain);
+    src.connect(f).connect(am).connect(master);
+    // thump body
+    const th = ctx.createOscillator(); th.type = 'sine'; th.frequency.value = 52;
+    const tg = ctx.createGain(); tg.gain.value = 0.0; const tl = ctx.createGain(); tl.gain.value = 0.35; lfo.connect(tl).connect(tg.gain);
+    th.connect(tg).connect(master);
+    // turbine
+    const tur = ctx.createOscillator(); tur.type = 'sawtooth'; tur.frequency.value = 1180;
+    const tf = ctx.createBiquadFilter(); tf.type = 'bandpass'; tf.frequency.value = 1200; tf.Q.value = 6;
+    const tug = ctx.createGain(); tug.gain.value = 0.05; tur.connect(tf).connect(tug).connect(master);
+    src.start(); lfo.start(); th.start(); tur.start();
+    let alive = true;
+    const set = (p: THREE.Vector3) => { pan.positionX.value = p.x; pan.positionY.value = p.y; pan.positionZ.value = p.z; };
+    set(pos);
+    const h = {
+      setPos: set,
+      setLevel: (v: number) => {
+        if (!alive) return;
+        master.gain.setTargetAtTime(0.9 * v, ctx.currentTime, 0.4);
+        lfo.frequency.setTargetAtTime(6 + 4.5 * v, ctx.currentTime, 0.5);
+        tur.frequency.setTargetAtTime(500 + 680 * v, ctx.currentTime, 0.6);
+      },
+      stop: () => {
+        if (!alive) return; alive = false;
+        master.gain.setTargetAtTime(0, ctx.currentTime, 0.5);
+        for (const n of [src, lfo, th, tur]) n.stop(ctx.currentTime + 3);
+      },
+    };
+    this.loops.push(h);
+    return h;
+  }
+
+  /** Prison alarm: two-tone klaxon (non-positional, muffled), fades out after `dur` seconds. */
+  alarm(dur = 18): { stop: () => void } {
+    if (!this.ctx) return { stop: () => {} };
+    const ctx = this.ctx, t = ctx.currentTime;
+    const g = ctx.createGain(); g.gain.value = 0; g.connect(this.sfx);
+    g.gain.setTargetAtTime(0.16, t, 0.05);
+    g.gain.setTargetAtTime(0, t + dur, 1.5);
+    const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 2600; f.connect(g);
+    const o = ctx.createOscillator(); o.type = 'square'; o.frequency.value = 620;
+    const o2 = ctx.createOscillator(); o2.type = 'square'; o2.frequency.value = 627;
+    // alternate 620 / 820 Hz every 0.45 s
+    for (let k = 0; k < Math.ceil((dur + 6) / 0.45); k++) {
+      const hz = k % 2 ? 820 : 620;
+      o.frequency.setValueAtTime(hz, t + k * 0.45); o2.frequency.setValueAtTime(hz * 1.011, t + k * 0.45);
+    }
+    o.connect(f); o2.connect(f); o.start(); o2.start();
+    o.stop(t + dur + 6); o2.stop(t + dur + 6);
+    let alive = true;
+    const h = { stop: () => { if (!alive) return; alive = false; g.gain.cancelScheduledValues(ctx.currentTime); g.gain.setTargetAtTime(0, ctx.currentTime, 0.3); } };
+    this.loops.push(h);
+    return h;
+  }
+
+  /** close thunder clap (cutscene lightning) */
+  thunder(delay = 0): void {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime + delay;
+    this.noiseBurst(this.amb, t, 0.35, 'highpass', 900, 0.6, 0.5);
+    this.noiseBurst(this.amb, t + 0.05, 4.5, 'lowpass', 380, 0.7, 1.0, 50);
+  }
+
+  /** heavy metal clank (cell bars sliding home / unlocking) */
+  clank(pos?: THREE.Vector3, heavy = true): void {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime, d = this.out(pos);
+    this.tone(d, t, 0.5, 'square', heavy ? 180 : 320, heavy ? 90 : 200, 0.12);
+    this.tone(d, t, 0.9, 'sine', heavy ? 610 : 900, heavy ? 590 : 880, 0.18);
+    this.noiseBurst(d, t, 0.12, 'bandpass', 2400, 1.5, 0.5);
+    this.noiseBurst(d, t, 0.6, 'lowpass', 900, 0.5, 0.3, 120);
+  }
+
   /** Calm save-room theme (soft pad chords). */
   saveRoom(on: boolean): void {
     if (!this.ctx) return;

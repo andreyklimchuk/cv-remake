@@ -9,6 +9,7 @@ import { LevelBuilder, instanced, T } from '../world/LevelBuilder';
 import { ItemPickup, Door, ScriptedInteractable, type Interactable } from '../world/Interactables';
 import { makeItemMesh } from '../world/ItemMeshes';
 import type { ZombieSpawn } from '../ai/Zombie';
+import type { ItemInstance } from '../inventory/Items';
 import { audio } from '../../engine/AudioEngine';
 import { bus } from '../../engine/Events';
 import { buildAnnex, singleDoor } from './PrisonAnnex';
@@ -36,11 +37,11 @@ export interface Level {
 
 /**
  * TEST LEVEL — "Rockfort Island: Prison Compound" (Claire's opening area).
- * Zones (streamed): Courtyard (outdoor, burning truck, watchtower) → Guard House (save room,
- * keycard) → Cell Block (extinguisher, bow gun) and West Yard (behind fire: shotgun, Hawk Emblem).
+ * Zones (streamed): Courtyard (outdoor, burning truck, watchtower) → Guard House (save room) → Cell Block (extinguisher, bow gun) and West Yard (behind fire: shotgun, Hawk Emblem).
  * + Administration wing (steam valve, warden's safe, music box, hidden emblem) and Trophy Gallery
  *   (optional "Song of three beasts" painting puzzle) — see PrisonAnnex.ts.
- * Puzzle chain: Keycard → Cell Block (prisoner's note: safe code) → Extinguisher → put out fire →
+ * Start: Claire's cell in block B (intro cutscene; alarm unlocks it) → guard house → yard (knife + M9F).
+ * Puzzle chain: Cell Block (prisoner's note: safe code) → Extinguisher → put out fire →
  * West Yard: Valve Handle → close steam valve → Warden's office: safe 0419 → Music Box Plate →
  * music box → portrait rises → Hawk Emblem → Main Gate.
  */
@@ -94,8 +95,9 @@ export function buildPrisonLevel(ctx: LevelContext): Level {
   scene.add(sky);
   scene.fog = new THREE.FogExp2(0x10141b, q.fogDensity * 0.4);
   scene.background = new THREE.Color(0x07090c);
-  scene.add(new THREE.HemisphereLight(0x5a6c8c, 0x1a140e, 1.5));
+  const hemi = new THREE.HemisphereLight(0x5a6c8c, 0x1a140e, 1.5); hemi.name = 'hemi'; scene.add(hemi);
   const moon = new THREE.DirectionalLight(0x9ab0d8, 1.5);
+  moon.name = 'moon'; // cutscenes flash it for lightning
   moon.position.set(-30, 50, 20);
   moon.target.position.set(0, 0, 20);
   moon.castShadow = q.shadows;
@@ -106,9 +108,9 @@ export function buildPrisonLevel(ctx: LevelContext): Level {
   scene.add(moon, moon.target);
 
   // ---------------------------------------------------------------- helpers
-  const item = (id: string, defId: string, qty: number, x: number, y: number, z: number, parent: THREE.Object3D) => {
+  const item = (id: string, defId: string, qty: number, x: number, y: number, z: number, parent: THREE.Object3D, extra?: Partial<ItemInstance>) => {
     if (flags.has('picked:' + id)) return;
-    ctx.addInteractable(new ItemPickup(id, new THREE.Vector3(x, y, z), defId, qty, makeItemMesh(defId), parent));
+    ctx.addInteractable(new ItemPickup(id, new THREE.Vector3(x, y, z), defId, qty, makeItemMesh(defId), parent, extra));
   };
   const barbed = (x1: number, z1: number, x2: number, z2: number, y: number): THREE.Matrix4[] => {
     const out: THREE.Matrix4[] = [];
@@ -326,6 +328,12 @@ export function buildPrisonLevel(ctx: LevelContext): Level {
       ctx.spawnZombie({ id: 'yard_1', x: -5, z: 13, yaw: Math.PI, outfit: 'prisoner' }, G);
       ctx.spawnZombie({ id: 'yard_2', x: 2, z: 33, yaw: 0.4, outfit: 'guard', wander: true }, G);
       ctx.spawnZombie({ id: 'yard_3', x: 17, z: 12.5, yaw: -1.2, outfit: 'prisoner', fakeDead: true }, G);
+      // dead guard by the guard house: Claire's knife + M9F (she starts unarmed)
+      flags.add('dead:y_guardBody');
+      ctx.spawnZombie({ id: 'y_guardBody', x: 13.6, z: 9.6, yaw: 2.2, outfit: 'guard' }, G);
+      item('y_knife', 'knife', 1, 12.7, 0.02, 10.5, G);
+      item('y_m9f', 'm9f', 1, 14.5, 0.02, 10.6, G, { mag: 15 });
+      item('y_ammo0', 'ammo_hg', 15, 14.9, 0.02, 8.7, G);
 
       // guard-house door (hinged at z = 8, swings inward)
       const { pivot, col: dcol } = singleDoor(G, physics, { x: 20.3, z: 8, alongZ: true, openW: 2, openH: 2.5, thick: 0.6, leafMat: M.rust, fillMat: M.concrete });
@@ -398,7 +406,6 @@ export function buildPrisonLevel(ctx: LevelContext): Level {
       ctx.addInteractable(new ScriptedInteractable('typewriter', new THREE.Vector3(21.6, 0, 3.6), 1.4, () => 'Печатная машинка — сохранить игру', (g) => g.openSaveDialog()));
       ctx.addInteractable(new ScriptedInteractable('itembox', new THREE.Vector3(25, 0, 3.2), 1.4, () => 'Сундук для предметов', (g) => g.openItemBox()));
       // items
-      item('g_key', 'keycard', 1, 29.6, 0.81, 16.95, G);
       item('g_mag', 'part_mag', 1, 28.9, 0.81, 16.9, G);
       item('g_herbR', 'herb_r', 1, 30.5, 0, 3.4, G);
       item('g_ammo', 'ammo_hg', 15, 31.2, 0, 8.3, G);
@@ -409,12 +416,12 @@ export function buildPrisonLevel(ctx: LevelContext): Level {
       // zombie
       ctx.spawnZombie({ id: 'guard_1', x: 28.8, z: 12.5, yaw: -Math.PI / 2, outfit: 'guard' }, G);
 
-      // cell-block door (keycard)
+      // cell-block door (its electronic lock was released by the alarm)
       const { pivot, col: dcol } = singleDoor(G, physics, { x: 25, z: 20, alongZ: false, openW: 2, openH: 2.5, leafMat: M.steel, fillMat: M.plaster });
       const reader = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.22, 0.05), M.dark); reader.position.set(27.35, 1.3, 19.8); b2.addMesh(reader, false);
       const led = new THREE.Mesh(new THREE.SphereGeometry(0.02, 6, 4), M.red); led.position.set(27.35, 1.4, 19.77); b2.addMesh(led, false);
       b2.flush(G);
-      cellDoor = new Door('cellDoor', new THREE.Vector3(26, 0, 19.2), pivot, dcol, 'keycard', 'Электронный замок. Нужна ключ-карта охраны.', Math.PI * 0.55);
+      cellDoor = new Door('cellDoor', new THREE.Vector3(26, 0, 19.2), pivot, dcol, null, '', Math.PI * 0.55);
       if (flags.has('open:cellDoor')) cellDoor.openNow();
       ctx.addInteractable(cellDoor);
 
@@ -460,17 +467,42 @@ export function buildPrisonLevel(ctx: LevelContext): Level {
         b.box(x0 + 3.1, 0.3, 43.4, 0.5, 0.6, 0.6, M.white, { tile: 1 });
       }
       b.flush(G);
-      // bars (instanced) with open doors in cells 1, 4, 5
+      // bars (instanced) with open doors in cells 1, 4, 5; cell 3 (x 32–36) is Claire's: a sliding barred door
       const barT: THREE.Matrix4[] = [];
       const open = new Set([1, 4, 5]);
+      const CLAIRE = 3;
       for (let c = 0; c < 6; c++) {
         const x0 = 20 + c * 4;
         for (let x = x0 + 0.15; x < x0 + 3.95; x += 0.16) {
-          if (open.has(c) && x > x0 + 1.4 && x < x0 + 2.6) continue;
+          if ((open.has(c) || c === CLAIRE) && x > x0 + 1.4 && x < x0 + 2.6) continue;
           barT.push(T(x, 1.5, 36));
         }
         barT.push(T(x0 + 2, 3, 36, 0, 0, Math.PI / 2)); // top rail
-        if (open.has(c)) {
+        if (c === CLAIRE) {
+          physics.addMinMax(x0, 35.95, x0 + 1.4, 36.05, 0, 3, 'bars', false);
+          physics.addMinMax(x0 + 2.6, 35.95, x0 + 4, 36.05, 0, 3, 'bars', false);
+          // sliding door: a frame of bars that rolls east behind the fixed bars (flag 'cellOpen')
+          const slide = new THREE.Group();
+          const sb: THREE.Matrix4[] = [];
+          for (let x = 0.08; x < 1.2; x += 0.16) sb.push(T(x, 1.45, 0));
+          slide.add(instanced(new THREE.CylinderGeometry(0.018, 0.018, 2.9, 6), M.bars, sb));
+          for (const y of [0.06, 1.1, 2.86]) { const r = new THREE.Mesh(new THREE.BoxGeometry(1.24, 0.05, 0.05), M.bars); r.position.set(0.6, y, 0); r.castShadow = true; slide.add(r); }
+          const lock = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.18, 0.09), M.steel); lock.position.set(0.04, 1.1, 0.03); slide.add(lock);
+          slide.position.set(x0 + 1.4, 0, 35.9);
+          G.add(slide);
+          const sc = physics.addMinMax(x0 + 1.4, 35.95, x0 + 2.6, 36.05, 0, 3, 'bars', false);
+          let k = flags.has('cellOpen') ? 1 : 0;
+          const apply = () => { slide.position.x = x0 + 1.4 + k * 1.18; sc.enabled = k < 0.6; };
+          apply();
+          lightsForUpdate.push({ update: (dt) => {
+            const want = flags.has('cellOpen') ? 1 : 0;
+            if (k === want) return;
+            const was = sc.enabled;
+            k = want > k ? Math.min(1, k + dt / 1.1) : Math.max(0, k - dt / 1.1);
+            apply();
+            if (was !== sc.enabled) bus.emit('doorsChanged', null);
+          } });
+        } else if (open.has(c)) {
           physics.addMinMax(x0, 35.95, x0 + 1.4, 36.05, 0, 3, 'bars', false);
           physics.addMinMax(x0 + 2.6, 35.95, x0 + 4, 36.05, 0, 3, 'bars', false);
           for (let k = 0; k < 7; k++) barT.push(T(x0 + 1.4 + Math.cos(1.0) * 0.17 * k, 1.5, 36 + Math.sin(1.0) * 0.17 * k));
@@ -499,6 +531,7 @@ export function buildPrisonLevel(ctx: LevelContext): Level {
       }
       // items
       item('c_ext', 'extinguisher', 1, 43.4, 0, 41.2, G);
+      item('c_lighter', 'lighter', 1, 33.25, bedsOk ? 0.6 : 0.71, 43.1, G);
       item('c_bow', 'bowgun', 1, 25.5, bedsOk ? 0.6 : 0.71, 42.6, G);
       item('c_bolts', 'ammo_bolt', 18, 25.5, bedsOk ? 0.6 : 0.71, 43.3, G);
       // prisoner's note (safe code) on the bed in cell 5
@@ -515,7 +548,7 @@ export function buildPrisonLevel(ctx: LevelContext): Level {
       item('c_herbG', 'herb_g', 1, 21.5, 0, 34.5, G);
       item('c_gpa', 'gp_a', 1, 43.2, 0, 33, G);
       // zombies
-      ctx.spawnZombie({ id: 'cells_1', x: 31, z: 34, yaw: -Math.PI / 2, outfit: 'prisoner' }, G);
+      ctx.spawnZombie({ id: 'cells_1', x: 41.5, z: 33.4, yaw: -Math.PI / 2, outfit: 'prisoner' }, G);
       ctx.spawnZombie({ id: 'cells_2', x: 26, z: 29.5, yaw: Math.PI, outfit: 'prisoner' }, G);
       ctx.spawnZombie({ id: 'cells_3', x: 38, z: 40.5, yaw: 0, outfit: 'prisoner', fakeDead: true }, G);
       ctx.spawnZombie({ id: 'cells_4', x: 30, z: 38, yaw: Math.PI, outfit: 'prisoner' }, G); // locked in cell 3, reaching through bars
@@ -565,7 +598,7 @@ export function buildPrisonLevel(ctx: LevelContext): Level {
   navPts.push([-18.6, 14], [-22, 14], [18.8, 9], [21.6, 9], [21.8, 11], [23.7, 5], [23.7, 8.2], [24.5, 11], [28, 11], [24, 15], [28, 15], [30, 5], [26, 18.8], [26, 21.2]);
   for (const x of [-34, -30, -26, -22]) for (const z of [6, 10, 14, 18, 22, 26]) navPts.push([x, z]);
   navPts.push(...annex.navPts);
-  navPts.push([26, 24], [26, 27.5], [26, 31], [22, 34], [26, 34], [30, 34], [34, 34], [38, 34], [42, 34], [26, 37.5], [26, 40], [38, 37.5], [38, 40], [42, 37.5], [42, 40], [0, 41.5]);
+  navPts.push([34, 38.5], [26, 24], [26, 27.5], [26, 31], [22, 34], [26, 34], [30, 34], [34, 34], [38, 34], [42, 34], [26, 37.5], [26, 40], [38, 37.5], [38, 40], [42, 37.5], [42, 40], [0, 41.5]);
   const blockedStatic: THREE.Box3[] = [
     new THREE.Box3(new THREE.Vector3(-13.6, 0, 3.4), new THREE.Vector3(-10.4, 3, 10.9)),
     new THREE.Box3(new THREE.Vector3(-34.9, 0, 19.1), new THREE.Vector3(-29.1, 3, 24.9)),
@@ -579,7 +612,7 @@ export function buildPrisonLevel(ctx: LevelContext): Level {
   const outdoorBounds = [yardBounds, westBounds, ...exterior.outdoorBounds];
   return {
     name: 'Rockfort Island — Prison',
-    spawn: { pos: new THREE.Vector3(0, 0, 3), yaw: 0 },
+    spawn: { pos: new THREE.Vector3(34, 0, 38.6), yaw: Math.PI }, // Claire's cell (see cutscenes/Intro.ts)
     outdoorBounds,
     saveRoom,
     update: (dt, t, player) => {

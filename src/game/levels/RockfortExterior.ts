@@ -751,7 +751,7 @@ export function buildExterior(ctx: LevelContext, H: AnnexHelpers) {
         (g) => {
           if (fireLit) { g.message('Огонь гудит в камине. Медный герб над ним повёрнут — механизм сработал.', 3); return; }
           if (!g.inventory.has('lighter')) {
-            g.message(g.player.character === 'steve' ? 'Камин холодный, дрова сложены. Нужен огонь — зажигалка есть у Клэр. [C] — сменить персонажа.' : 'Камин холодный, дрова сложены. Нечем поджечь.', 4);
+            g.message('Камин холодный, дрова сложены. Нечем поджечь.', 4);
             audio.click(); return;
           }
           g.confirm('Поджечь дрова зажигалкой?', () => {

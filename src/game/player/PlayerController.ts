@@ -156,12 +156,14 @@ export class PlayerController {
     let targetSpeed = 0;
     const running = input.run() && wishLen > 0.1;
 
+    // no knife yet (Claire starts unarmed): no slash / stance / knife counter, only shove and dodge
+    const hasKnife = weapons.inv.has('knife');
     if (this.state === 'normal') {
       const melee = weapons.def.type === 'melee';
       const busy = this.model.weaponBusy();
       // knife stance: Space (or RMB with the knife equipped) — LMB slash, RMB thrust, F still quick-slashes
-      const spaceKnife = input.knifeHold();
-      this.knifeReady = spaceKnife || (melee && input.aim());
+      const spaceKnife = hasKnife && input.knifeHold();
+      this.knifeReady = spaceKnife || (melee && hasKnife && input.aim());
       this.aiming = !this.knifeReady && !busy && input.aim() && !melee;
       if (this.knifeReady) {
         this.yaw = this.turnToward(this.yaw, rig.yaw, 16, dt);
@@ -176,7 +178,7 @@ export class PlayerController {
         targetSpeed = (running ? (danger ? 2.9 : 4.3) : (danger ? 1.5 : 2.2)) * wishLen;
       }
       // actions
-      if (input.knife()) this.startKnife(targets);
+      if (input.knife()) { if (hasKnife) this.startKnife(targets); else bus.emit('message', { text: 'Ножа нет. Q — оттолкнуть.', duration: 1.6 }); }
       else if (input.shove()) this.startShove(targets);
     } else {
       this.aiming = false;
@@ -231,7 +233,7 @@ export class PlayerController {
           const to = this.grabbedBy.position.clone().sub(this.pos);
           this.yaw = this.turnToward(this.yaw, Math.atan2(to.x, to.z), 12, dt);
         }
-        if (input.knife() && this.counterCooldown <= 0 && this.stateTime < 1.3) {
+        if (hasKnife && input.knife() && this.counterCooldown <= 0 && this.stateTime < 1.3) {
           // knife counter (sub-weapon defence)
           this.actionTarget = this.grabbedBy;
           this.grabbedBy = null;

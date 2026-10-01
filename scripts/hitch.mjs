@@ -14,7 +14,7 @@ await page.addInitScript(() => {
     C.prototype[fn] = function (...a) { const t = performance.now(); const r = o.apply(this, a); const d = performance.now() - t; const e = window.__gl[fn] || (window.__gl[fn] = [0, 0]); e[0]++; e[1] += d; return r; };
   }
 });
-await page.goto('file:///data/cv-remake/dist/play.html');
+await page.goto('file:///data/cv-remake/dist/play.html?devstart');
 await page.waitForTimeout(1500);
 const t0 = Date.now();
 await page.click('text=НОВАЯ ИГРА');

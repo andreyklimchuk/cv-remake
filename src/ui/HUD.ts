@@ -112,7 +112,7 @@ export class HUD {
     this.statusLabel.style.color = col;
 
     // ammo — RE2R style: weapon icon + loaded rounds (large) over reserve (green); fades out when idle
-    if (this.wicon !== s.weaponId) { this.wicon = s.weaponId; (this.ammo.querySelector('.wico') as HTMLElement).innerHTML = iconHTML(s.weaponId); this.ammoShowT = 3; }
+    if (this.wicon !== s.weaponId) { this.wicon = s.weaponId; (this.ammo.querySelector('.wico') as HTMLElement).innerHTML = s.weaponId === 'none' ? '' : iconHTML(s.weaponId); this.ammoShowT = 3; }
     if (s.mag !== this.lastMag) { this.lastMag = s.mag; this.ammoShowT = Math.max(this.ammoShowT, 2); }
     this.ammoShowT -= dt;
     this.ammo.style.opacity = s.aiming || s.reloading || this.ammoShowT > 0 ? '1' : '0.28';

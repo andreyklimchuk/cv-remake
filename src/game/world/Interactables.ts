@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { Inventory } from '../inventory/Inventory';
 import type { PlayerController } from '../player/PlayerController';
 import type { PhysicsWorld, Collider } from '../../engine/Physics';
-import { ITEMS } from '../inventory/Items';
+import { ITEMS, type ItemInstance } from '../inventory/Items';
 import { audio } from '../../engine/AudioEngine';
 import { bus } from '../../engine/Events';
 import { glowTexture } from '../../engine/Materials';
@@ -41,7 +41,7 @@ export class ItemPickup implements Interactable {
   enabled = true;
   radius = 1.4;
   sparkle: THREE.Sprite;
-  constructor(public id: string, public pos: THREE.Vector3, public defId: string, public qty: number, public mesh: THREE.Object3D, parent: THREE.Object3D) {
+  constructor(public id: string, public pos: THREE.Vector3, public defId: string, public qty: number, public mesh: THREE.Object3D, parent: THREE.Object3D, public extra?: Partial<ItemInstance>) {
     this.sparkle = new THREE.Sprite(new THREE.SpriteMaterial({ map: sparkleTex, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.5 }));
     this.sparkle.position.copy(pos).add(new THREE.Vector3(0, 0.12, 0));
     this.sparkle.scale.setScalar(0.1);
@@ -61,7 +61,7 @@ export class ItemPickup implements Interactable {
       this.mesh.removeFromParent(); this.sparkle.removeFromParent();
       return;
     }
-    const left = g.inventory.add(this.defId, this.qty);
+    const left = g.inventory.add(this.defId, this.qty, this.extra);
     if (left === this.qty) { g.message('Инвентарь полон. Освободите слот или оставьте предметы в сундуке.'); return; }
     audio.pickup();
     g.message(`Получено: ${ITEMS[this.defId].name}${this.qty - left > 1 ? ' ×' + (this.qty - left) : ''}`);

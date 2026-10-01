@@ -16,15 +16,17 @@ import { ITEMS, newUid, type ItemInstance } from './inventory/Items';
 import { DOCS } from './levels/Docs';
 import { WEAPONS } from './combat/Weapons';
 import type { GameAPI } from './world/Interactables';
+import { Cinema } from '../ui/Cinema';
+import type { Cutscene, CutsceneEnv } from './cutscenes/Cutscene';
+import { IntroCutscene } from './cutscenes/Intro';
+import { MeetSteveCutscene } from './cutscenes/MeetSteve';
 
-type Mode = 'title' | 'playing' | 'inventory' | 'paused' | 'dialog' | 'dead' | 'end';
+type Mode = 'title' | 'playing' | 'inventory' | 'paused' | 'dialog' | 'dead' | 'end' | 'cutscene';
 
 /**
  * Top-level orchestrator ("Web RE-Engine" runtime): owns renderer, input, UI and the current World,
  * and runs the frame loop: input → player → weapons → AI → FX → streaming → camera → audio → HUD → render.
  */
-/** character switch is allowed only in free control (not grabbed, dodging, dead, mid-action) */
-function p0ok(w: World): boolean { return w.player.state === 'normal' && !w.weapons.isReloading(); }
 
 export class Game {
   backend!: RenderBackend;
@@ -45,11 +47,15 @@ export class Game {
   private visitedZones = new Set<string>();
   private lastSway = { yaw: 0, pitch: 0 };
   private api: GameAPI;
+  cinema: Cinema;
+  /** running real-time cutscene (mode 'cutscene') */
+  cut: Cutscene | null = null;
 
   constructor(private canvas: HTMLCanvasElement, private ui: HTMLElement) {
     this.input = new Input(canvas);
     this.hud = new HUD(ui);
     this.hud.show(false);
+    this.cinema = new Cinema(ui);
     this.invUI = new InventoryUI(ui, {
       inventory: null as never, itemBox: null as never,
       equippedUid: () => this.world?.weapons.current?.uid ?? null,
@@ -58,7 +64,7 @@ export class Game {
         if (ITEMS[it.defId].weaponId === 'gold_lugers' && this.world?.character !== 'steve') { this.invUI.flash('Это пистолеты Стива — Клэр не стреляет с двух рук.'); return; }
         this.world?.equip(it);
       },
-      lighterOn: () => !!this.world?.player.models.claire.lighterOn,
+      lighterOn: () => !!this.world?.player.model.lighterOn,
       status: () => {
         const p = this.world!.player;
         const st = p.status();
@@ -104,6 +110,7 @@ export class Game {
   // ---------------------------------------------------------------- flow
   private showTitle(): void {
     this.mode = 'title';
+    this.cut = null; this.cinema.show(false);
     this.hud.show(false);
     this.input.unlockPointer();
     this.menus.title(SaveSystem.has(), {
@@ -120,6 +127,7 @@ export class Game {
     this.menus.loading('ROCKFORT ISLAND');
     setTimeout(async () => {
       this.world?.dispose();
+      this.cut = null; this.cinema.show(false);
       const w = new World(this.camera, this.backend.preset, save);
       this.world = w;
       (this.invUI as any).host.inventory = w.inventory;
@@ -128,15 +136,64 @@ export class Game {
       this.rig.yaw = save?.camYaw ?? w.player.yaw;
       this.backend.attach(w.scene, this.camera);
       this.visitedZones.clear();
+      // new game: the intro's helicopter / guards are created before warm-up so their shaders compile behind the loading screen
+      if (!save && new URLSearchParams(location.search).has('devstart')) w.devStart();
+      const intro = !save && !w.flags.has('introDone') ? new IntroCutscene(this.cutEnv(w)) : null;
       await this.warmup(w);
       audio.startAmbience();
       this.menus.clear();
+      this.input.lockPointer();
+      bus.emit('doorsChanged', null);
+      if (intro) { this.startCutscene(intro); return; }
       this.hud.show(true);
       this.mode = 'playing';
-      this.input.lockPointer();
       this.hud.message(save ? 'Игра загружена.' : 'Клэр Рэдфилд. Остров Рокфорт. Тюремный комплекс Umbrella.', 4);
-      bus.emit('doorsChanged', null);
     }, 30);
+  }
+
+  private cutEnv(w: World): CutsceneEnv { return { world: w, camera: this.camera, cinema: this.cinema }; }
+
+  startCutscene(c: Cutscene): void {
+    this.cut = c;
+    this.mode = 'cutscene';
+    this.hud.show(false);
+    this.hud.setPrompt(null);
+    this.cinema.show(true);
+    const w = this.world;
+    if (w) { w.player.vel.set(0, 0, 0); w.player.aiming = false; w.player.knifeReady = false; }
+  }
+
+  /** cutscene frame: the scene script drives camera + actors; player / AI frozen, world (FX, lights, streaming) keeps running */
+  private cutsceneStep(dt: number, w: World): void {
+    const c = this.cut!;
+    w.time += dt;
+    if (this.input.skip() && c.t > 0.3) c.skip(); else c.step(dt);
+    if (c.activeZombies.length) w.updateZombies(dt, c.activeZombies);
+    for (const z of w.zombies) {
+      if (c.hideZombies) { z.model.root.visible = false; continue; }
+      const zone = w.streamer.zoneAt(z.position);
+      z.model.root.visible = zone ? w.streamer.shown.has(zone.id) : true;
+    }
+    const fx = w.combat;
+    fx.bloodFx.update(dt); fx.sparks.update(dt); fx.shells.update(dt); fx.flash.update(dt); fx.debris.update(dt);
+    w.level.update(dt, w.time, c.focus);
+    for (const i of w.interactables) i.update?.(dt, w.time);
+    w.streamer.update(c.done ? w.player.pos : c.focus, this.camera.position);
+    w.lights.update(this.camera.position);
+    const zone = w.streamer.current;
+    const outdoor = zone?.outdoor ?? true;
+    w.rain.lines.visible = outdoor || (zone?.neighbors.some((n) => w.streamer.zones.get(n)?.outdoor && w.streamer.shown.has(n)) ?? false);
+    if (w.rain.lines.visible) w.rain.update(dt, this.camera.position, w.level.outdoorBounds, this.rainGround);
+    audio.setIndoor(!outdoor);
+    if (c.done) {
+      this.cut = null;
+      this.cinema.show(false);
+      this.hud.show(true);
+      this.mode = 'playing';
+      this.rig.yaw = w.player.yaw; this.rig.pitch = -0.12;
+      (this.invUI as any).host.inventory = w.inventory;
+      this.input.lockPointer();
+    }
   }
 
   /** Pre-compile every shader program and upload every texture while the loading screen is up,
@@ -261,12 +318,11 @@ export class Game {
     const w = this.world!;
     const d = ITEMS[it.defId];
     if (it.defId === 'lighter') {
-      if (w.character !== 'claire') { this.hud.message('Зажигалка у Клэр.'); return; }
-      const on = !w.player.models.claire.lighterOn;
-      w.player.models.claire.setLighter(on);
+      const on = !w.player.model.lighterOn;
+      w.player.model.setLighter(on);
       if (on) w.flags.add('lighterOn'); else w.flags.delete('lighterOn');
       audio.click();
-      this.hud.message(on ? 'Клэр зажигает зажигалку.' : 'Зажигалка погашена.', 1.6);
+      this.hud.message(on ? (w.character === 'steve' ? 'Стив щёлкает зажигалкой Клэр.' : 'Клэр зажигает зажигалку.') : 'Зажигалка погашена.', 1.6);
       return;
     }
     if (d.kind !== 'herb') return;
@@ -306,6 +362,7 @@ export class Game {
     if (w && this.mode === 'inventory' && (this.input.inventory() || this.input.pause())) { this.invUI.close(); this.input.endFrame(); }
     else if (w && this.mode === 'inventory' && !this.invUI.isOpen) this.mode = 'playing';
     if (w && this.mode === 'playing') this.simulate(dt, w);
+    else if (w && this.mode === 'cutscene' && this.cut) this.cutsceneStep(dt, w);
     else if (w && this.mode === 'dead') {
       w.time += dt;
       w.player.update(dt, w.time, this.input, this.rig, w.physics, w.weapons, w.zombies);
@@ -320,16 +377,17 @@ export class Game {
       this.camera.position.set(Math.sin(now * 0.0001) * 3, 2, 0);
     }
 
-    if (w) {
+    if (w && this.mode !== 'cutscene') {
       this.rig.update(dt, w.player.pos, w.player.aiming, w.player.speed());
       audio.updateListener(this.camera);
       const p = w.player;
       const hp = p.hpRatio();
       this.backend.setDamage(Math.max(0, 0.55 - hp) * 1.4 + (p.state === 'grabbed' ? 0.3 : 0));
       const wp = w.weapons;
+      const unarmed = !wp.current && !w.inventory.has('knife');
       this.hud.update(dt, {
         hpRatio: hp, status: p.status(), poisoned: p.poisoned, aiming: p.aiming,
-        weaponId: wp.current?.defId ?? 'knife', weaponName: wp.def.name, mag: wp.inMag(), reserve: wp.reserve(), melee: wp.def.type === 'melee',
+        weaponId: unarmed ? 'none' : wp.current?.defId ?? 'knife', weaponName: unarmed ? 'Без оружия' : wp.def.name, mag: wp.inMag(), reserve: wp.reserve(), melee: wp.def.type === 'melee',
         sub: wp.def.ammo.length > 1 ? ITEMS[wp.ammoType()].name : wp.current?.mods?.length ? wp.current.mods.map((m) => ITEMS[m].name.replace('M9F ', '').replace('M3 ', '')).join(' · ') : '',
         reloading: wp.isReloading(), spreadDeg: wp.spreadDeg({ moveSpeed: p.speed(), hpRatio: hp, staminaRatio: p.stamina / 100 }), fov: this.camera.fov, onTarget: !!wp.aimTarget,
       });
@@ -367,13 +425,7 @@ export class Game {
       this.rig.addLook(-a.yaw, -a.pitch);
     }
 
-    // weapon switching
-    if (inp.switchCharacter() && p0ok(w)) {
-      const to = w.switchCharacter();
-      (this.invUI as any).host.inventory = w.inventory;
-      this.hud.message(to === 'steve' ? 'Стив Бернсайд' : 'Клэр Рэдфилд', 1.8);
-      audio.ui();
-    }
+    // weapon switching (the playable character is story-driven: Claire → Steve after the gate, no free switch)
     const weps = w.inventory.weapons().filter((i) => ITEMS[i.defId].weaponId !== 'knife' && (w.character === 'steve' || ITEMS[i.defId].weaponId !== 'gold_lugers'));
     const slot = inp.weaponSlot();
     const cyc = inp.cycleWeapon();
@@ -388,6 +440,11 @@ export class Game {
     p.indoor = !(w.streamer.current?.outdoor ?? true);
     p.update(dt, w.time, inp, this.rig, w.physics, w.weapons, w.zombies);
     if (p.state === 'dead' && this.mode === 'playing') { this.mode = 'dead'; this.deadT = 0; return; }
+    // story: past the opened main gate Claire meets Steve (cutscene) — from then on the player is Steve
+    if (!w.flags.has('steveMet') && w.flags.has('gateOpen') && w.character === 'claire' && p.state === 'normal' && p.pos.z > 42.4 && Math.abs(p.pos.x) < 7) {
+      this.startCutscene(new MeetSteveCutscene(this.cutEnv(w), () => { this.hud.message('Стив Бернсайд. Золотые Люгеры, всё снаряжение Клэр — кроме её пистолета.', 4); }));
+      return;
+    }
 
     // weapons
     const muzzle = p.model.muzzleWorld(new THREE.Vector3());
@@ -442,10 +499,18 @@ export class Game {
       if (d < i.radius && d < bd && i.prompt(this.api)) { bd = d; best = i; }
     }
     this.hud.setPrompt(best && p.state === 'normal' && !p.aiming ? best.prompt(this.api) : null);
-    if (best && inp.interact() && p.state === 'normal') best.interact(this.api);
+    if (best && inp.interact() && p.state === 'normal') {
+      const had = !!w.weapons.current;
+      best.interact(this.api);
+      // picked up a first firearm while empty-handed → draw it
+      if (!had && !w.weapons.current) {
+        const gun = w.inventory.weapons().find((i) => ITEMS[i.defId].weaponId !== 'knife' && (w.character === 'steve' || ITEMS[i.defId].weaponId !== 'gold_lugers'));
+        if (gun) w.equip(gun);
+      }
+    }
 
     // grab UI
-    this.hud.setStruggle(p.state === 'grabbed', (p as any).struggle ?? 0, p.counterCooldown <= 0);
+    this.hud.setStruggle(p.state === 'grabbed', (p as any).struggle ?? 0, p.counterCooldown <= 0 && w.inventory.has('knife'));
   }
 
   private flashMesh: THREE.Group | null = null;

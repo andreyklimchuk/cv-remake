@@ -10,6 +10,7 @@ import type { QualityPreset } from '../engine/Quality';
 import { bus } from '../engine/Events';
 import { audio } from '../engine/AudioEngine';
 import { Inventory, ItemBox } from './inventory/Inventory';
+import { newUid } from './inventory/Items';
 import { PlayerController } from './player/PlayerController';
 import { WeaponSystem } from './combat/WeaponSystem';
 import type { CombatContext } from './combat/CombatContext';
@@ -126,11 +127,7 @@ export class World {
     } else {
       this.player.pos.copy(this.level.spawn.pos);
       this.player.yaw = this.level.spawn.yaw;
-      this.inventory.add('m9f', 1, { mag: 15 });
-      this.inventory.add('knife');
-      this.inventory.add('ammo_hg', 15);
-      this.inventory.add('herb_g');
-      this.inventory.add('lighter');
+      // Claire starts locked up and unarmed: lighter in her cell, knife + M9F on a dead guard in the yard
       this.stockSteve();
     }
     this.nav.rebuild();
@@ -145,7 +142,7 @@ export class World {
       this.player.hp = hp; this.player.poisoned = pois; this.player.hpBy.claire = hpC;
       this.player.model.setWeapon(this.weapons.def.id);
     }
-    if (this.flags.has('lighterOn')) this.player.models.claire.setLighter(true);
+    if (this.flags.has('lighterOn')) this.player.model.setLighter(true);
   }
 
   get character(): 'claire' | 'steve' { return this.player.character; }
@@ -170,6 +167,33 @@ export class World {
     this.weapons.equip(null);
     this.equip(eq);
     return to;
+  }
+
+  /** test / debug start (`play.html?devstart`): no intro, Claire in the yard with the old starting kit */
+  devStart(): void {
+    this.flags.add('introDone'); this.flags.add('cellOpen');
+    this.player.pos.set(0, 0, 3); this.player.yaw = 0;
+    this.player.model.root.position.copy(this.player.pos);
+    this.inventory.add('m9f', 1, { mag: 15 });
+    this.inventory.add('knife');
+    this.inventory.add('ammo_hg', 15);
+    this.inventory.add('herb_g');
+    this.inventory.add('lighter');
+    this.equip(this.inventory.firstOf('m9f') ?? null);
+  }
+
+  /** after meeting Steve: Claire hands him everything except her M9F (overflow goes to the item box) */
+  handOverToSteve(): void {
+    const c = this.inventories.claire, st = this.inventories.steve;
+    if (c.capacity > st.capacity) st.expand(c.capacity - st.capacity);
+    for (const it of [...c.items]) {
+      if (it.defId === 'm9f') continue;
+      if (it.defId === 'knife' && st.has('knife')) continue;
+      const { uid: _u, x: _x, y: _y, rot: _r, defId, qty, ...extra } = it;
+      const left = st.add(defId, qty, extra);
+      if (left > 0) this.itemBox.items.push({ ...it, uid: newUid(), qty: left });
+      c.remove(it.uid);
+    }
   }
 
   equip(it: import('./inventory/Items').ItemInstance | null): void {
@@ -200,9 +224,9 @@ export class World {
     };
   }
 
-  updateZombies(dt: number): void {
+  updateZombies(dt: number, only?: Enemy[]): void {
     this.zctx.time = this.time;
-    for (const z of this.zombies) {
+    for (const z of only ?? this.zombies) {
       const wasAlive = z.alive;
       // distance-based AI LOD: far zombies think at half rate
       const far = z.position.distanceToSquared(this.player.pos) > 45 * 45;

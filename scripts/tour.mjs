@@ -8,7 +8,7 @@ const errors = [];
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 page.on('pageerror', (e) => errors.push('PAGEERROR: ' + e.message + '\n' + e.stack));
 await page.addInitScript((q) => localStorage.setItem('cv.settings', JSON.stringify({ quality: q, sensitivity: 1, aimAssist: 0.5, volume: 0, invertY: false })), quality);
-await page.goto('file:///data/cv-remake/dist/play.html');
+await page.goto('file:///data/cv-remake/dist/play.html?devstart');
 await page.waitForTimeout(1500);
 await page.click('text=НОВАЯ ИГРА');
 await page.waitForTimeout(7000);

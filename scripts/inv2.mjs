@@ -3,7 +3,7 @@ const browser = await chromium.launch({ executablePath: '/usr/local/bin/chromium
 const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
 const errors = []; page.on('pageerror', (e) => errors.push('PAGEERROR: ' + e.message));
 await page.addInitScript(() => localStorage.setItem('cv.settings', JSON.stringify({ quality: 'low', sensitivity: 1, aimAssist: 0.5, volume: 0, invertY: false })));
-await page.goto('file:///data/cv-remake/dist/play.html'); await page.waitForTimeout(1500);
+await page.goto('file:///data/cv-remake/dist/play.html?devstart'); await page.waitForTimeout(1500);
 await page.click('text=НОВАЯ ИГРА'); await page.waitForTimeout(5000);
 await page.evaluate(() => { const w = window.__game.world; w.inventory.add('gp_a', 1); w.inventory.add('gp_a', 1); w.player.hp = 30; });
 await page.keyboard.press('Tab'); await page.waitForTimeout(1000);

@@ -4,7 +4,7 @@ const browser = await chromium.launch({ executablePath: '/usr/local/bin/chromium
 const page = await browser.newPage({ viewport: { width: 640, height: 360 } });
 const errors = []; page.on('pageerror', (e) => errors.push(e.message));
 await page.addInitScript(() => localStorage.setItem('cv.settings', JSON.stringify({ quality: 'low', sensitivity: 1, aimAssist: 0.5, volume: 0, invertY: false })));
-await page.goto('file:///data/cv-remake/dist/play.html');
+await page.goto('file:///data/cv-remake/dist/play.html?devstart');
 await page.waitForTimeout(1500);
 await page.click('text=НОВАЯ ИГРА');
 await page.waitForFunction(() => window.__game?.mode === 'playing', null, { timeout: 120000 });

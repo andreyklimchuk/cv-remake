@@ -110,7 +110,8 @@ export class Input {
     return 0;
   }
   cycleWeapon(): number { return this.wheel + (this.btnPressed(15) ? 1 : 0) - (this.btnPressed(14) ? 1 : 0); }
-  switchCharacter(): boolean { return this.keyPressed('KeyC') || this.btnPressed(12); }
+  /** cutscene skip */
+  skip(): boolean { return this.keyPressed('Enter') || this.keyPressed('Escape') || this.keyPressed('NumpadEnter') || this.btnPressed(9); }
   flashlight(): boolean { return this.keyPressed('KeyL') || this.btnPressed(13); }
   debugToggle(): boolean { return this.keyPressed('F3'); }
   cheat(): boolean { return this.keyPressed('F9'); }

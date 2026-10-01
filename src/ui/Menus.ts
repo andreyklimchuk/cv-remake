@@ -22,11 +22,10 @@ const CONTROLS = `
 <tr><td>E</td><td>взаимодействие · двери открываются, если идти в них</td></tr>
 <tr><td>Tab / I</td><td>инвентарь</td></tr>
 <tr><td>1–8 / колесо</td><td>смена оружия</td></tr>
-<tr><td>C</td><td>сменить персонажа (Клэр ⇄ Стив)</td></tr>
 <tr><td>L</td><td>фонарик (Стив)</td></tr>
-<tr><td>Esc</td><td>пауза</td></tr>
+<tr><td>Esc</td><td>пауза · в катсцене — пропустить (также Enter)</td></tr>
 <tr><td>F3</td><td>отладка (FPS, draw calls)</td></tr>
-<tr><td>Геймпад</td><td>LS/RS · LT прицел · RT огонь · B нож · X перезарядка · Y действие · LB толчок · RB (удерж.) стойка с ножом · D-pad ↑ смена персонажа · D-pad ↓ фонарик</td></tr>
+<tr><td>Геймпад</td><td>LS/RS · LT прицел · RT огонь · B нож · X перезарядка · Y действие · LB толчок · RB (удерж.) стойка с ножом · D-pad ↓ фонарик · Start — пропустить катсцену</td></tr>
 </table>`;
 
 /** Title / pause / settings / death / end screens and confirm dialogs (DOM). */
