@@ -441,6 +441,21 @@ node scripts/backup.mjs "<сообщение>" all            # всё
    `CUTSCENES OK`; `node scripts/start.mjs` (пропуск интро, клетка, зажигалка, дверь, C не работает, F без ножа,
    подбор M9F с mag 15) → `START OK`. Старые тесты переведены на `play.html?devstart`.
 
+### 6.11 Итерация «готовая модель Клэр от пользователя»
+- Пользователь прислал `claire-redfield-survival-unit.zip` (Sketchfab, Claire из *Resident Evil: Survival Unit*:
+  1 меш ~3k треугольников, текстуры D 512 / N 1024 / ORM 512, скелет Bip001 (55 костей), 3 оружия и ~300 чужих
+  анимаций). Исходник НЕ хранится в репо (лежал в `/data/cv_claire_src/source/Sclaire.glb`).
+- Конвертер `tools/import/claire_su.py <Sclaire.glb> src/assets/models/claire_su.glb` (python+numpy, без Blender):
+  оставляет только меш Клэр, проверяет bind == rest, переименовывает кости в имена игрового рига
+  (Pelvis→hips, Spine→spine, Spine1→chest, Clavicle→lClav, UpperArm/Forearm/Hand, Calf→lShin, Hair_01..04→pony0..3,
+  пальцы → `lF{палец}{сегмент}`, 0 = большой), хелперы (Root/Bip001/IK/Bone_Gun_01) сливает в hips/rThigh,
+  **удаляет треугольники пистолета в кобуре** (Bone_Gun_02; scale 0 у кости давал NaN-нормали → чёрный экран через bloom),
+  суставы — только translation, меш `claire_outfit` (ветка «прочие материалы» в buildDetailed, aoMap = ORM.R).
+- `ModelLibrary`: `claire` = `claire_su.glb` по умолчанию; `?classic` — старая Blender-Клэр (`claire.glb` остался).
+- `ClaireModel.buildFingers/curlFingers`: у новой модели нет shape keys (blink/pain/grip) → хват делается сгибанием
+  костей пальцев по `gripL/gripR` (ось = поперёк костяшек, знак проверен рендером). Моргания/мимики нет.
+- Стив пока старая Blender-модель (разный стиль); тесты start/cutscene/knife/func/doors пройдены.
+
 ## 7. Blender-пайплайн (как перегенерировать ассеты)
 
 Все модели генерируются кодом; запускать **из `/data/assets_src`**, скрипты лежат в `/data/assets_src/tools/`
