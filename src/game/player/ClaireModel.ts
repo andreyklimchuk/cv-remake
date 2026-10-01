@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { buildHumanoid, bakeRigidSkinned, damp, type Humanoid } from '../Rig';
 import { pbr, skinMaterial } from '../../engine/Materials';
 import { makeWeaponModel, weaponHold } from './WeaponModels';
+import { LightPool } from '../../engine/LightPool';
+import { glowTexture } from '../../engine/Materials';
 import { ModelLibrary, jointsOf, skinnedMeshesOf, buildSkeletonFromJoints, reskin } from '../assets/ModelLibrary';
 
 /** Limb bones get a rest orientation aiming their −Y axis at these children (see buildSkeletonFromJoints). */
@@ -39,6 +41,14 @@ export class ClaireModel {
   root: THREE.Group;
   private gunHolder = new THREE.Group();
   private gun: THREE.Group | null = null;
+  /** second (left-hand) gun for dual-wield weapons (Steve's Lugers) */
+  private gunHolderL = new THREE.Group();
+  private gunL: THREE.Group | null = null;
+  /** Claire's lighter: model + flame + warm point light, held in the left hand */
+  private lighter: THREE.Group | null = null;
+  private lighterLight: THREE.PointLight | null = null;
+  private flame: THREE.Sprite | null = null;
+  lighterOn = false;
   private knifeModel: THREE.Group;
   gunId = 'none';
   private phase = 0;
@@ -64,8 +74,11 @@ export class ClaireModel {
   onFootstep?: (foot: 'l' | 'r') => void;
   private lastStepSign = 0;
 
-  constructor(texSize: number) {
-    if (ModelLibrary.has('claire')) {
+  /** which GLB character this is ('claire' | 'steve') */
+  readonly key: string;
+  constructor(texSize: number, key = 'claire') {
+    this.key = key;
+    if (ModelLibrary.has(key)) {
       this.detailed = true;
       this.rig = this.buildDetailed(texSize);
       this.root = this.rig.root;
@@ -74,7 +87,7 @@ export class ClaireModel {
       this.rig.lHand.add(this.knifeModel);
       this.knifeModel.rotation.x = Math.PI / 2;
       this.knifeModel.position.set(0.0, -0.08, 0.03);
-      this.root.add(this.gunHolder);
+      this.root.add(this.gunHolder, this.gunHolderL);
       return;
     }
     this.detailed = false;
@@ -143,7 +156,7 @@ export class ClaireModel {
     r.lHand.add(this.knifeModel);
     this.knifeModel.rotation.x = Math.PI / 2;
     this.knifeModel.position.set(0, -0.05, 0.02);
-    this.root.add(this.gunHolder);
+    this.root.add(this.gunHolder, this.gunHolderL);
     // GPU-skinned body: ~9 draw calls instead of ~40 (animated face parts stay separate, no shadows)
     bakeRigidSkinned(this.root, [...r.bones, ...this.pony], bake);
     for (const m of [...this.eyes, ...this.lids, ...this.brows, this.jaw]) m.castShadow = false;
@@ -152,7 +165,7 @@ export class ClaireModel {
 
   /** Blender-authored Claire: sculpted body, cloth, hair cards, eyes, shape keys (blink/pain/grip). */
   private buildDetailed(texSize: number): Humanoid {
-    const g = ModelLibrary.get('claire')!;
+    const g = ModelLibrary.get(this.key)!;
     const root = new THREE.Group();
     const joints = jointsOf(g);
     const bm = buildSkeletonFromJoints(joints, CLAIRE_AIM, root);
@@ -213,7 +226,7 @@ export class ClaireModel {
   /** attach every gun model once so their materials compile during loading; returns the undo */
   preloadWeapons(): () => void {
     const g = new THREE.Group();
-    for (const id of ['m9f', 'm3', 'mp5', 'python', 'gl', 'bowgun', 'linear']) { try { g.add(makeWeaponModel(id)); } catch { /* optional */ } }
+    for (const id of ['m9f', 'm3', 'mp5', 'python', 'gl', 'bowgun', 'linear', 'luger']) { try { g.add(makeWeaponModel(id)); } catch { /* optional */ } }
     this.gunHolder.add(g);
     return () => { this.gunHolder.remove(g); };
   }
@@ -222,14 +235,56 @@ export class ClaireModel {
     if (id === this.gunId) return;
     this.gunId = id;
     if (this.gun) this.gunHolder.remove(this.gun);
-    this.gun = id !== 'knife' && id !== 'none' ? makeWeaponModel(id) : null;
+    if (this.gunL) { this.gunHolderL.remove(this.gunL); this.gunL = null; }
+    const dual = weaponHold(id) === 'dual';
+    this.gun = id !== 'knife' && id !== 'none' ? makeWeaponModel(dual ? 'luger' : id) : null;
     if (this.gun) this.gunHolder.add(this.gun);
+    if (dual) { this.gunL = makeWeaponModel('luger'); this.gunHolderL.add(this.gunL); }
   }
 
   muzzleWorld(out: THREE.Vector3): THREE.Vector3 {
     const m = this.gun?.getObjectByName('muzzle');
     if (m) return m.getWorldPosition(out);
     return this.rig.rHand.getWorldPosition(out);
+  }
+
+  /** left-hand muzzle of a dual-wield weapon, or null */
+  muzzleWorldL(out: THREE.Vector3): THREE.Vector3 | null {
+    const m = this.gunL?.getObjectByName('muzzle');
+    return m ? m.getWorldPosition(out) : null;
+  }
+
+  /** light / extinguish the lighter (built lazily; its light joins the pooled light set) */
+  setLighter(on: boolean): void {
+    this.lighterOn = on;
+    if (on && !this.lighter) {
+      const g = new THREE.Group();
+      const glb = ModelLibrary.get('item_lighter');
+      if (glb) {
+        const m = glb.scene.clone(true);
+        const bb = new THREE.Box3().setFromObject(m); const sz = bb.getSize(new THREE.Vector3());
+        const k = 0.058 / Math.max(0.001, Math.max(sz.x, sz.y, sz.z));
+        m.scale.setScalar(k);
+        const c = bb.getCenter(new THREE.Vector3()).multiplyScalar(k);
+        m.position.set(-c.x, -bb.min.y * k - 0.058, -c.z);
+        if (sz.y < Math.max(sz.x, sz.z)) { m.rotation.x = -Math.PI / 2; m.position.set(-c.x, -0.058, 0); }
+        m.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.castShadow = false; });
+        g.add(m);
+      } else {
+        const body = new THREE.Mesh(new THREE.BoxGeometry(0.022, 0.05, 0.012), new THREE.MeshStandardMaterial({ color: 0xb8bcc2, metalness: 1, roughness: 0.3 }));
+        body.position.y = -0.03; g.add(body);
+      }
+      this.flame = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture('rgba(255,236,170,1)', 'rgba(255,110,20,0)'), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+      this.flame.scale.set(0.035, 0.07, 1); this.flame.position.y = 0.03; g.add(this.flame);
+      this.lighterLight = new THREE.PointLight(0xffa24a, 3.2, 7.5, 2);
+      this.lighterLight.position.y = 0.06;
+      this.lighterLight.userData.priority = 12; // the player's own light always wins a pooled slot
+      g.add(this.lighterLight);
+      this.lighter = g;
+      this.root.add(g);
+      LightPool.active?.adopt(g);
+    }
+    if (this.lighter) this.lighter.visible = on;
   }
 
   animate(dt: number, t: number, p: AnimParams): void {
@@ -266,7 +321,15 @@ export class ClaireModel {
     const pitch = p.aimPitch;
     let lUx = s * amp * 0.8, lUz = this.detailed ? 0.06 : 0.1, lFx = -0.25 - amp * 0.4, lUy = 0;
     let rUx = -s * amp * 0.8, rUz = this.detailed ? -0.06 : -0.1, rFx = -0.25 - amp * 0.4, rUy = 0;
-    if (hold !== 'knife' && a > 0.001) {
+    const lit = this.lighterOn && hold !== 'dual' && p.state === 'normal' && !p.reloading;
+    if (hold === 'dual' && a > 0.001) {
+      // Steve: both arms extended, one Luger in each hand
+      rUx = THREE.MathUtils.lerp(rUx, -Math.PI / 2 - pitch * 0.85, a); rUz = THREE.MathUtils.lerp(rUz, 0.12, a); rFx = THREE.MathUtils.lerp(rFx, -0.04, a);
+      lUx = THREE.MathUtils.lerp(lUx, -Math.PI / 2 - pitch * 0.85, a); lUz = THREE.MathUtils.lerp(lUz, -0.12, a); lFx = THREE.MathUtils.lerp(lFx, -0.04, a);
+      spineX = THREE.MathUtils.lerp(spineX, -pitch * 0.3, a);
+    } else if (hold === 'dual') {
+      rUx = THREE.MathUtils.lerp(rUx, -0.45, 0.6); rFx = -0.65; lUx = THREE.MathUtils.lerp(lUx, -0.45, 0.6); lFx = -0.65;
+    } else if (hold !== 'knife' && a > 0.001) {
       const pist = hold === 'pistol';
       const tRUx = pist ? -Math.PI / 2 - pitch * 0.7 : -1.05 - pitch * 0.7;
       const tRUz = pist ? 0.28 : 0.22;
@@ -280,6 +343,11 @@ export class ClaireModel {
     } else if (hold !== 'knife') {
       // low-ready carry
       rUx = THREE.MathUtils.lerp(rUx, -0.5, 0.6); rFx = -0.6;
+    }
+    if (lit && !(a > 0.5 && hold !== 'pistol')) {
+      // lighter raised in front of the chest (one-handed pistol aim keeps it lit beside the gun)
+      const e = a > 0.5 ? 0.35 : 1;
+      lUx = THREE.MathUtils.lerp(lUx, -0.85, e); lFx = THREE.MathUtils.lerp(lFx, -1.15, e); lUz = THREE.MathUtils.lerp(lUz, -0.22, e);
     }
     if (p.reloading) { lUx = -0.9; lFx = -1.4; lUz = -0.3; rUx = -0.8; rFx = -0.9; rUz = 0.2; }
 
@@ -410,8 +478,32 @@ export class ClaireModel {
     if (this.detailed) {
       const holding = !!this.gun && this.gun.visible !== false && this.gunId !== 'none';
       this.gripR = damp(this.gripR, holding ? 1 : 0.15, 12, dt);
-      this.gripL = damp(this.gripL, this.knifeModel.visible || (holding && a > 0.5) ? 1 : 0.15, 12, dt);
+      this.gripL = damp(this.gripL, this.knifeModel.visible || !!this.gunL || this.lighterOn || (holding && a > 0.5) ? 1 : 0.15, 12, dt);
       this.setMorph('grip_R', this.gripR); this.setMorph('grip_L', this.gripL);
+    }
+    if (this.lighter) {
+      const show = this.lighterOn && hold !== 'dual' && !this.knifeModel.visible && p.state !== 'dead' && !p.reloading;
+      this.lighter.visible = show;
+      if (show) {
+        this.root.updateMatrixWorld(true);
+        const hp = this.detailed ? r.lHand.localToWorld(new THREE.Vector3(0, -0.06, 0.03)).add(new THREE.Vector3(0, 0.035, 0)) : r.lHand.getWorldPosition(new THREE.Vector3());
+        this.lighter.position.copy(this.root.worldToLocal(hp));
+        const f = 0.85 + Math.sin(t * 31) * 0.06 + Math.sin(t * 13.7) * 0.05 + (Math.random() - 0.5) * 0.06;
+        if (this.flame) this.flame.scale.set(0.03 * f, 0.065 * f, 1);
+        if (this.lighterLight) this.lighterLight.intensity = 3.2 * f;
+      }
+    }
+    if (this.gunL) {
+      this.gunL.visible = p.state !== 'knife' && p.state !== 'finisher' && p.state !== 'counter';
+      this.root.updateMatrixWorld(true);
+      const hand = this.detailed ? r.lHand.localToWorld(new THREE.Vector3(0, -0.075, 0.015)) : r.lHand.getWorldPosition(new THREE.Vector3());
+      const local = this.root.worldToLocal(hand.clone());
+      this.gunHolderL.position.copy(local);
+      if (a > 0.3 && p.state === 'normal') {
+        const target = this.root.worldToLocal(p.aimPoint.clone());
+        const m = new THREE.Matrix4().lookAt(target, local, new THREE.Vector3(0, 1, 0));
+        this.gunHolderL.quaternion.slerp(new THREE.Quaternion().setFromRotationMatrix(m), 1 - Math.exp(-30 * dt));
+      } else this.gunHolderL.quaternion.slerp(new THREE.Quaternion().setFromEuler(new THREE.Euler(0.9, 0, 0)), 1 - Math.exp(-12 * dt));
     }
     if (this.gun) {
       this.gun.visible = p.state !== 'knife' && p.state !== 'finisher' && p.state !== 'counter';

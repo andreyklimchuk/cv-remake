@@ -10,6 +10,7 @@ export interface InventoryHost {
   equippedUid(): number | null;
   use(it: ItemInstance): void;
   equip(it: ItemInstance): void;
+  lighterOn?(): boolean;
   status(): { hp: number; label: string; color: string };
   docs(): { title: string; body: string }[];
   onClose(): void;
@@ -171,6 +172,7 @@ export class InventoryUI {
       return out;
     }
     if (d.kind === 'herb') out.push(['Использовать', () => { this.host.use(it); audio.ui(); }]);
+    if (it.defId === 'lighter') out.push([this.host.lighterOn?.() ? 'Погасить' : 'Зажечь', () => { this.host.use(it); this.close(); }]);
     if (d.kind === 'weapon') out.push([this.host.equippedUid() === it.uid ? 'Экипировано' : 'Экипировать', () => { this.host.equip(it); audio.ui(); }]);
     out.push(['Осмотреть', () => { this.examine = it; }]);
     out.push(['Совместить', () => { this.combineSrc = it; }]);
@@ -229,7 +231,7 @@ export class InventoryUI {
     this.render();
   }
 
-  private flash(text: string): void { this.note = `<h4>—</h4><p>${text}</p>`; }
+  flash(text: string): void { this.note = `<h4>—</h4><p>${text}</p>`; }
 
   private onKey(e: KeyboardEvent): void {
     if (!this.isOpen) return;

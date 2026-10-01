@@ -54,14 +54,39 @@ export class PlayerController {
   indoor = false;
   onDeath?: () => void;
 
+  /** both playable characters are built up-front (shaders warmed at load); only one is visible */
+  readonly models: Record<'claire' | 'steve', ClaireModel>;
+  character: 'claire' | 'steve' = 'claire';
+  /** health of the character that is not being controlled */
+  hpBy: Partial<Record<'claire' | 'steve', { hp: number; poisoned: boolean }>> = {};
+
   constructor(texSize: number, scene: THREE.Scene) {
-    this.model = new ClaireModel(texSize);
-    scene.add(this.model.root);
-    this.model.onFootstep = () => {
+    const step = () => {
       const run = this.speed() > 3;
       audio.footstep(this.pos, run, !this.indoor);
       if (this.speed() > 0.5) bus.emit('noise', { pos: this.pos.clone(), radius: run ? 8 : 2.5, kind: run ? 'run' : 'walk' });
     };
+    const claire = new ClaireModel(texSize, 'claire');
+    const steve = new ClaireModel(texSize, 'steve');
+    this.models = { claire, steve };
+    for (const m of [claire, steve]) { scene.add(m.root); m.onFootstep = step; }
+    steve.root.visible = false;
+    this.model = claire;
+  }
+
+  /** swap the controlled character in place (Claire ⇄ Steve) */
+  setCharacter(c: 'claire' | 'steve'): void {
+    if (c === this.character) return;
+    const old = this.model;
+    this.hpBy[this.character] = { hp: this.hp, poisoned: this.poisoned };
+    const st = this.hpBy[c] ?? { hp: this.maxHp, poisoned: false };
+    this.hp = st.hp; this.poisoned = st.poisoned;
+    this.character = c;
+    this.model = this.models[c];
+    old.root.visible = false;
+    this.model.root.visible = true;
+    this.model.root.position.copy(this.pos);
+    this.model.root.rotation.y = this.yaw;
   }
 
   speed(): number { return Math.hypot(this.vel.x, this.vel.z); }

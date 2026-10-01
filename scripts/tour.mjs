@@ -28,6 +28,7 @@ const stops = [
   ['office', 42, 9.5, 0.3], ['office2', 46, 12, -2.3], ['archive', 36.5, 9, -0.2], ['cells', 30, 33.5, 0.2], ['gallery', 47, 36, Math.PI / 2], ['west', -26, 14, -2.2], ['yard', 6, 8, -0.8],
   ['gateout', 0, 43, 0.15], ['bridge', 0.5, 60, 0], ['plaza', 0, 88, 0], ['terrace', -6, 110, -Math.PI / 2, 3.6], ['tyard', -24, 103, 0.2, 3.6],
   ['training', -35, 120.5, 1.0, 3.6], ['passage', 0, 120, 0, 3.6], ['pyard', 0, 144, 0, 3.6], ['hall', 0, 162, 0, 3.6], ['hall2', 0, 186, Math.PI, 7.6], ['hall3', -6, 164, 0.5, 3.6],
+  ['barracks', -36, 133.5, 0.6, 3.6], ['armory', -26.4, 136.8, Math.PI / 2, 3.6], ['pcorr', 0, 191.2, 0, 3.6], ['dining', 3.5, 209.5, -0.3, 3.6], ['dining2', 6.5, 222.8, -2.5, 3.6], ['fireplace', -4.5, 211, -1.1, 3.6],
 ];
 for (const [n, x, z, yaw, y] of stops) { if (only && !only.includes(n)) continue; await tp(x, z, yaw, -0.12, 2500, y ?? 0); await shot(n); }
 if (!only || only.includes('inv')) {

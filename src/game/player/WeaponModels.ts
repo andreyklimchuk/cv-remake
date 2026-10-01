@@ -64,6 +64,15 @@ export function makeWeaponModel(id: string): THREE.Group {
       box(g, metal, 0.03, 0.03, 0.22, 0, 0.0, -0.15);
       muzzle(g, 0.4, 0.03);
       break;
+    case 'luger': {
+      const gold = new THREE.MeshStandardMaterial({ color: 0xffc860, metalness: 1, roughness: 0.25 });
+      const ivory = new THREE.MeshStandardMaterial({ color: 0xe8e2d4, metalness: 0, roughness: 0.4 });
+      cyl(g, gold, 0.008, 0.11, 0, 0.024, 0.125);
+      box(g, gold, 0.022, 0.035, 0.12, 0, 0.018, 0.01);
+      box(g, ivory, 0.03, 0.1, 0.04, 0, -0.045, -0.06, -0.6);
+      muzzle(g, 0.18, 0.024);
+      break;
+    }
     case 'python':
       cyl(g, steel, 0.014, 0.2, 0, 0.035, 0.14);
       cyl(g, steel, 0.026, 0.05, 0, 0.02, 0.02);
@@ -88,7 +97,8 @@ export function makeWeaponModel(id: string): THREE.Group {
   return g;
 }
 
-export function weaponHold(id: string): 'pistol' | 'rifle' | 'knife' {
+export function weaponHold(id: string): 'pistol' | 'rifle' | 'knife' | 'dual' {
   if (id === 'knife') return 'knife';
+  if (id === 'gold_lugers') return 'dual';
   return id === 'm9f' || id === 'python' ? 'pistol' : 'rifle';
 }

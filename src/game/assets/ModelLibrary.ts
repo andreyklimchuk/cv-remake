@@ -1,14 +1,15 @@
 import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import claireUrl from '../../assets/models/claire.glb?url';
+import steveUrl from '../../assets/models/steve.glb?url';
 
 /**
  * Preloads the Blender-authored character assets (exported as GLB from the .blend sources in
  * /assets/blender). Everything is inlined into the build, so this also works from file://.
  * If loading fails the game falls back to the procedural capsule characters.
  */
-const URLS: Record<string, string> = { claire: claireUrl };
-const zombieUrls = import.meta.glob('../../assets/models/zombie_*.glb', { query: '?url', import: 'default', eager: true }) as Record<string, string>;
+const URLS: Record<string, string> = { claire: claireUrl, steve: steveUrl };
+const zombieUrls = import.meta.glob(['../../assets/models/zombie_*.glb', '../../assets/models/enemy_*.glb'], { query: '?url', import: 'default', eager: true }) as Record<string, string>;
 for (const [p, u] of Object.entries(zombieUrls)) URLS[p.split('/').pop()!.replace('.glb', '')] = u;
 const WEAPON_URLS = import.meta.glob('../../assets/models/weapon_*.glb', { query: '?url', import: 'default', eager: true }) as Record<string, string>;
 for (const [p, u] of Object.entries(WEAPON_URLS)) URLS[p.split('/').pop()!.replace('.glb', '')] = u;

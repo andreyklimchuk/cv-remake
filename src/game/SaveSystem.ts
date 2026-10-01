@@ -10,6 +10,10 @@ export interface SaveData {
   inventory: ItemInstance[];
   box: ItemInstance[];
   equipped: number | null;
+  /** active character; `inventory`/`equipped`/`cap` belong to it, `other` holds the other character's kit */
+  character?: 'claire' | 'steve';
+  cap?: number;
+  other?: { inventory: ItemInstance[]; equipped: number | null; cap: number; hp?: number; poisoned?: boolean };
   flags: string[];
   stats: { time: number; kills: number; saves: number; shots: number; hits: number };
 }

@@ -22,6 +22,9 @@ type Mode = 'title' | 'playing' | 'inventory' | 'paused' | 'dialog' | 'dead' | '
  * Top-level orchestrator ("Web RE-Engine" runtime): owns renderer, input, UI and the current World,
  * and runs the frame loop: input → player → weapons → AI → FX → streaming → camera → audio → HUD → render.
  */
+/** character switch is allowed only in free control (not grabbed, dodging, dead, mid-action) */
+function p0ok(w: World): boolean { return w.player.state === 'normal' && !w.weapons.isReloading(); }
+
 export class Game {
   backend!: RenderBackend;
   camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.05, 900);
@@ -37,6 +40,7 @@ export class Game {
   private fps = 60;
   private debug = false;
   private deadT = 0;
+  private rainGround = (x: number, z: number) => this.world!.physics.groundAt(x, z, 60);
   private visitedZones = new Set<string>();
   private lastSway = { yaw: 0, pitch: 0 };
   private api: GameAPI;
@@ -49,7 +53,11 @@ export class Game {
       inventory: null as never, itemBox: null as never,
       equippedUid: () => this.world?.weapons.current?.uid ?? null,
       use: (it) => this.useItem(it),
-      equip: (it) => { this.world?.equip(it); },
+      equip: (it) => {
+        if (ITEMS[it.defId].weaponId === 'gold_lugers' && this.world?.character !== 'steve') { this.invUI.flash('Это пистолеты Стива — Клэр не стреляет с двух рук.'); return; }
+        this.world?.equip(it);
+      },
+      lighterOn: () => !!this.world?.player.models.claire.lighterOn,
       status: () => {
         const p = this.world!.player;
         const st = p.status();
@@ -136,7 +144,13 @@ export class Game {
       compileAsync?: (s: THREE.Object3D, c: THREE.Camera) => Promise<unknown>; compile?: (s: THREE.Object3D, c: THREE.Camera) => void; initTexture?: (t: THREE.Texture) => void;
     };
     for (const z of w.streamer.zones.values()) z.group.visible = true;
-    const undoGuns = w.player.model.preloadWeapons();
+    const models = Object.values(w.player.models);
+    const vis = models.map((m) => m.root.visible);
+    const lit = w.player.models.claire.lighterOn;
+    w.player.models.claire.setLighter(true);
+    models.forEach((m) => { m.root.visible = true; });
+    const undos = models.map((m) => m.preloadWeapons());
+    const undoGuns = () => { undos.forEach((u) => u()); models.forEach((m, i) => { m.root.visible = vis[i]; }); w.player.models.claire.setLighter(lit); };
     try {
       if (r.compileAsync) await r.compileAsync(w.scene, this.camera); else r.compile?.(w.scene, this.camera);
     } catch (e) { console.warn('shader warmup', e); }
@@ -244,6 +258,15 @@ export class Game {
   private useItem(it: ItemInstance): void {
     const w = this.world!;
     const d = ITEMS[it.defId];
+    if (it.defId === 'lighter') {
+      if (w.character !== 'claire') { this.hud.message('Зажигалка у Клэр.'); return; }
+      const on = !w.player.models.claire.lighterOn;
+      w.player.models.claire.setLighter(on);
+      if (on) w.flags.add('lighterOn'); else w.flags.delete('lighterOn');
+      audio.click();
+      this.hud.message(on ? 'Клэр зажигает зажигалку.' : 'Зажигалка погашена.', 1.6);
+      return;
+    }
     if (d.kind !== 'herb') return;
     if (d.heal === undefined && !d.cure) { this.hud.message('Красная трава бесполезна сама по себе. Смешайте с зелёной.'); return; }
     if (w.player.hp >= w.player.maxHp && !(d.cure && w.player.poisoned) && !d.defense) { this.hud.message('Здоровье в норме.'); return; }
@@ -343,7 +366,13 @@ export class Game {
     }
 
     // weapon switching
-    const weps = w.inventory.weapons().filter((i) => ITEMS[i.defId].weaponId !== 'knife');
+    if (inp.switchCharacter() && p0ok(w)) {
+      const to = w.switchCharacter();
+      (this.invUI as any).host.inventory = w.inventory;
+      this.hud.message(to === 'steve' ? 'Стив Бернсайд' : 'Клэр Рэдфилд', 1.8);
+      audio.ui();
+    }
+    const weps = w.inventory.weapons().filter((i) => ITEMS[i.defId].weaponId !== 'knife' && (w.character === 'steve' || ITEMS[i.defId].weaponId !== 'gold_lugers'));
     const slot = inp.weaponSlot();
     const cyc = inp.cycleWeapon();
     if ((slot && weps[slot - 1]) || (cyc && weps.length)) {
@@ -360,10 +389,11 @@ export class Game {
 
     // weapons
     const muzzle = p.model.muzzleWorld(new THREE.Vector3());
+    const muzzle2 = p.model.muzzleWorldL(new THREE.Vector3());
     const right = new THREE.Vector3(-Math.cos(p.yaw), 0, Math.sin(p.yaw));
     const out = w.weapons.update(dt, w.time, {
       aiming: p.aiming, fire: inp.fire(), firePressed: inp.firePressed(), reload: inp.reload(),
-      moveSpeed: p.speed(), hpRatio: p.hpRatio(), staminaRatio: p.stamina / 100, muzzle, right,
+      moveSpeed: p.speed(), hpRatio: p.hpRatio(), staminaRatio: p.stamina / 100, muzzle, muzzle2, right,
       canFire: p.state === 'normal',
     });
     this.rig.addLook(out.kickYaw, -out.kickPitch);
@@ -382,8 +412,7 @@ export class Game {
     const zone = w.streamer.current;
     const outdoor = zone?.outdoor ?? true;
     w.rain.lines.visible = outdoor || (zone?.neighbors.some((n) => w.streamer.zones.get(n)?.outdoor && w.streamer.zones.get(n)?.group.visible) ?? false);
-    const rb = w.level.outdoorBounds.find((b) => b.containsPoint(new THREE.Vector3(p.pos.x, 1, p.pos.z))) ?? w.level.outdoorBounds[0];
-    w.rain.update(dt, p.pos, rb);
+    if (w.rain.lines.visible) w.rain.update(dt, p.pos, w.level.outdoorBounds, this.rainGround);
     audio.setIndoor(!outdoor);
     audio.saveRoom(w.level.saveRoom.containsPoint(new THREE.Vector3(p.pos.x, 1, p.pos.z)));
     if (zone && !this.visitedZones.has(zone.id)) {
@@ -393,6 +422,7 @@ export class Game {
         gate_out: ['ДОРОГА К МОСТУ', 'ROCKFORT ISLAND'], bridge: ['МОСТ', 'ROCKFORT ISLAND'], plaza: ['ЛЕСТНИЦА', 'ROCKFORT ISLAND'],
         tyard: ['ПЛАЦ', 'MILITARY TRAINING FACILITY'], training: ['УЧЕБНЫЙ КОРПУС', 'MILITARY TRAINING FACILITY'],
         passage: ['ПРОХОД', 'ROCKFORT ISLAND'], pyard: ['ДВОРЦОВАЯ ПЛОЩАДЬ', 'ASHFORD PALACE'], hall: ['ГЛАВНЫЙ ЗАЛ', 'ASHFORD PALACE'],
+        barracks: ['КАЗАРМА И ОРУЖЕЙНАЯ', 'MILITARY TRAINING FACILITY'], pcorr: ['ГАЛЕРЕЯ ПОРТРЕТОВ', 'ASHFORD PALACE'], dining: ['ОБЕДЕННЫЙ ЗАЛ', 'ASHFORD PALACE'],
       };
       const n = names[zone.id];
       if (n) this.hud.zone(n[0], n[1]);

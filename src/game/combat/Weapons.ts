@@ -66,6 +66,13 @@ export const WEAPONS: Record<string, WeaponDef> = {
     reloadTime: 2.2, penetration: 1, range: 50, stagger: 0.18, crit: 0.02, limbMult: 0.9,
     sound: { thump: 0.55, crack: 0.75, tail: 0.35, pitch: 1.2 }, noise: 22, muzzle: 0.9, shell: true, laser: true,
   },
+  gold_lugers: {
+    id: 'gold_lugers', name: 'Gold Lugers', type: 'hitscan', ammo: ['ammo_hg'], ammoPerShot: 2, magSize: 16, damage: 12, pellets: 2,
+    fireRate: 2.8, auto: false, spreadMin: 0.9, spreadMax: 4.2, moveSpread: 2.6, focusTime: 1.0,
+    recoil: { kick: 3.4, pattern: [[0.3, 1], [-0.4, 1], [0.5, 1.1], [-0.3, 1.2]], recovery: 12, camShake: 0.16 },
+    reloadTime: 2.1, penetration: 1, range: 55, stagger: 0.42, crit: 0.08, limbMult: 1.05,
+    sound: { thump: 0.85, crack: 1.0, tail: 0.6, pitch: 1.05 }, noise: 24, muzzle: 1, shell: true, laser: false,
+  },
   python: {
     id: 'python', name: 'Python Magnum', type: 'hitscan', ammo: ['ammo_mag'], ammoPerShot: 1, magSize: 6, damage: 95, pellets: 1,
     fireRate: 0.9, auto: false, spreadMin: 0.3, spreadMax: 5, moveSpread: 3.5, focusTime: 1.4,

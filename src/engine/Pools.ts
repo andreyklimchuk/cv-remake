@@ -170,6 +170,7 @@ export class DebrisPool {
 export class MuzzleFlash {
   light: THREE.PointLight;
   sprite: THREE.Sprite;
+  sprite2: THREE.Sprite;
   private t = 0;
   constructor(scene: THREE.Scene) {
     this.light = new THREE.PointLight(0xffb060, 0, 9, 2);
@@ -178,19 +179,29 @@ export class MuzzleFlash {
     }));
     this.sprite.scale.setScalar(0.35);
     this.sprite.visible = false;
-    scene.add(this.light, this.sprite);
+    this.sprite2 = new THREE.Sprite(this.sprite.material.clone());
+    this.sprite2.visible = false;
+    scene.add(this.light, this.sprite, this.sprite2);
   }
-  fire(pos: THREE.Vector3, scale = 1): void {
+  /** pos2: second muzzle of a dual-wield weapon (one shared light at the midpoint) */
+  fire(pos: THREE.Vector3, scale = 1, pos2?: THREE.Vector3 | null): void {
     this.t = 0.05;
     this.light.position.copy(pos);
+    if (pos2) this.light.position.lerp(pos2, 0.5);
     this.sprite.position.copy(pos);
     this.sprite.scale.setScalar(0.25 * scale + Math.random() * 0.15);
     this.sprite.material.rotation = Math.random() * Math.PI;
-    this.light.intensity = 25 * scale;
+    this.light.intensity = 25 * scale * (pos2 ? 1.5 : 1);
     this.sprite.visible = true;
+    if (pos2) {
+      this.sprite2.position.copy(pos2);
+      this.sprite2.scale.setScalar(0.25 * scale + Math.random() * 0.15);
+      this.sprite2.material.rotation = Math.random() * Math.PI;
+      this.sprite2.visible = true;
+    }
   }
   update(dt: number): void {
     this.t -= dt;
-    if (this.t <= 0) { this.light.intensity = 0; this.sprite.visible = false; }
+    if (this.t <= 0) { this.light.intensity = 0; this.sprite.visible = false; this.sprite2.visible = false; }
   }
 }

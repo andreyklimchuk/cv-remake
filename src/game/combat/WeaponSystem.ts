@@ -19,6 +19,7 @@ export interface WeaponInput {
   hpRatio: number;
   staminaRatio: number;
   muzzle: THREE.Vector3; // world position of barrel tip
+  muzzle2?: THREE.Vector3 | null; // left-hand barrel tip of a dual-wield weapon
   right: THREE.Vector3;  // character right vector (shell ejection)
   canFire: boolean;      // false during dodge / stagger / grabbed
 }
@@ -58,7 +59,7 @@ export class WeaponSystem {
   shots = 0;
   hits = 0;
 
-  constructor(private ctx: CombatContext, private inv: Inventory) {
+  constructor(private ctx: CombatContext, public inv: Inventory) {
     this.projectiles = new Projectiles(ctx);
     const lg = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 0, 1)]);
     this.laserLine = new THREE.Line(lg, new THREE.LineBasicMaterial({ color: 0xff1010, transparent: true, opacity: 0.25, depthWrite: false }));
@@ -237,8 +238,9 @@ export class WeaponSystem {
     this.current!.mag = this.inMag() - d.ammoPerShot;
     const spread = this.spreadDeg(input);
 
-    if (d.muzzle > 0) this.ctx.flash.fire(input.muzzle, d.muzzle);
+    if (d.muzzle > 0) this.ctx.flash.fire(input.muzzle, d.muzzle, input.muzzle2);
     if (d.shell) this.ctx.shells.eject(input.muzzle.clone().addScaledVector(input.right, -0.05), input.right, d.id === 'm3' ? 0xaa2222 : undefined);
+    if (d.shell && input.muzzle2) this.ctx.shells.eject(input.muzzle2.clone().addScaledVector(input.right, 0.05), input.right.clone().negate());
     audio.gunshot(d.sound);
     bus.emit('noise', { pos: input.muzzle.clone(), radius: d.noise, kind: 'gunshot' });
     bus.emit('cameraShake', { strength: d.recoil.camShake, duration: 0.12 });

@@ -160,29 +160,46 @@ export class FireEmitter {
 export class Rain {
   lines: THREE.LineSegments;
   private pos: Float32Array;
+  private floor: Float32Array;
   private n: number;
   constructor(scene: THREE.Scene, count: number, private area = 26) {
     this.n = count;
-    this.pos = new Float32Array(count * 6);
-    for (let i = 0; i < count; i++) this.reset(i, Math.random() * 14);
+    this.pos = new Float32Array(count * 6).fill(-1000);
+    this.floor = new Float32Array(count).fill(-2000);
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(this.pos, 3));
     this.lines = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0x8899aa, transparent: true, opacity: 0.35, depthWrite: false }));
     this.lines.frustumCulled = false;
     scene.add(this.lines);
   }
-  private reset(i: number, y: number, cx = 0, cz = 0): void {
-    const x = cx + (Math.random() - 0.5) * this.area, z = cz + (Math.random() - 0.5) * this.area;
-    this.pos.set([x, y, z, x + 0.03, y + 0.35, z + 0.02], i * 6);
+  /**
+   * Drops only exist above open-sky areas (union of the outdoor boxes) and die on the ground below them,
+   * so nothing falls through roofs of interiors next to a courtyard.
+   */
+  private reset(i: number, center: THREE.Vector3, boxes: THREE.Box3[], ground?: (x: number, z: number) => number, fresh = false): void {
+    const o = i * 6;
+    const x = center.x + (Math.random() - 0.5) * this.area, z = center.z + (Math.random() - 0.5) * this.area;
+    let inside = false;
+    for (const b of boxes) if (x >= b.min.x && x <= b.max.x && z >= b.min.z && z <= b.max.z) { inside = true; break; }
+    if (!inside) { this.pos.fill(-1000, o, o + 6); this.floor[i] = -2000; return; }
+    const gy = ground ? ground(x, z) : 0;
+    const top = Math.max(gy, center.y) + 9 + Math.random() * 4;
+    const y = fresh ? gy + Math.random() * (top - gy) : top;
+    this.floor[i] = gy;
+    this.pos.set([x, y, z, x + 0.03, y + 0.35, z + 0.02], o);
   }
-  update(dt: number, center: THREE.Vector3, bounds?: THREE.Box3): void {
+  update(dt: number, center: THREE.Vector3, boxes: THREE.Box3[], ground?: (x: number, z: number) => number): void {
+    const fresh = !this.lines.userData.init;
+    this.lines.userData.init = true;
+    const half = this.area * 0.5;
     for (let i = 0; i < this.n; i++) {
       const o = i * 6;
+      if (fresh) { this.reset(i, center, boxes, ground, true); continue; }
+      if (this.floor[i] < -1500) { if (Math.random() < 0.08) this.reset(i, center, boxes, ground); continue; }
       this.pos[o + 1] -= 16 * dt; this.pos[o + 4] -= 16 * dt;
       this.pos[o] -= 0.5 * dt; this.pos[o + 3] -= 0.5 * dt;
-      const x = this.pos[o], z = this.pos[o + 2];
-      const out = bounds && (x < bounds.min.x || x > bounds.max.x || z < bounds.min.z || z > bounds.max.z);
-      if (this.pos[o + 1] < 0 || out) this.reset(i, 10 + Math.random() * 4, center.x, center.z);
+      const far = Math.abs(this.pos[o] - center.x) > half || Math.abs(this.pos[o + 2] - center.z) > half;
+      if (this.pos[o + 1] < this.floor[i] || far) this.reset(i, center, boxes, ground);
     }
     (this.lines.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
   }

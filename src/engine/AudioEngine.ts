@@ -169,6 +169,35 @@ export class AudioEngine {
     o.start(t); lfo.start(t); o.stop(t + dur); lfo.stop(t + dur);
   }
 
+  /** Cerberus: 'snarl' (rolling growl), 'bark' (sharp bark), 'yelp' (hit / death) */
+  dog(pos: THREE.Vector3, kind: 'snarl' | 'bark' | 'yelp'): void {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t = ctx.currentTime, d = this.out(pos);
+    const dur = kind === 'snarl' ? 1.1 + Math.random() * 0.5 : kind === 'bark' ? 0.16 : 0.35;
+    const o = ctx.createOscillator(); o.type = 'sawtooth';
+    const base = kind === 'snarl' ? 85 + Math.random() * 20 : kind === 'bark' ? 330 + Math.random() * 60 : 700;
+    o.frequency.setValueAtTime(base, t);
+    if (kind === 'bark') o.frequency.exponentialRampToValueAtTime(base * 0.55, t + dur);
+    if (kind === 'yelp') o.frequency.exponentialRampToValueAtTime(base * 1.6, t + dur * 0.3), o.frequency.exponentialRampToValueAtTime(base * 0.5, t + dur);
+    const lfo = ctx.createOscillator(); lfo.frequency.value = kind === 'snarl' ? 22 + Math.random() * 8 : 40;
+    const lg = ctx.createGain(); lg.gain.value = base * (kind === 'snarl' ? 0.25 : 0.05); lfo.connect(lg).connect(o.frequency);
+    const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = kind === 'snarl' ? 650 : 1400; f.Q.value = 2.5;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(kind === 'snarl' ? 0.32 : 0.5, t + 0.02); g.gain.linearRampToValueAtTime(0.0001, t + dur);
+    o.connect(f).connect(g); g.connect(d);
+    this.noiseBurst(d, t, dur, 'bandpass', kind === 'snarl' ? 900 : 2200, 1.5, kind === 'snarl' ? 0.14 : 0.2);
+    o.start(t); lfo.start(t); o.stop(t + dur); lfo.stop(t + dur);
+  }
+
+  /** Bandersnatch: deep wet roar / grunt */
+  roar(pos: THREE.Vector3, long = true): void {
+    this.groan(pos, 0.42, long);
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime, d = this.out(pos);
+    this.noiseBurst(d, t, long ? 1.4 : 0.5, 'lowpass', 500, 1, 0.35, 160);
+    this.tone(d, t, long ? 1.2 : 0.4, 'sawtooth', 48, 34, 0.18);
+  }
+
   pickup(): void {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;

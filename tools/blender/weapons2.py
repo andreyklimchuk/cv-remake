@@ -192,7 +192,43 @@ def linear():
     P.append(wbox('screen', -0.12, -0.04, 0.086, 0.088, 0.05, M['glow'], bev=0.0))
     done('weapon_linear', P, (0.64, 0.026))
 
-for k, fn in [('m3', m3), ('mp5', mp5), ('python', python), ('gl', gl), ('bowgun', bowgun), ('linear', linear)]:
+# ------------------------------------------------------------------ Steve's gold Luger P08 (one of a pair)
+def luger():
+    M = mats(); P = []
+    gold = mat('w_gold', (1.0, 0.74, 0.32), 0.22, 1.0, noise=0.15)
+    gold2 = mat('w_gold_dark', (0.62, 0.42, 0.14), 0.35, 1.0)
+    ivory = mat('w_ivory', (0.86, 0.84, 0.78), 0.38, 0.0, coat=0.5, noise=0.25)
+    M['ivory'] = ivory; M['blued'] = gold
+    # barrel + front sight + muzzle crown
+    P.append(wcyl('barrel', 0.0082, 0.07, 0.178, 0.024, gold, verts=24, r2=0.0072))
+    P.append(wcyl('bore', 0.0045, 0.177, 0.1795, 0.024, M['dark'], verts=16, bev=0))
+    P.append(wprism('fsight', [(0.162, 0.03), (0.172, 0.03), (0.17, 0.038), (0.165, 0.038)], 0.0035, gold, bev=0.0006))
+    P.append(wcyl('bring', 0.0105, 0.068, 0.078, 0.024, gold2, verts=24))
+    # receiver / barrel extension + frame
+    P.append(wprism('receiver', [(-0.045, 0.012), (0.07, 0.012), (0.07, 0.034), (0.0, 0.036), (-0.045, 0.036)], 0.021, gold, bev=0.0015))
+    P.append(wprism('frame', [(-0.04, -0.006), (0.07, -0.006), (0.075, 0.012), (-0.045, 0.014)], 0.024, gold, bev=0.0018))
+    # toggle-lock: links + knurled knobs
+    P.append(wbox('toggle1', -0.04, -0.005, 0.034, 0.045, 0.014, gold, bev=0.0012))
+    P.append(wbox('toggle2', -0.062, -0.04, 0.036, 0.047, 0.014, gold, bev=0.0012))
+    for sx in (1, -1):
+        P.append(cyl('knob', 0.0085, 0.008, (sx * 0.011, 0.04, 0.043), gold2, rot=(0, math.pi / 2, 0), verts=20, bev=0.0008))
+        for i in range(8):
+            a = i * math.pi / 4
+            P.append(wbox('knurl', -0.04 + 0.0086 * math.cos(a) - 0.0012, -0.04 + 0.0086 * math.cos(a) + 0.0012, 0.043 + 0.0086 * math.sin(a) - 0.0012, 0.043 + 0.0086 * math.sin(a) + 0.0012, 0.009, gold, x=sx * 0.011, bev=0.0003))
+    P.append(wprism('rsight', [(-0.064, 0.044), (-0.054, 0.044), (-0.055, 0.052), (-0.063, 0.052)], 0.008, gold, bev=0.0006))
+    # raked grip with white engraved grips + gold frame strap
+    rk = math.tan(math.radians(36)); h = 0.1
+    P.append(wprism('gripframe', [(-0.06, 0.002), (0.0, 0.002), (-0.006 - h * rk, -h), (-0.062 - h * rk, -h)], 0.024, gold, bev=0.002, seg=2))
+    P.append(wprism('grips', [(-0.054, -0.008), (-0.01, -0.008), (-0.013 - 0.087 * rk, -0.094), (-0.056 - 0.087 * rk, -0.094)], 0.031, ivory, bev=0.003, seg=3))
+    P.append(wbox('magbase', -0.064 - h * rk, -0.004 - h * rk, -0.11, -h + 0.002, 0.022, gold2, bev=0.002))
+    P.append(wcyl('lanyard', 0.003, -0.056 - h * rk, -0.05 - h * rk, -0.098, gold2, verts=10)) if False else None
+    # side plate + safety lever + engraving bosses
+    for sx in (1, -1): P.append(wbox('sideplate', -0.03, 0.05, 0.0, 0.01, 0.002, gold2, x=sx * 0.0125, bev=0.0004))
+    P.append(wbox('safety', -0.05, -0.038, 0.004, 0.012, 0.004, gold2, x=-0.014, bev=0.0006))
+    trigger(M, P, f=0.002, u=-0.004)
+    done('weapon_luger', P, (0.18, 0.024))
+
+for k, fn in [('luger', luger), ('m3', m3), ('mp5', mp5), ('python', python), ('gl', gl), ('bowgun', bowgun), ('linear', linear)]:
     if ONLY and k not in ONLY: continue
     reset_hs(); fn()
 print('weapons2 done')

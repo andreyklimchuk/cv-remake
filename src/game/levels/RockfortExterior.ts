@@ -48,10 +48,16 @@ export function buildExterior(ctx: LevelContext, H: AnnexHelpers) {
   const passB = new THREE.Box3(new THREE.Vector3(-6, -1, 118), new THREE.Vector3(6, 20, 142));
   const pyardB = new THREE.Box3(new THREE.Vector3(-16, -1, 142), new THREE.Vector3(16, 25, 160));
   const hallB = new THREE.Box3(new THREE.Vector3(-14.3, -1, 160), new THREE.Vector3(14.3, 25, 190.5));
+  const barrB = new THREE.Box3(new THREE.Vector3(-38.2, -1, 130.3), new THREE.Vector3(-16.1, 20, 145));
+  const pcorrB = new THREE.Box3(new THREE.Vector3(-2.3, -1, 190.5), new THREE.Vector3(2.3, 20, 206));
+  const dinB = new THREE.Box3(new THREE.Vector3(-10.3, -1, 206), new THREE.Vector3(10.3, 20, 224.5));
   const U = 3.6;   // upper ground level
   const G2 = 7.6;  // palace gallery level
 
   let trainDoor: Door | null = null;
+  let barrDoor: Door | null = null;
+  let hallDoorOpen = flags.has('open:hallEnd');
+  let fireLit = flags.has('dining:fire');
   let palaceOpen = flags.has('open:palaceDoor');
 
   // ------------------------------------------------------------------ helpers
@@ -118,6 +124,9 @@ export function buildExterior(ctx: LevelContext, H: AnnexHelpers) {
   physics.addFloor({ x1: -38, z1: 118, x2: -16, z2: 130, y0: U, y1: U, axis: null, solid: true });
   physics.addFloor({ x1: -4, z1: 118, x2: 4, z2: 142, y0: U, y1: U, axis: null, solid: true });
   physics.addFloor({ x1: -16, z1: 142, x2: 16, z2: 190.5, y0: U, y1: U, axis: null, solid: true });
+  physics.addFloor({ x1: -38, z1: 130, x2: -16, z2: 145, y0: U, y1: U, axis: null, solid: true });
+  physics.addFloor({ x1: -2, z1: 190.5, x2: 2, z2: 206, y0: U, y1: U, axis: null, solid: true });
+  physics.addFloor({ x1: -10, z1: 206, x2: 10, z2: 224.5, y0: U, y1: U, axis: null, solid: true });
   physics.addFloor({ x1: -14, z1: 180, x2: 14, z2: 190, y0: G2, y1: G2, axis: null });  // palace gallery (walk underneath)
 
   // =================================================================== GATE OUT
@@ -283,16 +292,18 @@ export function buildExterior(ctx: LevelContext, H: AnnexHelpers) {
 
   // =================================================================== TRAINING FACILITY LOBBY (interior)
   streamer.add({
-    id: 'training', bounds: trainB, neighbors: ['tyard'], outdoor: false,
-    portalOpen: () => !!trainDoor?.open,
+    id: 'training', bounds: trainB, neighbors: ['tyard', 'barracks'], outdoor: false,
+    portalOpen: (n) => n === 'barracks' ? !!barrDoor?.open : !!trainDoor?.open,
     build: (G) => {
       const b = new LevelBuilder(physics);
       b.box(-27, U / 2, 124, 22, U, 12, X.milConcrete, { collide: false, tile: 4 });
       b.box(-27, U + 0.003, 124, 21.6, 0.01, 11.6, M.tiles, { collide: false, shadow: false, tile: 2 });
       b.box(-27, U + 3.7, 124, 22, 0.2, 12, M.plaster, { collide: false, tile: 3 });
-      b.box(-27, U + 4, 130, 22.4, 8, 0.4, X.milConcrete, { tile: 4 });
+      // back wall with the doorway to the barracks (x -35..-33.4)
+      b.box(-36.6, U + 4, 130, 3.2, 8, 0.4, X.milConcrete, { tile: 4 }); b.box(-24.6, U + 4, 130, 17.6, 8, 0.4, X.milConcrete, { tile: 4 });
+      b.box(-34.2, U + 5.2, 130, 1.6, 5.6, 0.4, X.milConcrete, { tile: 4 });
       b.box(-38, U + 4, 124, 0.4, 8, 12.4, X.milConcrete, { tile: 4 }); b.box(-16, U + 4, 124, 0.4, 8, 12.4, X.milConcrete, { tile: 4 });
-      for (const [cx, cz, w, d] of [[-27, 129.75, 21.5, 0.06], [-37.75, 124, 0.06, 11.5], [-16.25, 124, 0.06, 11.5]] as [number, number, number, number][]) b.box(cx, U + 0.6, cz, w, 1.2, d, M.wood, { collide: false, tile: 1 });
+      for (const [cx, cz, w, d] of [[-36.4, 129.75, 2.7, 0.06], [-24.8, 129.75, 17.1, 0.06], [-37.75, 124, 0.06, 11.5], [-16.25, 124, 0.06, 11.5]] as [number, number, number, number][]) b.box(cx, U + 0.6, cz, w, 1.2, d, M.wood, { collide: false, tile: 1 });
       b.box(-27, U + 0.6, 118.25, 21.5, 1.2, 0.06, M.wood, { collide: false, tile: 1 });
       // counter
       b.box(-20.5, U + 0.55, 121.5, 0.6, 1.1, 4, M.wood, { tile: 1 });
@@ -338,6 +349,85 @@ export function buildExterior(ctx: LevelContext, H: AnnexHelpers) {
   });
   N('trainIn', -27, 119.6, U); nav.link(navIdx.trainOut, navIdx.trainIn);
   for (const x of [-35.5, -31, -27, -23, -18.5]) for (const z of [120, 124.2, 128]) N(null, x, z, U);
+
+  // =================================================================== BARRACKS + ARMORY (behind the training lobby) — Cerberus pack
+  streamer.add({
+    id: 'barracks', bounds: barrB, neighbors: ['training'], outdoor: false,
+    portalOpen: () => !!barrDoor?.open,
+    build: (G) => {
+      const b = new LevelBuilder(physics);
+      const CH = 3.6;
+      b.box(-27, U + 0.003, 137.5, 21.6, 0.01, 14.4, X.milConcrete, { collide: false, shadow: false, tile: 3 });
+      b.box(-27, U + CH + 0.1, 137.5, 22.4, 0.2, 15, M.plaster, { collide: false, tile: 3 });
+      b.box(-27, U + 4, 144.8, 22.4, 8, 0.4, X.milConcrete, { tile: 4 });
+      b.box(-38, U + 4, 137.5, 0.4, 8, 15, X.milConcrete, { tile: 4 }); b.box(-16, U + 4, 137.5, 0.4, 8, 15, X.milConcrete, { tile: 4 });
+      // partition barracks | armory (doorway z 136..137.6)
+      b.box(-25, U + CH / 2, 133.1, 0.3, CH, 5.8, X.milConcrete, { tile: 3 });
+      b.box(-25, U + CH / 2, 141.1, 0.3, CH, 7, X.milConcrete, { tile: 3 });
+      b.box(-25, U + 3, 136.8, 0.3, 1.2, 1.6, X.milConcrete, { tile: 3 });
+      // olive wainscot
+      const olive = new THREE.MeshStandardMaterial({ color: 0x4a5236, roughness: 0.85 });
+      b.box(-27, U + 0.6, 144.55, 21.5, 1.2, 0.06, olive, { collide: false });
+      b.box(-37.75, U + 0.6, 137.5, 0.06, 1.2, 14.4, olive, { collide: false }); b.box(-16.25, U + 0.6, 137.5, 0.06, 1.2, 14.4, olive, { collide: false });
+      // bunk beds (two tiers) along the west wall and the partition
+      const lower: [number, number, number, number][] = [], upper: [number, number, number, number][] = [];
+      for (const z of [132.4, 135.4, 138.6, 141.8]) {
+        lower.push([-36.9, U, z, 0]); upper.push([-36.9, U + 1.15, z, 0]);
+        if (z > 137) { lower.push([-26.1, U, z, 0]); upper.push([-26.1, U + 1.15, z, 0]); }
+      }
+      propInstances(G, physics, 'bed', lower);
+      propInstances(G, physics, 'bed', upper, { collide: false });
+      for (const [bx, bz] of [...lower.map((l) => [l[0], l[2]])]) for (const dx of [-0.4, 0.4]) for (const dz of [-1, 1]) b.box(bx + dx, U + 1.05, bz + dz, 0.05, 2.1, 0.05, M.steel, { collide: false, shadow: false });
+      // overturned footlockers, blood trail, kennel cage
+      propInstances(G, physics, 'crate', [[-31.5, U, 133.2, 0.4], [-33.2, U, 140.8, 1.1]], { scale: [0.8, 0.5, 0.5] });
+      placeProp(G, physics, 'bench', -31.5, U, 137.5, 0);
+      const blood = new THREE.MeshStandardMaterial({ color: 0x3a0404, roughness: 0.3, transparent: true, opacity: 0.85, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
+      for (const [x, z, r] of [[-33, 134, 0.9], [-31, 136.5, 0.5], [-29.6, 138.8, 0.7], [-34.8, 142.6, 1.1]] as [number, number, number][]) {
+        const d = new THREE.Mesh(new THREE.CircleGeometry(r, 14), blood); d.rotation.x = -Math.PI / 2; d.scale.y = 0.6; d.position.set(x, U + 0.012, z); G.add(d);
+      }
+      // dog kennel (bent bars) in the corner of the barracks
+      for (let i = 0; i < 9; i++) b.box(-33.6 + i * 0.4, U + 0.8, 143.4, 0.04, 1.6, 0.04, M.steel, { collide: false, shadow: false });
+      b.box(-32, U + 1.6, 143.4, 3.6, 0.06, 0.06, M.steel, { collide: false });
+      // armory: weapon racks, cabinets, crates
+      for (const z of [131.5, 133.5]) { b.box(-16.6, U + 1, z, 0.5, 2, 1.6, M.steel, { tile: 1 }); for (let k = 0; k < 4; k++) b.box(-16.9, U + 1.2, z - 0.6 + k * 0.4, 0.1, 1.1, 0.06, M.wood, { collide: false, shadow: false }); }
+      placeProp(G, physics, 'cabinet', -16.6, U, 140.5, -Math.PI / 2); placeProp(G, physics, 'cabinet', -16.6, U, 141.4, -Math.PI / 2);
+      propInstances(G, physics, 'crate', [[-23.8, U, 143.6, 0.2], [-22.6, U, 143.8, -0.3], [-23.4, U + 0.9, 143.7, 0.6]]);
+      placeProp(G, physics, 'desk', -20.5, U, 143.9, Math.PI); placeProp(G, physics, 'sandbags', -19, U, 135.5, Math.PI / 2);
+      placeProp(G, physics, 'monitor', -20.5, U + 0.78, 143.9, Math.PI, { collide: false });
+      // lights (one dead, one flickering)
+      for (const [fx, fz, dead] of [[-31.5, 134, false], [-31.5, 141, true], [-20.5, 137.5, false]] as [number, number, boolean][]) {
+        placeProp(G, physics, 'fluoro', fx, U + 3.55, fz, Math.PI / 2, { collide: false, shadow: false });
+        if (dead) continue;
+        const l = new THREE.PointLight(0xd8e4ff, 20, 12, 1.6); l.position.set(fx, U + 3.2, fz); G.add(l);
+        H.flicker(l, 20, undefined, fx < -30);
+      }
+      const red = new THREE.PointLight(0xff3020, 3, 6, 1.8); red.position.set(-32, U + 2.6, 144); G.add(red);
+      b.flush(G);
+      paper(G, -20.4, U + 0.78, 143.6, 0.3);
+      ctx.addInteractable(new ScriptedInteractable('docKennel', new THREE.Vector3(-20.5, U, 143), 1.1, () => 'Прочитать: журнал кинолога', (g) => g.readDoc('kennel_log')));
+      H.item('b_hg', 'ammo_hg', 20, -16.9, U + 0.78, 137.4, G);
+      H.item('b_sg', 'ammo_sg', 7, -22.6, U + 0.9, 143.8, G);
+      H.item('b_herb', 'herb_g', 1, -36.9, U + 0.55, 135.4, G);
+      H.item('b_herb2', 'herb_r', 1, -26.1, U + 0.55, 141.8, G);
+      H.item('b_gren', 'gren_exp', 4, -16.9, U + 0.78, 139.6, G);
+      ctx.spawnZombie({ id: 'cb_1', x: -31, y: U, z: 141, yaw: Math.PI, kind: 'cerberus' }, G);
+      ctx.spawnZombie({ id: 'cb_2', x: -34, y: U, z: 137.5, yaw: 2.6, kind: 'cerberus' }, G);
+      ctx.spawnZombie({ id: 'cb_3', x: -20, y: U, z: 140, yaw: -2.4, kind: 'cerberus' }, G);
+      ctx.spawnZombie({ id: 'cb_z', x: -22, y: U, z: 132, yaw: 0.5, outfit: 'guard', fakeDead: true }, G);
+      // steel door in the training-lobby back wall (hinge x -35)
+      const pivot = new THREE.Group(); pivot.position.set(-35, U, 130);
+      pivot.add(doorLeaf(false, 1.6, 2.4, M.steel)); G.add(pivot);
+      const col = physics.addMinMax(-35, 129.85, -33.4, 130.15, U, U + 2.4, 'door', true);
+      barrDoor = new Door('barrDoor', new THREE.Vector3(-34.2, U, 129.2), pivot, col, null, '', -Math.PI * 0.55);
+      if (flags.has('open:barrDoor')) barrDoor.openNow();
+      ctx.addInteractable(barrDoor);
+    },
+  });
+  N('barrOut', -34.2, 128.6, U); N('barrIn', -34.2, 131.4, U); nav.link(navIdx.barrOut, navIdx.barrIn);
+  for (const x of [-34.5, -31.5, -28.5]) for (const z of [133.5, 136.8, 140, 143]) N(null, x, z, U);
+  N(null, -25, 136.8, U);
+  for (const x of [-22.5, -19.5]) for (const z of [131.5, 134.5, 137.5, 140.5]) N(null, x, z, U);
+
 
   // =================================================================== PASSAGE (rock canyon with arches)
   streamer.add({
@@ -445,8 +535,8 @@ export function buildExterior(ctx: LevelContext, H: AnnexHelpers) {
 
   // =================================================================== PALACE MAIN HALL
   streamer.add({
-    id: 'hall', bounds: hallB, neighbors: ['pyard'], outdoor: false,
-    portalOpen: () => palaceOpen,
+    id: 'hall', bounds: hallB, neighbors: ['pyard', 'pcorr'], outdoor: false,
+    portalOpen: (n) => n === 'pcorr' ? hallDoorOpen : palaceOpen,
     build: (G) => {
       const b = new LevelBuilder(physics);
       const C = 16.6; // ceiling height
@@ -454,13 +544,15 @@ export function buildExterior(ctx: LevelContext, H: AnnexHelpers) {
       const cg = new THREE.PlaneGeometry(2.6, 29.7); cg.rotateX(-Math.PI / 2); cg.translate(0, U + 0.012, 175.15); b.add(cg, X.carpet, false);
       // walls
       b.box(-14.15, (U + C) / 2, 175, 0.3, C - U, 30.4, X.wallpaper, { tile: 3 }); b.box(14.15, (U + C) / 2, 175, 0.3, C - U, 30.4, X.wallpaper, { tile: 3 });
-      b.box(0, (U + C) / 2, 190.15, 28.6, C - U, 0.3, X.wallpaper, { tile: 3 });
+      b.box(-7.8, (U + C) / 2, 190.15, 13, C - U, 0.3, X.wallpaper, { tile: 3 }); b.box(7.8, (U + C) / 2, 190.15, 13, C - U, 0.3, X.wallpaper, { tile: 3 });
+      b.box(0, (U + 3.4 + C) / 2, 190.15, 2.6, C - U - 3.4, 0.3, X.wallpaper, { tile: 3 });
       b.box(-7.75, (U + C) / 2, 160.45, 12.5, C - U, 0.3, X.wallpaper, { tile: 3 }); b.box(7.75, (U + C) / 2, 160.45, 12.5, C - U, 0.3, X.wallpaper, { tile: 3 });
       b.box(0, (U + 4 + C) / 2, 160.45, 3, C - U - 4, 0.3, X.wallpaper, { collide: false, tile: 3 });
       // dark wood panelling (lower walls + gallery level)
       for (const y0 of [U, G2]) {
         b.box(-13.97, y0 + 1.2, 175, 0.06, 2.4, 29.4, X.darkWood, { collide: false, tile: 1 }); b.box(13.97, y0 + 1.2, 175, 0.06, 2.4, 29.4, X.darkWood, { collide: false, tile: 1 });
-        b.box(0, y0 + 1.2, 189.97, 27.8, 2.4, 0.06, X.darkWood, { collide: false, tile: 1 });
+        if (y0 === U) { b.box(-7.65, y0 + 1.2, 189.97, 12.7, 2.4, 0.06, X.darkWood, { collide: false, tile: 1 }); b.box(7.65, y0 + 1.2, 189.97, 12.7, 2.4, 0.06, X.darkWood, { collide: false, tile: 1 }); }
+        else b.box(0, y0 + 1.2, 189.97, 27.8, 2.4, 0.06, X.darkWood, { collide: false, tile: 1 });
         b.box(-13.9, y0 + 2.45, 175, 0.14, 0.12, 29.4, X.gold, { collide: false }); b.box(13.9, y0 + 2.45, 175, 0.14, 0.12, 29.4, X.gold, { collide: false });
       }
       b.box(-7.75, U + 1.2, 160.62, 12.4, 2.4, 0.06, X.darkWood, { collide: false, tile: 1 }); b.box(7.75, U + 1.2, 160.62, 12.4, 2.4, 0.06, X.darkWood, { collide: false, tile: 1 });
@@ -481,7 +573,8 @@ export function buildExterior(ctx: LevelContext, H: AnnexHelpers) {
       arch(-10, 2); arch(-6, 2); arch(6, 2); arch(10, 2); arch(0, 4);
       b.box(0, G2 + 7.6, 189.6, 28, 0.6, 0.8, X.cream, { collide: false });
       // under-gallery door frame
-      b.box(0, U + 2.1, 189.95, 3.2, 4.2, 0.2, X.darkWood, { collide: false });
+      for (const sx of [-1, 1]) b.box(sx * 1.45, U + 1.85, 189.95, 0.3, 3.7, 0.36, X.darkWood, { collide: false });
+      b.box(0, U + 3.55, 189.95, 3.2, 0.3, 0.36, X.darkWood, { collide: false });
       // side balconies (decorative, above the stairs)
       for (const s of [-1, 1]) b.box(s * 13.1, G2 + 2.6, 165, 1.8, 0.25, 6, X.marble, { collide: false });
       b.flush(G);
@@ -524,11 +617,28 @@ export function buildExterior(ctx: LevelContext, H: AnnexHelpers) {
       ctx.addInteractable(new ScriptedInteractable('noteAshford', new THREE.Vector3(-6, U, 163.2), 1.2, () => 'Прочитать: записка дворецкого', (g) => g.readDoc('butler_note')));
       ctx.addInteractable(new ScriptedInteractable('portraitAlexia', new THREE.Vector3(0, G2, 188.4), 1.5, () => 'Осмотреть портрет',
         (g) => g.message('Портрет светловолосой девочки в золочёной раме. Табличка: «Alexia Ashford, 1971». Взгляд у неё недетский.', 5)));
-      // end-of-demo door under the gallery
-      const endDoor = propClone('door_wood');
-      if (endDoor) { const e2 = propClone('door_wood')!; endDoor.scale.set(1.3, 3.4, 1); e2.scale.set(1.3, 3.4, 1); endDoor.position.set(-1.3, U, 189.85); e2.position.set(1.3, U, 189.85); e2.rotation.y = Math.PI; endDoor.rotation.y = 0; G.add(endDoor, e2); }
-      ctx.addInteractable(new ScriptedInteractable('hallEnd', new THREE.Vector3(0, U, 188.9), 1.6, () => 'Открыть дверь',
-        (g) => { audio.click(true); g.message('За дверью — коридор в глубь дворца... (продолжение следует)', 3); setTimeout(() => g.completeLevel(), 1800); }));
+      // double door under the gallery → portrait corridor (hinges at x ±1.3, opens into the corridor)
+      const hl: THREE.Object3D[] = [];
+      for (const sx of [-1, 1]) {
+        const p = new THREE.Group(); p.position.set(sx * 1.3, U, 189.85);
+        const leaf = propClone('door_wood') ?? new THREE.Mesh(new THREE.BoxGeometry(1, 1, 0.08), X.darkWood);
+        leaf.scale.set(1.3, 3.4, 1); p.add(leaf); p.rotation.y = sx < 0 ? 0 : Math.PI; G.add(p); hl.push(p);
+      }
+      const hallCol = physics.addMinMax(-1.3, 189.7, 1.3, 190.3, U, U + 3.4, 'door', true);
+      const openHall = (now: boolean) => { hallCol.enabled = false; if (now) { hl[0].rotation.y = -Math.PI / 2; hl[1].rotation.y = Math.PI / 2; } };
+      if (hallDoorOpen) openHall(true);
+      H.onUpdate((dt) => {
+        if (!hallDoorOpen) return;
+        hl[0].rotation.y = THREE.MathUtils.damp(hl[0].rotation.y, -Math.PI / 2, 3, dt);
+        hl[1].rotation.y = THREE.MathUtils.damp(hl[1].rotation.y, Math.PI / 2, 3, dt);
+      });
+      ctx.addInteractable(new ScriptedInteractable('hallEnd', new THREE.Vector3(0, U, 188.9), 1.6, () => hallDoorOpen ? '' : 'Открыть дверь',
+        (g, self) => {
+          if (hallDoorOpen) return;
+          hallDoorOpen = true; g.flags.add('open:hallEnd'); openHall(false); self.enabled = false;
+          audio.click(true); bus.emit('doorsChanged', null);
+          g.message('Двери под галереей открываются в длинный тёмный коридор.', 3);
+        }));
       H.item('x_pack3', 'side_pack', 1, 12.6, G2, 186.5, G);
       H.item('x_bfire', 'bolt_fire', 6, -12.8, U, 162, G);
       H.item('x_hg2', 'ammo_hg', 15, -12.6, G2, 187.5, G);
@@ -545,6 +655,146 @@ export function buildExterior(ctx: LevelContext, H: AnnexHelpers) {
     nav.link(a, m); nav.link(m, t);
   }
   for (const x of [-12, -8, -4, 0, 4, 8, 12]) for (const z of [182.5, 187]) N(null, x, z, G2);
+
+  // =================================================================== PORTRAIT CORRIDOR + DINING HALL (Bandersnatch, fireplace puzzle)
+  const CC = 4.6;
+  streamer.add({
+    id: 'pcorr', bounds: pcorrB, neighbors: ['hall', 'dining'], outdoor: false,
+    portalOpen: (n) => n === 'hall' ? hallDoorOpen : true,
+    build: (G) => {
+      const b = new LevelBuilder(physics);
+      ground(b, -2, 190.3, 2, 206, U + 0.002, X.marble, 1.6);
+      const rg = new THREE.PlaneGeometry(1.6, 15.4); rg.rotateX(-Math.PI / 2); rg.translate(0, U + 0.012, 198.2); b.add(rg, X.carpet, false);
+      b.box(-2.15, U + CC / 2, 198.2, 0.3, CC, 16, X.wallpaper, { tile: 3 }); b.box(2.15, U + CC / 2, 198.2, 0.3, CC, 16, X.wallpaper, { tile: 3 });
+      b.box(0, U + CC + 0.1, 198.2, 4.6, 0.2, 16, X.darkWood, { collide: false, tile: 2 });
+      for (const sx of [-1, 1]) {
+        b.box(sx * 1.97, U + 1.1, 198.2, 0.06, 2.2, 15.6, X.darkWood, { collide: false, tile: 1 });
+        b.box(sx * 1.92, U + 2.25, 198.2, 0.1, 0.1, 15.6, X.gold, { collide: false });
+      }
+      for (let z = 192; z <= 205; z += 2.6) b.box(0, U + CC - 0.15, z, 4.2, 0.3, 0.25, X.darkWood, { collide: false, shadow: false });
+      // arch into the dining hall
+      for (const sx of [-1, 1]) b.box(sx * 1.85, U + CC / 2, 205.9, 0.4, CC, 0.3, X.cream, { collide: false });
+      b.box(0, U + CC - 0.3, 205.9, 4, 0.6, 0.3, X.cream, { collide: false });
+      b.flush(G);
+      const pics = ['painting_eagle', 'painting_wolf', 'painting_snake', 'painting_warden'];
+      for (let i = 0; i < 4; i++) {
+        const z = 193.2 + i * 3.4, sx = i % 2 ? 1 : -1;
+        placeAt(G, pics[i], sx * 1.98, U + 1.3, z, sx < 0 ? Math.PI / 2 : -Math.PI / 2, 0.9);
+        placeAt(G, 'sconce', -sx * 1.98, U + 2.4, z, -sx < 0 ? Math.PI / 2 : -Math.PI / 2);
+        if (i % 2 === 0) { const l = new THREE.PointLight(0xffb060, 5, 7, 1.8); l.position.set(-sx * 1.5, U + 3, z); G.add(l); H.flicker(l, 5, undefined, i === 2); }
+      }
+      placeAt(G, 'urn', -1.6, U, 191.2, 0, 0.8, true); placeAt(G, 'urn', 1.6, U, 204.6, 0, 0.8, true);
+      H.item('c_hg', 'ammo_hg', 15, 1.6, U, 191.3, G);
+      ctx.spawnZombie({ id: 'pc_1', x: 0.6, y: U, z: 201, yaw: Math.PI, outfit: 'civilian' }, G);
+    },
+  });
+  for (const z of [191.5, 195, 198.5, 202, 205]) N(z === 191.5 ? 'pcIn' : null, 0, z, U);
+  N('hallDoorIn', 0, 188.6, U); nav.link(navIdx.hallDoorIn, navIdx.pcIn);
+
+  streamer.add({
+    id: 'dining', bounds: dinB, neighbors: ['pcorr'], outdoor: false,
+    build: (G) => {
+      const b = new LevelBuilder(physics);
+      const DH = 6.4;
+      ground(b, -10, 206, 10, 224.3, U + 0.002, X.marble, 1.6);
+      const rug = new THREE.PlaneGeometry(5, 13); rug.rotateX(-Math.PI / 2); rug.translate(0, U + 0.012, 215); b.add(rug, X.carpet, false);
+      // walls (front wall has the 3.6 m arch opening)
+      b.box(-6.05, U + DH / 2, 206.15, 8.1, DH, 0.3, X.wallpaper, { tile: 3 }); b.box(6.05, U + DH / 2, 206.15, 8.1, DH, 0.3, X.wallpaper, { tile: 3 });
+      b.box(0, U + CC + (DH - CC) / 2, 206.15, 4, DH - CC, 0.3, X.wallpaper, { tile: 3 });
+      b.box(-10.15, U + DH / 2, 215.2, 0.3, DH, 18.6, X.wallpaper, { tile: 3 }); b.box(10.15, U + DH / 2, 215.2, 0.3, DH, 18.6, X.wallpaper, { tile: 3 });
+      b.box(0, U + DH / 2, 224.4, 20.6, DH, 0.3, X.wallpaper, { tile: 3 });
+      b.box(0, U + DH + 0.15, 215.2, 20.6, 0.3, 18.6, X.darkWood, { collide: false, tile: 2 });
+      for (let x = -8; x <= 8; x += 4) b.box(x, U + DH - 0.2, 215.2, 0.3, 0.4, 18, X.darkWood, { collide: false, shadow: false });
+      // panelling
+      b.box(-9.97, U + 1.2, 215.2, 0.06, 2.4, 18, X.darkWood, { collide: false, tile: 1 }); b.box(9.97, U + 1.2, 215.2, 0.06, 2.4, 18, X.darkWood, { collide: false, tile: 1 });
+      b.box(-6, U + 1.2, 206.32, 7.8, 2.4, 0.06, X.darkWood, { collide: false, tile: 1 }); b.box(6, U + 1.2, 206.32, 7.8, 2.4, 0.06, X.darkWood, { collide: false, tile: 1 });
+      b.box(0, U + 1.2, 224.22, 19.8, 2.4, 0.06, X.darkWood, { collide: false, tile: 1 });
+      for (const sx of [-1, 1]) b.box(sx * 9.9, U + 2.45, 215.2, 0.14, 0.12, 18, X.gold, { collide: false });
+      // long banquet table + chairs + candelabras
+      const cloth = new THREE.MeshStandardMaterial({ color: 0xe8e0cc, roughness: 0.85 });
+      b.box(0, U + 0.76, 215, 1.9, 0.08, 10.4, X.darkWood, { tile: 1 });
+      b.box(0, U + 0.81, 215, 1.6, 0.02, 10.2, cloth, { collide: false, shadow: false });
+      for (const sx of [-1, 1]) for (const z of [210.3, 219.7]) b.box(sx * 0.8, U + 0.36, z, 0.12, 0.72, 0.12, X.darkWood, { collide: false });
+      physics.addMinMax(-0.95, 209.8, 0.95, 220.2, U, U + 0.8, 'prop', true);
+      const chairs: [number, number, number, number][] = [];
+      for (const z of [211, 213, 215, 217, 219]) { chairs.push([-1.35, U, z, Math.PI / 2 + (z === 215 ? 0.5 : 0)]); chairs.push([1.35, U, z, -Math.PI / 2]); }
+      chairs.push([0, U, 221, Math.PI]);
+      propInstances(G, physics, 'chair', chairs);
+      const wax = new THREE.MeshStandardMaterial({ color: 0xf0e6d0, roughness: 0.6 });
+      for (const z of [211.5, 215, 218.5]) {
+        b.cyl(0, U + 1.0, z, 0.05, 0.36, X.gold, false, 8);
+        for (const dx of [-0.18, 0, 0.18]) b.cyl(dx, U + 1.28, z, 0.022, 0.2, wax, false, 6);
+        const fl = new THREE.Mesh(new THREE.SphereGeometry(0.03, 6, 4), X.glowWarm); fl.position.set(0, U + 1.42, z); fl.scale.y = 1.8; G.add(fl);
+        const l = new THREE.PointLight(0xffb060, 3, 5, 1.8); l.position.set(0, U + 1.6, z); G.add(l); H.flicker(l, 3);
+      }
+      // plates
+      const plate = new THREE.MeshStandardMaterial({ color: 0xf4f2ee, roughness: 0.3 });
+      for (const z of [211, 213, 215, 217, 219]) for (const sx of [-1, 1]) b.cyl(sx * 0.55, U + 0.83, z, 0.13, 0.015, plate, false, 12);
+      // fireplace on the west wall (marble surround, dark firebox, hawk crest)
+      b.box(-9.45, U + 0.75, 213.75, 1.1, 1.5, 0.45, X.marble); b.box(-9.45, U + 0.75, 216.25, 1.1, 1.5, 0.45, X.marble);
+      b.box(-9.4, U + 1.65, 215, 1.25, 0.3, 3.1, X.marble);
+      b.box(-9.75, U + 0.7, 215, 0.3, 1.4, 2.1, X.abyss, { collide: false });
+      b.box(-9.3, U + 0.04, 215, 1.4, 0.08, 3.2, X.marble, { collide: false });
+      b.box(-9.85, U + 3.5, 215, 0.3, 3.4, 2.6, X.darkWood, { collide: false, tile: 1 });
+      physics.addMinMax(-10, 213.5, -8.9, 216.5, U, U + 1.8, 'prop', true);
+      for (const dz of [-0.35, 0, 0.35]) { const log = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.09, 0.9, 7), M.wood); log.rotation.x = Math.PI / 2; log.rotation.y = dz; log.position.set(-9.55 + Math.abs(dz) * 0.3, U + 0.12, 215 + dz); G.add(log); }
+      placeAt(G, 'painting_alexia', -9.66, U + 2.3, 215, Math.PI / 2, 1.0);
+      // sideboards, candles along walls, chandelier
+      placeProp(G, physics, 'cabinet', 9.6, U, 210, -Math.PI / 2); placeProp(G, physics, 'cabinet', 9.6, U, 220, -Math.PI / 2);
+      placeAt(G, 'urn', 9.3, U, 223.3, 0, 1, true); placeAt(G, 'urn', -9.3, U, 223.3, 0, 1, true);
+      placeAt(G, 'chandelier', 0, U + DH - 3, 215, 0, 1.1);
+      const ch = new THREE.PointLight(0xffc27a, 20, 18, 1.6); ch.position.set(0, U + DH - 2.8, 215); ch.castShadow = q.shadows; G.add(ch); H.flicker(ch, 20);
+      for (const sx of [-1, 1]) for (const z of [209, 221]) placeAt(G, 'sconce', sx * 9.97, U + 2.6, z, sx < 0 ? Math.PI / 2 : -Math.PI / 2);
+      for (const sx of [-1, 1]) { const l = new THREE.PointLight(0xffb060, 5, 8, 1.8); l.position.set(sx * 9.4, U + 3.1, 221); G.add(l); }
+      placeAt(G, 'rosette_window', 9.98, U + 3.6, 215, -Math.PI / 2, 1.2);
+      const moon = new THREE.SpotLight(0x8aa4d8, 30, 20, 0.5, 0.6, 1.2); moon.position.set(9.6, U + 4, 215); moon.target.position.set(0, U, 213); G.add(moon, moon.target);
+      // end-of-demo double door (north wall)
+      for (const sx of [-1, 1]) {
+        const d = propClone('door_wood'); if (!d) continue;
+        d.scale.set(1.2, 3, 1); d.position.set(sx * 1.2, U, 224.2); d.rotation.y = sx < 0 ? 0 : Math.PI; G.add(d);
+      }
+      for (const sx of [-1, 1]) b.box(sx * 1.35, U + 1.6, 224.15, 0.3, 3.2, 0.3, X.darkWood, { collide: false });
+      b.box(0, U + 3.15, 224.15, 3, 0.3, 0.3, X.darkWood, { collide: false });
+      b.box(0, U + 3.6, 224.18, 0.7, 0.5, 0.08, X.gold, { collide: false });
+      b.flush(G);
+      // fireplace fire (lit with Claire's lighter)
+      const fireL = new THREE.PointLight(0xff8a30, 0, 10, 1.6); fireL.position.set(-9, U + 0.8, 215); G.add(fireL);
+      let fire: FireEmitter | null = null;
+      const light = () => {
+        if (fire) return;
+        fire = new FireEmitter(scene, new THREE.Vector3(-9.5, U + 0.15, 215), 0.45, Math.round(70 * q.particleBudget / 700), false);
+        const f = fire; H.onUpdate((dt, t) => { if (!G.visible) return; f.update(dt, t); fireL.intensity = 14 + Math.sin(t * 13) * 2 + Math.sin(t * 31) * 1.5; });
+      };
+      if (fireLit) light();
+      ctx.addInteractable(new ScriptedInteractable('fireplace', new THREE.Vector3(-8.4, U, 215), 1.5,
+        () => fireLit ? 'Осмотреть камин' : 'Осмотреть камин',
+        (g) => {
+          if (fireLit) { g.message('Огонь гудит в камине. Медный герб над ним повёрнут — механизм сработал.', 3); return; }
+          if (!g.inventory.has('lighter')) {
+            g.message(g.player.character === 'steve' ? 'Камин холодный, дрова сложены. Нужен огонь — зажигалка есть у Клэр. [C] — сменить персонажа.' : 'Камин холодный, дрова сложены. Нечем поджечь.', 4);
+            audio.click(); return;
+          }
+          g.confirm('Поджечь дрова зажигалкой?', () => {
+            fireLit = true; g.flags.add('dining:fire'); light(); audio.click(true);
+            g.message('Сухие поленья вспыхивают. От жара над камином со скрежетом поворачивается медный герб — где-то в стене щёлкнул замок.', 5);
+          });
+        }));
+      ctx.addInteractable(new ScriptedInteractable('docDining', new THREE.Vector3(1.2, U, 221.6), 1.1, () => 'Прочитать: письмо на столе', (g) => g.readDoc('dining_letter')));
+      paper(G, 0.4, U + 0.83, 220, 0.4);
+      ctx.addInteractable(new ScriptedInteractable('diningEnd', new THREE.Vector3(0, U, 223.2), 1.6, () => 'Открыть дверь',
+        (g) => {
+          if (!fireLit) { audio.click(); g.message('Дверь заперта. Замок соединён тягами с чем-то в стене... со стороны камина.', 4); return; }
+          audio.click(true); g.message('Замок поддаётся. Дальше — личные покои Эшфордов... (продолжение следует)', 3); setTimeout(() => g.completeLevel(), 1800);
+        }));
+      H.item('d_herb', 'herb_g', 1, 9.3, U + 1.32, 210, G);
+      H.item('d_mag', 'ammo_mag', 6, 9.3, U + 1.32, 220, G);
+      ctx.spawnZombie({ id: 'bs_1', x: 5.5, y: U, z: 221.5, yaw: Math.PI, kind: 'bandersnatch' }, G);
+      ctx.spawnZombie({ id: 'dn_1', x: -4.5, y: U, z: 212, yaw: 2.4, outfit: 'civilian', fakeDead: true }, G);
+    },
+  });
+  for (const x of [-7.5, -4.5, -2.4, 2.4, 4.5, 7.5]) for (const z of [208, 211.5, 215, 218.5, 222]) N(null, x, z, U);
+  for (const z of [208, 222.5]) N(null, 0, z, U);
+
 
   return {
     outdoorBounds: [gateOut, bridgeB, plazaB, tyardB, passB, pyardB],

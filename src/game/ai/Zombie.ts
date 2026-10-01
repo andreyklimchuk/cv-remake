@@ -8,6 +8,10 @@ import type { DebrisPool, ParticlePool, DecalPool } from '../../engine/Pools';
 import { audio } from '../../engine/AudioEngine';
 import { bus } from '../../engine/Events';
 import { damp } from '../Rig';
+import type { Creature, CreatureKind } from './Creature';
+
+/** everything that lives in World.zombies (zombies + B.O.W. creatures) */
+export type Enemy = Zombie | Creature;
 
 export type ZState =
   | 'idle' | 'wander' | 'investigate' | 'chase' | 'lunge' | 'grab' | 'bite'
@@ -18,7 +22,7 @@ export interface ZombieContext {
   physics: PhysicsWorld;
   nav: NavGraph;
   player: PlayerController;
-  zombies: Zombie[];
+  zombies: Enemy[];
   debris: DebrisPool;
   bloodFx: ParticlePool;
   blood: DecalPool;
@@ -33,6 +37,8 @@ export interface ZombieSpawn {
   outfit?: ZombieOutfit;
   fakeDead?: boolean;
   wander?: boolean;
+  /** non-zombie B.O.W. (Cerberus / Bandersnatch) */
+  kind?: CreatureKind;
 }
 
 const UP = new THREE.Vector3(0, 1, 0);

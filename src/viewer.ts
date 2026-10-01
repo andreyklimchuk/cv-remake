@@ -3,6 +3,7 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import { ModelLibrary } from './game/assets/ModelLibrary';
 import { ClaireModel, type AnimParams } from './game/player/ClaireModel';
 import { ZombieModel, type ZombieOutfit } from './game/ai/ZombieModel';
+import { CreatureModel } from './game/ai/Creature';
 
 /** Model viewer: play.html?viewer=claire&pose=idle|aim|run|pain&yaw=0&shot=full|face|torso|feet */
 export async function runViewer(): Promise<void> {
@@ -30,9 +31,22 @@ export async function runViewer(): Promise<void> {
   await ModelLibrary.preload();
   const which = q.get('viewer') || 'claire';
   const pose = q.get('pose') || 'idle';
-  const claire = new ClaireModel(2048);
+  const claire = new ClaireModel(2048, which === 'steve' ? 'steve' : 'claire');
   let zombie: ZombieModel | null = null;
-  if (which.startsWith('zombie')) {
+  let creature: CreatureModel | null = null;
+  if (which === 'cerberus' || which === 'bandersnatch') {
+    creature = new CreatureModel(which);
+    scene.add(creature.root);
+    const c = creature;
+    if (which === 'cerberus') {
+      if (pose === 'run') { c.rot('lfUpper', -0.7); c.rot('rfUpper', -0.5); c.rot('lhUpper', 0.6); c.rot('rhUpper', 0.75); c.rot('lfLower', -0.6); c.rot('lhLower', 0.5); c.rot('jaw', 0.5); }
+      else if (pose === 'attack') { c.rot('lfUpper', -1.1); c.rot('rfUpper', -1.0); c.rot('lhUpper', 0.9); c.rot('rhUpper', 0.85); c.rot('jaw', 0.9); c.rot('neck', -0.35); c.offset('hips', 0, 0.3, 0); }
+      else { c.rot('jaw', 0.3); c.rot('neck', 0.05); c.rot('head', 0.2); }
+    } else {
+      if (pose === 'attack') { c.rot('rUpperArm', -1.45, 0, 0.05); c.rot('rForearm', 0); c.stretch('rForearm', 2.2); c.stretch('rHand', 1 / 2.2); c.rot('jaw', 0.9); c.rot('spine', 0.05, -0.35, 0); }
+      else { c.rot('spine', 0.18); c.rot('rForearm', -0.25); c.rot('jaw', 0.3); c.rot('rUpperArm', 0.05, 0, 0.12); }
+    }
+  } else if (which.startsWith('zombie')) {
     zombie = new ZombieModel(which.replace('zombie_', '') as ZombieOutfit, 2048, Number(q.get('seed') || 0));
     zombie.root.scale.setScalar(1);
     scene.add(zombie.root);
@@ -43,11 +57,15 @@ export async function runViewer(): Promise<void> {
     } else { r.lUpperArm.rotation.z = 0.08; r.rUpperArm.rotation.z = -0.08; r.spine.rotation.x = 0.12; r.neck.rotation.z = 0.25; }
     r.hips.position.y = zombie.hipRest - 0.02;
     if (q.get('sever')) { const piece = zombie.sever(q.get('sever') as any); if (piece) { piece.position.set(0.5, 0.1, 0.3); piece.rotation.z = 1.4; scene.add(piece); } }
-  } else scene.add(claire.root);
+  } else if (!creature) scene.add(claire.root);
   if (pose === 'aim' || pose === 'gun') claire.setWeapon(q.get('weapon') || 'm9f');
+  if (q.get('lighter')) claire.setLighter(true);
+  const hide = q.get('hide');
+  if (hide) scene.traverse((o) => { if ((o as THREE.Mesh).isMesh && o.name.includes(hide)) o.visible = false; });
+  (window as any).__meshes = () => { const out: string[] = []; scene.traverse((o) => { if ((o as THREE.Mesh).isMesh) out.push(o.name + ':' + (o as THREE.Mesh).geometry.attributes.position.count); }); return out; };
   const yaw = (Number(q.get('yaw') || 0) * Math.PI) / 180;
   const cam = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.05, 50);
-  const shots: Record<string, [number, number, number]> = { full: [0.95, 4.2, 0], torso: [1.2, 1.9, 0], face: [1.58, 0.62, 0], feet: [0.2, 1.4, 0], hands: [0.95, 1.4, 0] };
+  const shots: Record<string, [number, number, number]> = { full: [0.95, 4.2, 0], torso: [1.2, 1.9, 0], face: [1.58, 0.62, 0], feet: [0.2, 1.4, 0], hands: [0.95, 1.4, 0], dog: [0.45, 2.4, 0], doghead: [0.8, 0.95, 0], big: [1.3, 5.6, 0] };
   const [ty, dist] = shots[q.get('shot') || 'full'] ?? shots.full;
   cam.position.set(Math.sin(yaw) * dist, ty + 0.05, Math.cos(yaw) * dist); cam.lookAt(0, ty, 0);
   const p: AnimParams = {
@@ -60,10 +78,10 @@ export async function runViewer(): Promise<void> {
   let frames = 0;
   const tick = () => {
     const t = (performance.now() - t0) / 1000;
-    if (!zombie) claire.animate(1 / 60, t, p);
+    if (!zombie && !creature) claire.animate(1 / 60, t, p);
     r.render(scene, cam);
     frames++;
-    (window as any).__frames = frames; (window as any).__viewerReady = frames > 4 && !!ModelLibrary.has(which);
+    (window as any).__frames = frames; (window as any).__viewerReady = frames > 4 && (!!ModelLibrary.has(which) || !!ModelLibrary.has('enemy_' + which));
     requestAnimationFrame(tick);
   };
   tick();

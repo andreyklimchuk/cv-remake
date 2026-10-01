@@ -107,6 +107,7 @@ export class Input {
     return 0;
   }
   cycleWeapon(): number { return this.wheel + (this.btnPressed(15) ? 1 : 0) - (this.btnPressed(14) ? 1 : 0); }
+  switchCharacter(): boolean { return this.keyPressed('KeyC') || this.btnPressed(12); }
   debugToggle(): boolean { return this.keyPressed('F3'); }
   cheat(): boolean { return this.keyPressed('F9'); }
   raw(code: string): boolean { return this.keyPressed(code); }

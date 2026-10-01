@@ -21,9 +21,10 @@ const CONTROLS = `
 <tr><td>E</td><td>взаимодействие</td></tr>
 <tr><td>Tab / I</td><td>инвентарь</td></tr>
 <tr><td>1–8 / колесо</td><td>смена оружия</td></tr>
+<tr><td>C</td><td>сменить персонажа (Клэр ⇄ Стив)</td></tr>
 <tr><td>Esc</td><td>пауза</td></tr>
 <tr><td>F3</td><td>отладка (FPS, draw calls)</td></tr>
-<tr><td>Геймпад</td><td>LS/RS · LT прицел · RT огонь · B нож · X перезарядка · Y действие · LB толчок</td></tr>
+<tr><td>Геймпад</td><td>LS/RS · LT прицел · RT огонь · B нож · X перезарядка · Y действие · LB толчок · D-pad ↑ смена персонажа</td></tr>
 </table>`;
 
 /** Title / pause / settings / death / end screens and confirm dialogs (DOM). */

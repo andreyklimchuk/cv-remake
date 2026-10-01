@@ -77,7 +77,7 @@ export class LightPool {
       const d = this.tmp.distanceTo(cam);
       const range = l.distance > 0 ? l.distance : 40;
       if (d > range + 6) continue;
-      const s = l.intensity * Math.max(0.05, 1 - d / (range + 6)) * ((l as THREE.SpotLight).isSpotLight ? 0.6 : 1);
+      const s = l.intensity * Math.max(0.05, 1 - d / (range + 6)) * ((l as THREE.SpotLight).isSpotLight ? 0.6 : 1) * (l.userData.priority ?? 1);
       cands.push({ l, s });
     }
     if (dropped) this.virt = this.virt.filter((l) => !l.userData.dead);
