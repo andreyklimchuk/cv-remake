@@ -845,10 +845,52 @@
   "bytes": 44104,
   "gzip": true
  },
- "cv-remake-play.zip": {
-  "parts": 31,
-  "sha1": "91c995111165ec4aab6340d346b65332a756eef4",
-  "bytes": 23308882,
+ "assets/blender/enemy_bandersnatch.blend": {
+  "parts": 4,
+  "sha1": "e6014f4392784931dd14710f15017ff909f0468a",
+  "bytes": 2829113,
+  "gzip": true
+ },
+ "assets/blender/enemy_cerberus.blend": {
+  "parts": 4,
+  "sha1": "12803a5a4a581c0d0f99d3e3bb363cba170646ec",
+  "bytes": 2429914,
+  "gzip": true
+ },
+ "assets/blender/steve.blend": {
+  "parts": 8,
+  "sha1": "2497f69d9b8fb827c77e54c487cc1087f3f9b9a5",
+  "bytes": 5710665,
+  "gzip": true
+ },
+ "src/assets/icons/gold_lugers.jpg": {
+  "parts": 1,
+  "sha1": "a0e0cb9b574698fbb13d2e36bcb20fc06e7dcc89",
+  "bytes": 11763,
+  "gzip": true
+ },
+ "src/assets/models/enemy_bandersnatch.glb": {
+  "parts": 4,
+  "sha1": "fee006bb30b01268fde3c44a158c66f34e79ff7b",
+  "bytes": 2984052,
+  "gzip": true
+ },
+ "src/assets/models/enemy_cerberus.glb": {
+  "parts": 3,
+  "sha1": "89084d1f9b2a624e28c2e53e90f712c52a676802",
+  "bytes": 2588960,
+  "gzip": true
+ },
+ "src/assets/models/steve.glb": {
+  "parts": 7,
+  "sha1": "84fa5ac5669efdc020f6c1464a8e7e0f0adb55cf",
+  "bytes": 6998848,
+  "gzip": true
+ },
+ "src/assets/models/weapon_luger.glb": {
+  "parts": 1,
+  "sha1": "96e645736c85e64079fe28fe38e0312b50c8f470",
+  "bytes": 118276,
   "gzip": true
  }
 }
