@@ -21,7 +21,7 @@ const statePath = join(ROOT, '.backup-state.json');
 const state = existsSync(statePath) ? JSON.parse(readFileSync(statePath, 'utf8')) : {};
 const files = walk(ROOT);
 const out = []; const newState = {}; const manifest = existsSync(join(ROOT, 'binary-manifest.json')) ? JSON.parse(readFileSync(join(ROOT, 'binary-manifest.json'), 'utf8')) : {};
-const CH = 700_000;
+const CH = 1_010_000;
 for (const f of files) {
   if (f === 'binary-manifest.json') continue;
   const buf = readFileSync(join(ROOT, f)); const h = createHash('sha1').update(buf).digest('hex'); newState[f] = h;
@@ -40,7 +40,7 @@ writeFileSync(join(ROOT, 'binary-manifest.json'), JSON.stringify(manifest, null,
 const dir = join(ROOT, '.backup'); rmSync(dir, { recursive: true, force: true }); mkdirSync(dir);
 let batch = [], size = 0, n = 0;
 const flush = () => { if (!batch.length) return; writeFileSync(join(dir, `batch_${String(n).padStart(3, '0')}.json`), JSON.stringify({ owner: OWNER, repo: REPO, branch: BRANCH, message: `${msg} (${n + 1})`, files: batch })); n++; batch = []; size = 0; };
-for (const o of out) { const s = o.content.length + 200; if (size + s > 900_000) flush(); batch.push(o); size += s; }
+for (const o of out) { const s = o.content.length + 200; if (size + s > 1_030_000) flush(); batch.push(o); size += s; }
 flush();
 for (const k of Object.keys(newState)) if (newState[k] === undefined) delete newState[k];
 writeFileSync(join(ROOT, '.backup-state.pending.json'), JSON.stringify(newState));
