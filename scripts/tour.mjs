@@ -15,7 +15,7 @@ await page.waitForTimeout(7000);
 const tp = async (x, z, yaw, pitch = -0.12, wait = 2500, y = 0) => {
   await page.evaluate(([x, z, yaw, pitch, y]) => {
     const g = window.__game, w = g.world;
-    for (const i of w.interactables) if (i.openNow && !i.open) i.openNow(w.flags);
+    for (const i of w.interactables) if (i.openNow) { i.constructor.closeDelay = 1e9; if (!i.open) i.openNow(w.flags); }
     for (const zb of w.zombies) { zb.alive = false; if (zb.root) zb.root.visible = false; }
     w.flags.add('gateOpen'); w.flags.add('open:palaceDoor');
     w.player.pos.set(x, y, z); w.player.yaw = yaw; g.rig.yaw = yaw; g.rig.pitch = pitch;
