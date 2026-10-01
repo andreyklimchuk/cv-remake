@@ -105,6 +105,8 @@ export class ClaireModel {
   /** gun orientation relative to each hand bone (natural grip: barrel along the forearm, slide on the thumb side) */
   private gripOff = { r: new THREE.Quaternion(), l: new THREE.Quaternion() };
   private ikL = 0;
+  /** finger bones of rigs without grip shape keys (Survival Unit Claire): curled procedurally */
+  private fingers: { b: THREE.Bone; rest: THREE.Quaternion; axis: THREE.Vector3; side: 'l' | 'r'; max: number }[] = [];
 
   /** which GLB character this is ('claire' | 'steve') */
   readonly key: string;
@@ -251,6 +253,7 @@ export class ClaireModel {
     // now bones are "identity = modelled pose"; the game's limb animation expects identity = hanging along −Y,
     // which the aimed rest orientation already encodes.
     this.eyeBones = [B('lEye'), B('rEye')].filter(Boolean);
+    this.buildFingers(bm);
     this.pony = ['pony0', 'pony1', 'pony2', 'pony3'].map((n) => bm.get(n)).filter((b): b is THREE.Bone => !!b);
     this.ponyRest = this.pony.map((b) => b.quaternion.clone());
     return {
@@ -260,6 +263,35 @@ export class ClaireModel {
       lThigh: B('lThigh'), lShin: B('lShin'), rThigh: B('rThigh'), rShin: B('rShin'),
       bones, meshes: [], zoneMeshes: new Map(),
     };
+  }
+
+  /** Bip-style finger chains lF{finger}{segment} (0 = thumb). Curl axis = across the knuckles, in each bone's frame. */
+  private buildFingers(bm: Map<string, THREE.Bone>): void {
+    const wp = (n: string) => bm.get(n)!.getWorldPosition(new THREE.Vector3());
+    for (const S of ['l', 'r'] as const) {
+      if (!bm.has(`${S}F10`) || !bm.has(`${S}F20`)) continue;
+      const lat = wp(`${S}F10`).sub(wp(`${S}F20`)).normalize();          // index -> outer fingers
+      const dIdx = wp(`${S}F11`).sub(wp(`${S}F10`)).normalize();
+      const palm = new THREE.Vector3().crossVectors(dIdx, lat).normalize().multiplyScalar(S === 'l' ? 1 : -1);
+      for (let a = 0; a < 3; a++) for (let k = 0; k < 3; k++) {
+        const b = bm.get(`${S}F${a}${k}`); if (!b) continue;
+        const nx = bm.get(`${S}F${a}${Math.min(k + 1, 2)}`)!, pv = k === 2 ? bm.get(`${S}F${a}1`)! : b;
+        const d = (k === 2 ? wp(`${S}F${a}2`).sub(wp(`${S}F${a}1`)) : nx.getWorldPosition(new THREE.Vector3()).sub(pv.getWorldPosition(new THREE.Vector3()))).normalize();
+        // bend so the finger tip moves toward the palm side
+        const ax = new THREE.Vector3().crossVectors(d, palm).normalize();
+        const wq = b.getWorldQuaternion(new THREE.Quaternion()).invert();
+        const max = a === 0 ? [0.35, 0.45, 0.4][k] : [1.25, 1.35, 0.95][k];
+        this.fingers.push({ b, rest: b.quaternion.clone(), axis: ax.applyQuaternion(wq), side: S, max });
+      }
+    }
+  }
+
+  private curlFingers(): void {
+    const q = new THREE.Quaternion();
+    for (const f of this.fingers) {
+      const w = f.side === 'l' ? this.gripL : this.gripR;
+      f.b.quaternion.copy(f.rest).multiply(q.setFromAxisAngle(f.axis, f.max * w));
+    }
   }
 
   private setMorph(name: string, w: number): void {
@@ -766,6 +798,7 @@ export class ClaireModel {
       this.gripR = damp(this.gripR, holding ? 1 : 0.15, 12, dt);
       this.gripL = damp(this.gripL, this.knifeModel.visible || !!this.gunL || this.lighterOn || (holding && a > 0.5) ? 1 : 0.15, 12, dt);
       this.setMorph('grip_R', this.gripR); this.setMorph('grip_L', this.gripL);
+      if (this.fingers.length) this.curlFingers();
     }
     if (this.lighter) {
       const show = this.lighterOn && hold !== 'dual' && !knifeOut && p.state !== 'dead' && !p.reloading;

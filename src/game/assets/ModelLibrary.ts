@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import claireUrl from '../../assets/models/claire.glb?url';
+import claireClassicUrl from '../../assets/models/claire.glb?url';
+// Claire from 'Resident Evil: Survival Unit' (Sketchfab, converted by tools/import/claire_su.py); ?classic = old Blender model
+import claireSuUrl from '../../assets/models/claire_su.glb?url';
+const claireUrl = typeof location !== 'undefined' && /[?&]classic\b/.test(location.search) ? claireClassicUrl : claireSuUrl;
 import steveUrl from '../../assets/models/steve.glb?url';
 
 /**

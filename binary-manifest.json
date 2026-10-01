@@ -894,9 +894,15 @@
   "gzip": true
  },
  "cv-remake-play.zip": {
-  "parts": 49,
-  "sha1": "b5fd3782d8a38f06a52d7d22ec762fae4e32aa8e",
-  "bytes": 36724761,
+  "parts": 51,
+  "sha1": "9a98935fc31e411f79535a0188db22599e3dfd69",
+  "bytes": 38615453,
+  "gzip": true
+ },
+ "src/assets/models/claire_su.glb": {
+  "parts": 3,
+  "sha1": "f47f1561e5f8cf9b45f159ce4a4452c630c8aa12",
+  "bytes": 1952852,
   "gzip": true
  }
 }
