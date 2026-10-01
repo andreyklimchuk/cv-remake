@@ -1,8 +1,8 @@
 {
  "assets/blender/claire.blend": {
   "parts": 14,
-  "sha1": "2d558abd6326555221dc493eabe707967a5252d2",
-  "bytes": 10300194,
+  "sha1": "ef8db397c63047f3e7ccfc24c7090e0607333b58",
+  "bytes": 10299914,
   "gzip": true
  },
  "assets/blender/weapon_knife.blend": {
@@ -31,8 +31,8 @@
  },
  "src/assets/models/claire.glb": {
   "parts": 15,
-  "sha1": "dc56df9423b0ad46f7b87e212e8a9d72dd3d7cf0",
-  "bytes": 20709656,
+  "sha1": "9f501c963f79858a8e7861c276c16c0d91089a6e",
+  "bytes": 20709800,
   "gzip": true
  },
  "src/assets/models/weapon_knife.glb": {
@@ -151,20 +151,20 @@
  },
  "src/assets/icons/gp_a.jpg": {
   "parts": 1,
-  "sha1": "5f95f8b503b7ef72daa514f286e00b87a5d7e28a",
-  "bytes": 11829,
+  "sha1": "6f596240edb3df4005a13d18c9e13215dd38c4fe",
+  "bytes": 14106,
   "gzip": true
  },
  "src/assets/icons/gp_b.jpg": {
   "parts": 1,
-  "sha1": "80d7b3040a710367779667b3da4d71b8f7452bca",
-  "bytes": 12170,
+  "sha1": "8d322153366cf084316f12f40c1fa113171421d1",
+  "bytes": 14141,
   "gzip": true
  },
  "src/assets/icons/gp_c.jpg": {
   "parts": 1,
-  "sha1": "160c6a6f177cd9feecf225866beba5dec6e2b23b",
-  "bytes": 11996,
+  "sha1": "9a37c60f825dcd699dfede0a7de0389b88c616cb",
+  "bytes": 14072,
   "gzip": true
  },
  "src/assets/icons/gren_acid.jpg": {
@@ -361,20 +361,20 @@
  },
  "src/assets/models/item_gp_a.glb": {
   "parts": 1,
-  "sha1": "51f25379cf3a37d5e3e1a0c008f7ff9704ef7f16",
-  "bytes": 42056,
+  "sha1": "df3a86568853bbd32c2c95dc73cbfb64ff1452ff",
+  "bytes": 153504,
   "gzip": true
  },
  "src/assets/models/item_gp_b.glb": {
   "parts": 1,
-  "sha1": "a8afd1f908bfbb845d6f5c89af0e52ae85b5799a",
-  "bytes": 41848,
+  "sha1": "c98b4ca0b17074e574288dc6b7e06ebea3f47d84",
+  "bytes": 154212,
   "gzip": true
  },
  "src/assets/models/item_gp_c.glb": {
   "parts": 1,
-  "sha1": "abc1302a6e51a9572ebd02948795d25aa9d264b3",
-  "bytes": 41868,
+  "sha1": "8c8c0c4620f7c5da7a554c97c4054198f0de9d3f",
+  "bytes": 154100,
   "gzip": true
  },
  "src/assets/models/item_gren_acid.glb": {
@@ -681,6 +681,168 @@
   "parts": 1,
   "sha1": "aa9a11660ce0e1ceb1e60974a8211998b5eb6d04",
   "bytes": 115004,
+  "gzip": true
+ },
+ "src/assets/icons/bolt_exp.jpg": {
+  "parts": 1,
+  "sha1": "b801b436d741458df9f68b09338688e938621f33",
+  "bytes": 12098,
+  "gzip": true
+ },
+ "src/assets/icons/bolt_fire.jpg": {
+  "parts": 1,
+  "sha1": "0474de03950186ae7c9db554788f54f942d16dca",
+  "bytes": 12266,
+  "gzip": true
+ },
+ "src/assets/icons/bow_powder.jpg": {
+  "parts": 1,
+  "sha1": "82b8496fb8a493313178262049cf0cacfda4719e",
+  "bytes": 14029,
+  "gzip": true
+ },
+ "src/assets/icons/reload_tool.jpg": {
+  "parts": 1,
+  "sha1": "179f1313d7d39fcb1c10487ac84f0c9475efa1a0",
+  "bytes": 13569,
+  "gzip": true
+ },
+ "src/assets/icons/side_pack.jpg": {
+  "parts": 1,
+  "sha1": "4259db7a2b8257d29fd147fccb3a52bd482c4550",
+  "bytes": 11054,
+  "gzip": true
+ },
+ "src/assets/models/item_bolt_exp.glb": {
+  "parts": 1,
+  "sha1": "5caf4ac25e211eae730c92efc90dfb12008fb05f",
+  "bytes": 77252,
+  "gzip": true
+ },
+ "src/assets/models/item_bolt_fire.glb": {
+  "parts": 1,
+  "sha1": "4d08d5c7ee556ca5e8c9850c25cb0e52b1aa533a",
+  "bytes": 80528,
+  "gzip": true
+ },
+ "src/assets/models/item_bow_powder.glb": {
+  "parts": 1,
+  "sha1": "6692013d7be820fca4c339b44d07f38c45df2b5e",
+  "bytes": 153668,
+  "gzip": true
+ },
+ "src/assets/models/item_reload_tool.glb": {
+  "parts": 1,
+  "sha1": "7482715597e8043755d4390301b18d96f002b94d",
+  "bytes": 189444,
+  "gzip": true
+ },
+ "src/assets/models/item_side_pack.glb": {
+  "parts": 1,
+  "sha1": "4ee7bc602c34d5d196c582eaaecb6f1a29a9082b",
+  "bytes": 30268,
+  "gzip": true
+ },
+ "src/assets/models/prop_baluster_rail.glb": {
+  "parts": 1,
+  "sha1": "6653625fec69df5be0e6051155ecb8cfde6d769f",
+  "bytes": 71984,
+  "gzip": true
+ },
+ "src/assets/models/prop_banner.glb": {
+  "parts": 1,
+  "sha1": "78ad237d5f86e95d141eba947a88fe96d82341d4",
+  "bytes": 37380,
+  "gzip": true
+ },
+ "src/assets/models/prop_bridge_rail.glb": {
+  "parts": 1,
+  "sha1": "cea95b3b8599bf43466944a00b2a0225c3c73404",
+  "bytes": 49968,
+  "gzip": true
+ },
+ "src/assets/models/prop_chandelier.glb": {
+  "parts": 1,
+  "sha1": "3daec3c3ba4e035bbcc0f8eee2e41794657c905c",
+  "bytes": 356384,
+  "gzip": true
+ },
+ "src/assets/models/prop_column.glb": {
+  "parts": 1,
+  "sha1": "e759945917188b7fd29e8f615a3cb83cb21599f3",
+  "bytes": 51352,
+  "gzip": true
+ },
+ "src/assets/models/prop_door_wood.glb": {
+  "parts": 1,
+  "sha1": "e678d89c0993a44e1599dd36cfe3db75c8859781",
+  "bytes": 85656,
+  "gzip": true
+ },
+ "src/assets/models/prop_gate_iron.glb": {
+  "parts": 1,
+  "sha1": "e6db2c8d2dba2bc6d128fde91e5c1d4442968df9",
+  "bytes": 24160,
+  "gzip": true
+ },
+ "src/assets/models/prop_lamp_post.glb": {
+  "parts": 1,
+  "sha1": "564a80c1a56a66acd126238ecbef90d0b0a31bcf",
+  "bytes": 17368,
+  "gzip": true
+ },
+ "src/assets/models/prop_newel_post.glb": {
+  "parts": 1,
+  "sha1": "fde4c0387d87021ca7b1208c7ba61224ec4ef190",
+  "bytes": 93744,
+  "gzip": true
+ },
+ "src/assets/models/prop_painting_alexia.glb": {
+  "parts": 1,
+  "sha1": "ba30ac8738f6abf8a0bf0fc044f839b11f172ea5",
+  "bytes": 45692,
+  "gzip": true
+ },
+ "src/assets/models/prop_rosette_window.glb": {
+  "parts": 1,
+  "sha1": "deb53834704599ef4b55e4553f25eed6de7f672f",
+  "bytes": 109320,
+  "gzip": true
+ },
+ "src/assets/models/prop_sandbags.glb": {
+  "parts": 1,
+  "sha1": "8ad95b5d85b1a5ad1907c310f5c052632d4dc25e",
+  "bytes": 97816,
+  "gzip": true
+ },
+ "src/assets/models/prop_sconce.glb": {
+  "parts": 1,
+  "sha1": "dedef6ee68090911ec82304826e67d228181f889",
+  "bytes": 27036,
+  "gzip": true
+ },
+ "src/assets/models/prop_sign_umbrella.glb": {
+  "parts": 1,
+  "sha1": "066c906291a8d24550cc5084cbc40f48f0510d08",
+  "bytes": 51876,
+  "gzip": true
+ },
+ "src/assets/models/prop_statue_hawk.glb": {
+  "parts": 1,
+  "sha1": "6c38769aa78180f2ca642718f9d91a291fb8e3dd",
+  "bytes": 52916,
+  "gzip": true
+ },
+ "src/assets/models/prop_urn.glb": {
+  "parts": 1,
+  "sha1": "0cad69f05f66a5a7e8ad25b0cec6e6afd8f51a25",
+  "bytes": 56584,
+  "gzip": true
+ },
+ "src/assets/models/prop_window_frame.glb": {
+  "parts": 1,
+  "sha1": "f156d935e86ef29d121a36567b059a88ce729fe9",
+  "bytes": 44104,
   "gzip": true
  }
 }
