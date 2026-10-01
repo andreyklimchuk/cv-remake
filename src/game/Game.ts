@@ -444,3 +444,4 @@ export class Game {
     this.hud.setStruggle(p.state === 'grabbed', (p as any).struggle ?? 0, p.counterCooldown <= 0);
   }
 }
+

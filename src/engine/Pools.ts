@@ -205,3 +205,4 @@ export class MuzzleFlash {
     if (this.t <= 0) { this.light.intensity = 0; this.sprite.visible = false; this.sprite2.visible = false; }
   }
 }
+

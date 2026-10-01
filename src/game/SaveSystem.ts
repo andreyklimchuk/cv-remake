@@ -27,3 +27,4 @@ export const SaveSystem = {
   },
   save(d: SaveData): void { localStorage.setItem(KEY, JSON.stringify(d)); },
 };
+

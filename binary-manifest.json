@@ -844,5 +844,11 @@
   "sha1": "f156d935e86ef29d121a36567b059a88ce729fe9",
   "bytes": 44104,
   "gzip": true
+ },
+ "cv-remake-play.zip": {
+  "parts": 31,
+  "sha1": "91c995111165ec4aab6340d346b65332a756eef4",
+  "bytes": 23308882,
+  "gzip": true
  }
 }

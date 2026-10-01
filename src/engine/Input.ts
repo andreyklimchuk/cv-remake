@@ -112,3 +112,4 @@ export class Input {
   cheat(): boolean { return this.keyPressed('F9'); }
   raw(code: string): boolean { return this.keyPressed(code); }
 }
+

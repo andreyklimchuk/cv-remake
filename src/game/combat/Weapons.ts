@@ -95,3 +95,4 @@ export const WEAPONS: Record<string, WeaponDef> = {
     sound: { thump: 1.6, crack: 1.4, tail: 1.8, pitch: 0.4 }, noise: 40, muzzle: 3, shell: false, laser: false,
   },
 };
+

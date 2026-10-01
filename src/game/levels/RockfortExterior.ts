@@ -800,3 +800,4 @@ export function buildExterior(ctx: LevelContext, H: AnnexHelpers) {
     outdoorBounds: [gateOut, bridgeB, plazaB, tyardB, passB, pyardB],
   };
 }
+

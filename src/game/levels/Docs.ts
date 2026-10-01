@@ -81,3 +81,4 @@ export const DOCS: Record<string, Doc> = {
 <p style="text-align:right">— Д.</p>`,
   },
 };
+

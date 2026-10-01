@@ -204,3 +204,4 @@ export class Rain {
     (this.lines.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
   }
 }
+

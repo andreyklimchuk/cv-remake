@@ -320,3 +320,4 @@ export class PlayerController {
     return cur + d * (1 - Math.exp(-rate * dt));
   }
 }
+

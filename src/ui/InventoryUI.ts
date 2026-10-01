@@ -313,3 +313,4 @@ export class InventoryUI {
     g.globalAlpha = 1; g.shadowBlur = 0;
   }
 }
+

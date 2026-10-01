@@ -49,3 +49,4 @@ const info = await page.evaluate(() => { const g = window.__game; return { calls
 console.log(JSON.stringify(info));
 console.log('ERRORS:', errors.slice(0, 15).join('\n'));
 await browser.close();
+

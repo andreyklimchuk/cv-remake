@@ -30,3 +30,4 @@
 | `weapons.py` | hard-surface M9F (серрации, насечка рукояти, прицелы с точками, курок, предохранитель) и боевой нож |
 
 Порядок: `claire_s1 → claire_s2 → claire_s3 → TEXSIZE=2048 claire_s4`, затем `zombie.py` (для двух вариантов) и `weapons.py`, `weapons2.py`, `items.py`, `props.py`, `props2.py`, затем `steve.py`, `CV=cerberus creature.py`, `CV=bandersnatch creature.py`, `icons.py`.
+

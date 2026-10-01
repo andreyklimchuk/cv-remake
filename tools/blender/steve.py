@@ -589,3 +589,4 @@ export_glb(f'{OUT_GLB}/steve.glb', [rig, body, outfit, eyes, hair])
 save_blend(f'{OUT_BLEND}/steve.blend')
 json.dump({k: list(v) for k, v in joints.items()}, open('/data/assets_src/work/steve_joints.json', 'w'))
 log('DONE', {o.name: tri_count(o) for o in (body, outfit, eyes, hair)})
+

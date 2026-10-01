@@ -87,3 +87,4 @@ export async function runViewer(): Promise<void> {
   tick();
   (window as any).__viewerInfo = () => ({ calls: r.info.render.calls, tris: r.info.render.triangles, detailed: zombie ? zombie.detailed : claire.detailed });
 }
+

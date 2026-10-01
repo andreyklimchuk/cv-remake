@@ -232,3 +232,4 @@ for k, fn in [('luger', luger), ('m3', m3), ('mp5', mp5), ('python', python), ('
     if ONLY and k not in ONLY: continue
     reset_hs(); fn()
 print('weapons2 done')
+

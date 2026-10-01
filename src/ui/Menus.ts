@@ -166,3 +166,4 @@ export class Menus {
 
   loading(text: string): void { this.screen(`<h2 style="margin:0">${text}</h2>`); }
 }
+

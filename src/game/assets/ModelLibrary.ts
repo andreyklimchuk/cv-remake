@@ -107,3 +107,4 @@ export function reskin(src: THREE.SkinnedMesh, bones: THREE.Bone[], material?: T
   if (src.morphTargetDictionary) { m.morphTargetDictionary = { ...src.morphTargetDictionary }; m.morphTargetInfluences = new Array(Object.keys(src.morphTargetDictionary).length).fill(0); }
   return m;
 }
+

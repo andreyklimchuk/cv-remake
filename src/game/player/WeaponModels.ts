@@ -102,3 +102,4 @@ export function weaponHold(id: string): 'pistol' | 'rifle' | 'knife' | 'dual' {
   if (id === 'gold_lugers') return 'dual';
   return id === 'm9f' || id === 'python' ? 'pistol' : 'rifle';
 }
+

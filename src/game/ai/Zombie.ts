@@ -554,3 +554,4 @@ export class Zombie implements Combatant, PlayerTarget {
     r.rShin.rotation.x = k(r.rShin.rotation.x, rSh, 12);
   }
 }
+

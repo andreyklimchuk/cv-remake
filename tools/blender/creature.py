@@ -348,3 +348,4 @@ bpy.context.view_layer.update()
 export_glb(f'{OUT_GLB}/enemy_{CV}.glb', [rig, body])
 save_blend(f'{OUT_BLEND}/enemy_{CV}.blend')
 log('DONE', tri_count(body))
+

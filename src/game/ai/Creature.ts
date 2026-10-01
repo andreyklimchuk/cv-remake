@@ -542,3 +542,4 @@ export class Creature implements Combatant, PlayerTarget {
     }
   }
 }
+

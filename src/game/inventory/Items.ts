@@ -88,3 +88,4 @@ export function bumpUid(min: number): void { uidCounter = Math.max(uidCounter, m
 export function footprint(_inst: { defId: string; rot: boolean }): { w: number; h: number } {
   return { w: 1, h: 1 };
 }
+
