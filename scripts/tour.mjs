@@ -12,21 +12,24 @@ await page.goto('file:///data/cv-remake/dist/play.html');
 await page.waitForTimeout(1500);
 await page.click('text=НОВАЯ ИГРА');
 await page.waitForTimeout(7000);
-const tp = async (x, z, yaw, pitch = -0.12, wait = 2500) => {
-  await page.evaluate(([x, z, yaw, pitch]) => {
+const tp = async (x, z, yaw, pitch = -0.12, wait = 2500, y = 0) => {
+  await page.evaluate(([x, z, yaw, pitch, y]) => {
     const g = window.__game, w = g.world;
     for (const i of w.interactables) if (i.openNow && !i.open) i.openNow(w.flags);
     for (const zb of w.zombies) { zb.alive = false; if (zb.root) zb.root.visible = false; }
-    w.player.pos.set(x, 0, z); w.player.yaw = yaw; g.rig.yaw = yaw; g.rig.pitch = pitch;
-  }, [x, z, yaw, pitch]);
+    w.flags.add('gateOpen'); w.flags.add('open:palaceDoor');
+    w.player.pos.set(x, y, z); w.player.yaw = yaw; g.rig.yaw = yaw; g.rig.pitch = pitch;
+  }, [x, z, yaw, pitch, y]);
   await page.waitForTimeout(wait);
 };
 const shot = async (n) => { await page.screenshot({ path: `/data/cv-remake/shots/tour_${n}.png` }); console.log('shot', n); };
 const stops = [
   ['saveroom', 24.5, 5.5, Math.PI + 0.3], ['guard', 27, 10, 0.2], ['corridor', 34, 4.6, Math.PI / 2], ['steam', 38.5, 4.6, Math.PI / 2],
   ['office', 42, 9.5, 0.3], ['office2', 46, 12, -2.3], ['archive', 36.5, 9, -0.2], ['cells', 30, 33.5, 0.2], ['gallery', 47, 36, Math.PI / 2], ['west', -26, 14, -2.2], ['yard', 6, 8, -0.8],
+  ['gateout', 0, 43, 0.15], ['bridge', 0.5, 60, 0], ['plaza', 0, 88, 0], ['terrace', -6, 110, -Math.PI / 2, 3.6], ['tyard', -24, 103, 0.2, 3.6],
+  ['training', -35, 120.5, 1.0, 3.6], ['passage', 0, 120, 0, 3.6], ['pyard', 0, 144, 0, 3.6], ['hall', 0, 162, 0, 3.6], ['hall2', 0, 186, Math.PI, 7.6], ['hall3', -6, 164, 0.5, 3.6],
 ];
-for (const [n, x, z, yaw] of stops) { if (only && !only.includes(n)) continue; await tp(x, z, yaw); await shot(n); }
+for (const [n, x, z, yaw, y] of stops) { if (only && !only.includes(n)) continue; await tp(x, z, yaw, -0.12, 2500, y ?? 0); await shot(n); }
 if (!only || only.includes('inv')) {
   await page.evaluate(() => { const g = window.__game; const w = g.world; w.inventory.add('valve_handle'); w.inventory.add('gp_a'); g.openInventory(false); });
   await page.waitForTimeout(800); await shot('inventory');

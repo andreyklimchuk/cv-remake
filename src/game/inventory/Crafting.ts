@@ -3,7 +3,7 @@ import type { Inventory } from './Inventory';
 import { WEAPONS } from '../combat/Weapons';
 
 /** Order-independent combination recipes. */
-interface Recipe { a: string; b: string; out: string; qty: number }
+interface Recipe { a: string; b: string; out: string; qty: number; keepA?: boolean }
 
 export const RECIPES: Recipe[] = [
   // gunpowder
@@ -13,6 +13,10 @@ export const RECIPES: Recipe[] = [
   { a: 'gp_a', b: 'gp_c', out: 'ammo_bolt', qty: 12 },
   { a: 'gp_b', b: 'gp_c', out: 'ammo_mag', qty: 6 },
   { a: 'gp_c', b: 'gp_c', out: 'gren_exp', qty: 3 },
+  // reloading tool (RE3 style, tool is kept) — bow gun ammunition
+  { a: 'reload_tool', b: 'gp_a', out: 'ammo_bolt', qty: 20, keepA: true },
+  { a: 'reload_tool', b: 'gp_b', out: 'bolt_exp', qty: 10, keepA: true },
+  { a: 'reload_tool', b: 'gp_c', out: 'bolt_fire', qty: 10, keepA: true },
   // herbs
   { a: 'herb_g', b: 'herb_g', out: 'herb_gg', qty: 1 },
   { a: 'herb_gg', b: 'herb_g', out: 'herb_ggg', qty: 1 },
@@ -40,8 +44,8 @@ export function combine(inv: Inventory, a: ItemInstance, b: ItemInstance): Combi
   for (const [am, w] of [[a, b], [b, a]] as const) {
     const wd = ITEMS[w.defId].weaponId ? WEAPONS[ITEMS[w.defId].weaponId!] : undefined;
     if (!wd || !wd.ammo.includes(am.defId)) continue;
-    if (w.defId === 'gl' && w.loaded !== am.defId) {
-      // swap grenade type: unload current into inventory
+    if (wd.ammo.length > 1 && (w.loaded ?? wd.ammo[0]) !== am.defId) {
+      // swap ammo type (grenades / bolts): unload current into inventory
       if (w.mag && w.loaded) inv.add(w.loaded, w.mag);
       w.mag = 0; w.loaded = am.defId;
     }
@@ -52,12 +56,24 @@ export function combine(inv: Inventory, a: ItemInstance, b: ItemInstance): Combi
     inv.consume(am.defId, n);
     return { ok: true, text: `${ITEMS[w.defId].name}: заряжено ${n}.` };
   }
-  // 3) recipes
+  // 3) Bow Gun Powder + bolts → the whole stack becomes explosive bolts (CODE: Veronica)
+  for (const [pw, bl] of [[a, b], [b, a]] as const) {
+    if (pw.defId === 'bow_powder' && bl.defId === 'ammo_bolt') {
+      inv.remove(pw.uid);
+      const n = bl.qty;
+      inv.remove(bl.uid);
+      const left = inv.add('bolt_exp', n);
+      return { ok: true, text: `Создано: ${ITEMS.bolt_exp.name} ×${n - left}` + (left ? ` (${left} не поместилось)` : '') };
+    }
+  }
+  // 4) recipes
   const r = RECIPES.find((x) => (x.a === a.defId && x.b === b.defId) || (x.a === b.defId && x.b === a.defId));
   if (!r) return { ok: false, text: 'Эти предметы нельзя совместить.' };
-  const keepX = b.x, keepY = b.y;
-  inv.remove(a.uid);
-  inv.remove(b.uid);
+  const tool = r.keepA ? (a.defId === r.a ? a : b) : null;
+  const other = tool ? (tool === a ? b : a) : b;
+  const keepX = other.x, keepY = other.y;
+  if (!tool) inv.remove(a.uid);
+  inv.remove(other.uid);
   // try to place result where the target item was
   const left = inv.add(r.out, r.qty);
   const created = inv.items[inv.items.length - 1];

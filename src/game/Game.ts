@@ -108,7 +108,7 @@ export class Game {
     audio.init();
     audio.setVolume(this.settings.volume);
     this.menus.loading('ROCKFORT ISLAND');
-    setTimeout(() => {
+    setTimeout(async () => {
       this.world?.dispose();
       const w = new World(this.camera, this.backend.preset, save);
       this.world = w;
@@ -118,6 +118,7 @@ export class Game {
       this.rig.yaw = save?.camYaw ?? w.player.yaw;
       this.backend.attach(w.scene, this.camera);
       this.visitedZones.clear();
+      await this.warmup(w);
       audio.startAmbience();
       this.menus.clear();
       this.hud.show(true);
@@ -126,6 +127,33 @@ export class Game {
       this.hud.message(save ? 'Игра загружена.' : 'Клэр Рэдфилд. Остров Рокфорт. Тюремный комплекс Umbrella.', 4);
       bus.emit('doorsChanged', null);
     }, 30);
+  }
+
+  /** Pre-compile every shader program and upload every texture while the loading screen is up,
+   *  so walking into a new area never stalls on GPU work. */
+  private async warmup(w: World): Promise<void> {
+    const r = this.backend.renderer as unknown as {
+      compileAsync?: (s: THREE.Object3D, c: THREE.Camera) => Promise<unknown>; compile?: (s: THREE.Object3D, c: THREE.Camera) => void; initTexture?: (t: THREE.Texture) => void;
+    };
+    for (const z of w.streamer.zones.values()) z.group.visible = true;
+    const undoGuns = w.player.model.preloadWeapons();
+    try {
+      if (r.compileAsync) await r.compileAsync(w.scene, this.camera); else r.compile?.(w.scene, this.camera);
+    } catch (e) { console.warn('shader warmup', e); }
+    const seen = new Set<THREE.Texture>();
+    w.scene.traverse((o) => {
+      const m = (o as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined;
+      for (const mm of Array.isArray(m) ? m : m ? [m] : []) {
+        for (const v of Object.values(mm)) if (v && (v as THREE.Texture).isTexture && !seen.has(v as THREE.Texture)) { seen.add(v as THREE.Texture); r.initTexture?.(v as THREE.Texture); }
+      }
+    });
+    w.lights.warm(true);
+    this.rig.update(0, w.player.pos, false, 0);
+    this.backend.render(0);
+    undoGuns();
+    w.lights.warm(false);
+    w.streamer.update(w.player.pos, this.camera.position);
+    w.lights.update(this.camera.position);
   }
 
   private pause(): void {
@@ -277,7 +305,7 @@ export class Game {
       this.hud.update(dt, {
         hpRatio: hp, status: p.status(), poisoned: p.poisoned, aiming: p.aiming,
         weaponId: wp.current?.defId ?? 'knife', weaponName: wp.def.name, mag: wp.inMag(), reserve: wp.reserve(), melee: wp.def.type === 'melee',
-        sub: wp.def.id === 'gl' ? ITEMS[wp.ammoType()].name : wp.current?.mods?.length ? wp.current.mods.map((m) => ITEMS[m].name.replace('M9F ', '').replace('M3 ', '')).join(' · ') : '',
+        sub: wp.def.ammo.length > 1 ? ITEMS[wp.ammoType()].name : wp.current?.mods?.length ? wp.current.mods.map((m) => ITEMS[m].name.replace('M9F ', '').replace('M3 ', '')).join(' · ') : '',
         reloading: wp.isReloading(), spreadDeg: wp.spreadDeg({ moveSpeed: p.speed(), hpRatio: hp, staminaRatio: p.stamina / 100 }), fov: this.camera.fov, onTarget: !!wp.aimTarget,
       });
       if (this.debug) {
@@ -348,6 +376,7 @@ export class Game {
     w.level.update(dt, w.time, p.pos);
     for (const i of w.interactables) i.update?.(dt, w.time);
     w.streamer.update(p.pos, this.camera.position);
+    w.lights.update(this.camera.position);
 
     // weather / ambience per zone
     const zone = w.streamer.current;
@@ -361,6 +390,9 @@ export class Game {
       this.visitedZones.add(zone.id);
       const names: Record<string, [string, string]> = {
         yard: ['ТЮРЕМНЫЙ ДВОР', 'ROCKFORT ISLAND'], guard: ['КАРАУЛЬНОЕ ПОМЕЩЕНИЕ', 'PRISON'], cells: ['БЛОК КАМЕР B', 'PRISON'], west: ['ЗАПАДНЫЙ ДВОР', 'PRISON'],
+        gate_out: ['ДОРОГА К МОСТУ', 'ROCKFORT ISLAND'], bridge: ['МОСТ', 'ROCKFORT ISLAND'], plaza: ['ЛЕСТНИЦА', 'ROCKFORT ISLAND'],
+        tyard: ['ПЛАЦ', 'MILITARY TRAINING FACILITY'], training: ['УЧЕБНЫЙ КОРПУС', 'MILITARY TRAINING FACILITY'],
+        passage: ['ПРОХОД', 'ROCKFORT ISLAND'], pyard: ['ДВОРЦОВАЯ ПЛОЩАДЬ', 'ASHFORD PALACE'], hall: ['ГЛАВНЫЙ ЗАЛ', 'ASHFORD PALACE'],
       };
       const n = names[zone.id];
       if (n) this.hud.zone(n[0], n[1]);
@@ -371,6 +403,8 @@ export class Game {
     for (const i of w.interactables) {
       if (!i.enabled) continue;
       const d = i.pos.distanceTo(new THREE.Vector3(p.pos.x, i.pos.y, p.pos.z));
+      const dy = i.pos.y - p.pos.y;
+      if (dy < -0.6 || dy > 2.4) continue; // other floor
       if (d < i.radius && d < bd && i.prompt(this.api)) { bd = d; best = i; }
     }
     this.hud.setPrompt(best && p.state === 'normal' && !p.aiming ? best.prompt(this.api) : null);

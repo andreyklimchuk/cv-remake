@@ -3,6 +3,7 @@
 import sys; sys.path.insert(0, '/data/assets_src/tools')
 from hs import *
 import random
+from PIL import ImageOps
 
 ONLY = set(sys.argv[1:])
 OUT = OUT_GLB
@@ -77,6 +78,62 @@ def bolt(name, loc, rot):
         f.rotation_euler = (0, 0, a); apply_transform(f); fins.append(f)
     o = join([sh, tp] + fins, name); o.rotation_euler = rot; o.location = loc; apply_transform(o); return o
 
+def bolt_bundle(id_, tip):
+    P = []
+    mc = mat('charge_' + tip, (0.55, 0.05, 0.03) if tip == 'exp' else (0.75, 0.32, 0.05), 0.5, 0.3 if tip == 'exp' else 0.0)
+    mb = mat('charge_band', (0.06, 0.06, 0.06), 0.4, 0.8)
+    for i, (dx, dz) in enumerate([(-0.012, 0.004), (0, 0.004), (0.012, 0.004), (-0.006, 0.014), (0.006, 0.014), (0, 0.024)]):
+        P.append(bolt('b%d' % i, (dx, -0.16, dz + 0.0035), (-math.pi / 2, 0, 0)))
+        if tip == 'exp':
+            P.append(cyl('ch%d' % i, 0.0062, 0.026, (dx, 0.13, dz + 0.0035), mc, rot=(math.pi / 2, 0, 0), verts=14, bev=0.001))
+            for yy in (0.12, 0.14): P.append(cyl('bd%d' % i, 0.0065, 0.0025, (dx, yy, dz + 0.0035), mb, rot=(math.pi / 2, 0, 0), verts=14))
+        else:
+            P.append(cyl('ch%d' % i, 0.0068, 0.03, (dx, 0.128, dz + 0.0035), mc, rot=(math.pi / 2, 0, 0), verts=10, bev=0.0015))
+            P.append(cyl('fz%d' % i, 0.001, 0.012, (dx + 0.004, 0.11, dz + 0.009), mb, rot=(math.pi / 2, 0.4, 0), verts=6))
+    ml = mat('leather_strap', (0.16, 0.08, 0.04), 0.7)
+    for y in (-0.08, 0.06):
+        P.append(torus('strap', 0.02, 0.003, (0, y, 0.014), ml, rot=(math.pi / 2, 0, 0), maj=24, mnr=6))
+        P[-1].scale = (1.05, 1, 0.8); apply_transform(P[-1])
+    return finish('item_' + id_, P)
+
+def reload_tool():
+    """bench press (RE3 Reloading Tool) + tray of empty brass"""
+    steel = mat('rt_steel', (0.32, 0.33, 0.35), 0.35, 0.9); dark = mat('rt_dark', (0.06, 0.06, 0.065), 0.5, 0.6)
+    copper = mat('rt_copper', (0.55, 0.25, 0.12), 0.35, 1.0); knob = mat('rt_knob', (0.5, 0.5, 0.52), 0.25, 1.0)
+    P = [box('base', (0.07, 0.07, 0.008), (-0.045, 0, 0.004), steel, bev=0.002)]
+    P.append(box('frame', (0.03, 0.026, 0.1), (-0.06, 0, 0.058), dark, bev=0.003))
+    P.append(box('head', (0.04, 0.034, 0.024), (-0.05, 0, 0.112), dark, bev=0.003))
+    P.append(cyl('ram', 0.008, 0.07, (-0.035, 0, 0.065), copper, verts=20, bev=0.001))
+    P.append(cyl('die', 0.011, 0.03, (-0.035, 0, 0.095), steel, verts=20, bev=0.001))
+    for z in (0.04, 0.055, 0.07): P.append(torus('thr', 0.0082, 0.0008, (-0.035, 0, z), steel, maj=20, mnr=4))
+    lever = tube('lever', [(-0.05, 0.02, 0.112), (-0.02, 0.03, 0.125), (0.03, 0.035, 0.145)], 0.0035, steel)
+    P.append(lever); P.append(sphere('knob', 0.008, (0.03, 0.035, 0.145), knob, seg=16, rings=10))
+    # tray with casings
+    cloth = mat('tray_cloth', (0.3, 0.27, 0.2), 0.95)
+    P.append(box('tray', (0.07, 0.05, 0.016), (0.04, -0.01, 0.008), cloth, bev=0.004, seg=3))
+    rng = random.Random(4)
+    for i in range(10):
+        P.append(cartridge('cs%d' % i, (0.015 + (i % 5) * 0.012, -0.025 + (i // 5) * 0.02, 0.016 + rng.uniform(0, 0.003)),
+                           rot=(rng.uniform(1.2, 1.9), 0, rng.uniform(0, 3.1)), bullet=0.0 if i % 3 else 0.012))
+    return finish('item_reload_tool', P)
+
+def side_pack():
+    """olive drab hip pouch with flap, buckles and belt loop"""
+    cloth = mat('pack_cloth', (0.05, 0.06, 0.028), 0.95); web = mat('pack_web', (0.025, 0.027, 0.018), 0.9)
+    metal = mat('pack_buckle', (0.2, 0.2, 0.2), 0.4, 0.8)
+    P = [box('body', (0.16, 0.07, 0.11), (0, 0, 0.055), cloth, bev=0.012, seg=4)]
+    P.append(box('flap', (0.165, 0.075, 0.012), (0, -0.003, 0.112), cloth, bev=0.006, seg=3))
+    P.append(box('flapfront', (0.165, 0.012, 0.05), (0, -0.039, 0.088), cloth, bev=0.005, seg=3))
+    for x in (-0.045, 0.045):
+        P.append(box('strap', (0.02, 0.004, 0.07), (x, -0.046, 0.07), web, bev=0.001))
+        P.append(box('buckle', (0.026, 0.006, 0.016), (x, -0.049, 0.05), metal, bev=0.0015))
+    P.append(box('pocket', (0.11, 0.012, 0.05), (0, -0.04, 0.03), cloth, bev=0.004, seg=3))
+    P.append(box('loop', (0.12, 0.008, 0.06), (0, 0.04, 0.07), web, bev=0.002))
+    for i in range(7): P.append(box('stitch', (0.006, 0.001, 0.0012), (-0.06 + i * 0.02, -0.0466, 0.104), web))
+    o = finish('item_side_pack', P)
+    o.rotation_euler = (0, 0, 0.3); apply_transform(o)
+    return finish('item_side_pack', [o])
+
 def ammo_bolt():
     P = []
     for i, (dx, dz) in enumerate([(-0.012, 0.004), (0, 0.004), (0.012, 0.004), (-0.006, 0.014), (0.006, 0.014), (0, 0.024)]):
@@ -137,19 +194,50 @@ def ammo_linear():
     return finish('item_ammo_linear', [o])
 
 # ------------------------------------------------------------------ gunpowder
-def gunpowder(id_, letter, powder):
-    glass = mat('glass', (0.35, 0.45, 0.42), 0.08, 0.0)
-    glass.node_tree.nodes['Principled BSDF'].inputs['Alpha'].default_value = 0.22
-    glass.surface_render_method = 'BLENDED'
-    mp = mat('powder_' + id_, powder, 0.95)
-    mc = mat('cork', (0.5, 0.36, 0.22), 0.9)
-    prof = [(0, 0), (0.028, 0), (0.031, 0.004), (0.032, 0.06), (0.029, 0.072), (0.016, 0.082), (0.014, 0.092), (0.016, 0.096)]
-    P = [lathe('jar', prof, glass, segs=36, cap_top=False)]
-    P.append(lathe('powder', [(0, 0.002), (0.029, 0.002), (0.03, 0.05), (0.02, 0.054), (0, 0.056)], mp, segs=30))
-    P.append(lathe('cork', [(0, 0.086), (0.0125, 0.086), (0.014, 0.1), (0.015, 0.104), (0, 0.105)], mc, segs=20))
-    t = label_tex('lab_gp_' + id_, 512, 256, (226, 214, 180, 255), [(letter, 0.46, 170, FONT_SERIF, (25, 20, 15)), ('GUNPOWDER', 0.88, 36, FONT_SANS, (60, 40, 30))], border=(90, 30, 20), seed=7)
-    P.append(wrap_label('lab', 0.0322, 0.016, 0.05, -2.3, -0.84, t))
-    return finish('item_' + id_, P)
+def powder_pile(name, loc, col, r=0.022, h=0.017, seed=3):
+    """heap of powder on a creased paper sheet (RE3 gunpowder icon)"""
+    rng = random.Random(seed)
+    paper = mat('paper_sheet', (0.36, 0.31, 0.22), 0.9)
+    bm = bmesh.new(); N = 10; S = 0.085
+    vs = [[bm.verts.new((loc[0] + (i / N - 0.5) * S, loc[1] + (j / N - 0.5) * S * 0.8,
+                         0.0006 + 0.0025 * abs(math.sin(i * 1.3 + j * 0.7)) * (i in (0, N) or j in (0, N)) + 0.0012 * rng.random()))
+           for j in range(N + 1)] for i in range(N + 1)]
+    for i in range(N):
+        for j in range(N): bm.faces.new([vs[i][j], vs[i + 1][j], vs[i + 1][j + 1], vs[i][j + 1]])
+    sh = _hs_obj(name + '_paper', bm, paper)
+    so = sh.modifiers.new('s', 'SOLIDIFY'); so.thickness = 0.0005; apply_modifier(sh, 's')
+    mp = mat('powder_' + name, col, 0.98)
+    prof = [(0, h + 0.002)] + [(r * t, 0.002 + h * (1 - t ** 1.6) * (1 + 0.08 * math.sin(t * 17))) for t in np.linspace(0.1, 1, 9)] + [(r * 1.05, 0.0015)]
+    heap = lathe(name + '_heap', prof, mp, loc=(loc[0], loc[1], 0), segs=28)
+    P = V(heap)
+    for k in range(len(P)):
+        P[k, 0] += 0.003 * math.sin(P[k, 1] * 300 + seed); P[k, 1] += 0.003 * math.cos(P[k, 0] * 260)
+    setV(heap, P)
+    grains = [sphere(name + 'g%d' % i, 0.0012, (loc[0] + rng.uniform(-0.04, 0.04), loc[1] + rng.uniform(-0.03, 0.03), 0.0018), mp, seg=6, rings=4) for i in range(14)]
+    return [sh, heap] + grains
+
+def gunpowder(id_, letter, lab_col, powder=(0.018, 0.018, 0.02), title='GUNPOWDER'):
+    """squat screw-top metal jar with a coloured label + a heap of powder on paper (RE3 style)"""
+    tin = mat('jar_tin', (0.62, 0.63, 0.65), 0.3, 1.0)
+    lid = mat('jar_lid', (0.72, 0.73, 0.75), 0.22, 1.0)
+    R = 0.032
+    body = lathe('jar', [(0, 0), (R * 0.96, 0), (R, 0.003), (R, 0.046), (R * 0.97, 0.049), (R * 0.9, 0.05), (R * 0.9, 0.054)], tin, segs=48)
+    cap = lathe('cap', [(R * 0.92, 0.052), (R * 1.03, 0.052), (R * 1.05, 0.054), (R * 1.05, 0.066), (R * 1.0, 0.069), (0, 0.07)], lid, segs=48)
+    ribs = [box('rib%d' % i, (0.0016, 0.0012, 0.011), ((R * 1.05) * math.cos(i * math.pi / 30), (R * 1.05) * math.sin(i * math.pi / 30), 0.06), lid, rot=(0, 0, i * math.pi / 30)) for i in range(60)]
+    beads = [torus('bead', R * 0.995, 0.0012, (0, 0, z), tin, maj=48, mnr=6) for z in (0.006, 0.043)]
+    r_, g_, b_ = lab_col
+    def draw(img, d):
+        W, H = img.size
+        d.rectangle([0, 0, W, H], fill=(int(r_ * 255), int(g_ * 255), int(b_ * 255), 255))
+        d.rectangle([0, 18, W, 26], fill=(235, 225, 190, 255)); d.rectangle([0, H - 26, W, H - 18], fill=(235, 225, 190, 255))
+        f = font(FONT_SERIF, 120); tw = d.textlength(letter, font=f); d.text(((W - tw) / 2, H * 0.17), letter, font=f, fill=(245, 235, 200))
+        f2 = font(FONT_SANS, 30); tw = d.textlength(title, font=f2); d.text(((W - tw) / 2, H * 0.68), title, font=f2, fill=(245, 235, 200))
+    t = tex_label('lab_gp2_' + id_, (512, 256), (0, 0, 0, 255), draw)
+    img = Image.open(t).convert('RGBA'); ImageOps.mirror(grunge(img, 0.2, 11)).save(t)
+    lab = wrap_label('lab', R * 1.006, 0.011, 0.04, -2.4, -0.74, t)
+    P = [body, cap, lab] + ribs + beads
+    jar = join(P, 'jar_all'); jar.location = (-0.03, 0.012, 0); apply_transform(jar)
+    return finish('item_' + id_, [jar] + powder_pile('pile', (0.035, -0.012, 0), powder, seed=len(id_) + ord(letter[0])))
 
 # ------------------------------------------------------------------ herbs
 def leaf(name, L, W, m, bend=0.4, curl=0.25, seg=8, serr=0.0):
@@ -431,9 +519,12 @@ BUILD = {
     'gren_fire': lambda: grenades('gren_fire', (0.75, 0.08, 0.03), 'INCENDIARY'),
     'gren_acid': lambda: grenades('gren_acid', (0.2, 0.7, 0.15), 'ACID  40mm'),
     'ammo_linear': ammo_linear,
-    'gp_a': lambda: gunpowder('gp_a', 'A', (0.25, 0.25, 0.26)),
-    'gp_b': lambda: gunpowder('gp_b', 'B', (0.6, 0.25, 0.08)),
-    'gp_c': lambda: gunpowder('gp_c', 'C', (0.7, 0.6, 0.15)),
+    'gp_a': lambda: gunpowder('gp_a', 'A', (0.55, 0.06, 0.05)),
+    'gp_b': lambda: gunpowder('gp_b', 'B', (0.62, 0.48, 0.08)),
+    'gp_c': lambda: gunpowder('gp_c', 'C', (0.06, 0.4, 0.45)),
+    'bow_powder': lambda: gunpowder('bow_powder', 'P', (0.32, 0.1, 0.4), (0.03, 0.018, 0.012), 'BOW GUN POWDER'),
+    'bolt_exp': lambda: bolt_bundle('bolt_exp', 'exp'), 'bolt_fire': lambda: bolt_bundle('bolt_fire', 'fire'),
+    'reload_tool': reload_tool, 'side_pack': side_pack,
     'herb_g': lambda: herb('herb_g', ['g']), 'herb_r': lambda: herb('herb_r', ['r']), 'herb_b': lambda: herb('herb_b', ['b']),
     'herb_gg': lambda: herb('herb_gg', ['g', 'g'], 0.8), 'herb_ggg': lambda: herb('herb_ggg', ['g', 'g', 'g'], 0.7),
     'herb_gr': lambda: herb('herb_gr', ['g', 'r'], 0.8), 'herb_gb': lambda: herb('herb_gb', ['g', 'b'], 0.8),

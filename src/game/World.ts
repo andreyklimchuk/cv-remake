@@ -4,6 +4,7 @@ import { NavGraph } from '../engine/Nav';
 import { ZoneStreamer } from '../engine/Streaming';
 import { DecalPool, ShellPool, ParticlePool, DebrisPool, MuzzleFlash } from '../engine/Pools';
 import { Rain } from '../engine/VolumetricFX';
+import { LightPool } from '../engine/LightPool';
 import { glowTexture } from '../engine/Materials';
 import type { QualityPreset } from '../engine/Quality';
 import { bus } from '../engine/Events';
@@ -33,6 +34,7 @@ export class World {
   level: Level;
   combat: CombatContext;
   rain: Rain;
+  lights: LightPool;
   time = 0;
   stats = { time: 0, kills: 0, saves: 0, shots: 0, hits: 0 };
   private zctx: ZombieContext;
@@ -72,17 +74,27 @@ export class World {
       },
       addInteractable: (i) => this.interactables.push(i),
     });
+    // build every zone up-front (behind the loading screen) — no construction hitches while playing
+    for (const z of this.streamer.zones.values()) this.streamer.buildNow(z.id);
     this.streamer.onBuilt = () => this.nav.rebuild();
     this.unsubs.push(bus.on('doorsChanged', () => this.nav.rebuild()));
 
     this.rain = new Rain(s, q.rainDrops, 30);
+    // constant light set: zone lamps become virtual lights streamed into a fixed pool
+    const sh = q.shadows ? q.shadowedLights : 0;
+    const big = q.shadowedLights >= 3, small = !q.shadows;
+    this.lights = new LightPool(s, big ? 8 : small ? 4 : 6, big ? 3 : 2, Math.max(0, sh - 1), Math.min(1, sh), q.shadowMapSize);
+    this.lights.adopt(s);
+    LightPool.active = this.lights;
 
     // player start / restore
     if (save) {
-      this.player.pos.set(save.player.x, 0, save.player.z);
+      this.player.pos.set(save.player.x, save.player.y ?? 0, save.player.z);
       this.player.yaw = save.player.yaw;
       this.player.hp = save.player.hp;
       this.player.poisoned = save.player.poisoned;
+      const pouches = [...this.flags].filter((f) => f.startsWith('pouch:')).length;
+      if (pouches) this.inventory.expand(pouches * 2);
       const overflow = this.inventory.load(save.inventory);
       this.itemBox.items = [...save.box.map((i) => ({ ...i })), ...overflow];
       this.stats = { ...save.stats };
@@ -95,11 +107,6 @@ export class World {
       this.inventory.add('herb_g');
       this.inventory.add('lighter');
     }
-    // build the zone we start in (+ the courtyard) immediately — the rest streams in
-    this.streamer.buildNow('yard');
-    const startZone = this.streamer.zoneAt(this.player.pos);
-    if (startZone) this.streamer.buildNow(startZone.id);
-    for (const n of startZone?.neighbors ?? []) this.streamer.buildNow(n);
     this.nav.rebuild();
     const eq = save?.equipped != null ? this.inventory.get(save.equipped) : this.inventory.firstOf('m9f');
     this.equip(eq ?? null);
@@ -113,7 +120,7 @@ export class World {
   serialize(camYaw: number): SaveData {
     return {
       version: 1, savedAt: Date.now(), level: 'prison',
-      player: { x: this.player.pos.x, z: this.player.pos.z, yaw: this.player.yaw, hp: this.player.hp, poisoned: this.player.poisoned },
+      player: { x: this.player.pos.x, y: this.player.pos.y, z: this.player.pos.z, yaw: this.player.yaw, hp: this.player.hp, poisoned: this.player.poisoned },
       camYaw,
       inventory: this.inventory.serialize(),
       box: JSON.parse(JSON.stringify(this.itemBox.items)),
@@ -139,6 +146,7 @@ export class World {
     this.unsubs.forEach((u) => u());
     audio.stopAllLoops();
     audio.saveRoom(false);
+    if (LightPool.active === this.lights) LightPool.active = null;
     this.scene.traverse((o) => {
       const m = o as THREE.Mesh;
       m.geometry?.dispose?.();

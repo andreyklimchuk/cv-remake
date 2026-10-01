@@ -28,6 +28,8 @@ export interface ZombieContext {
 export interface ZombieSpawn {
   id: string;
   x: number; z: number; yaw: number;
+  /** ground height of the spawn point (upper levels) */
+  y?: number;
   outfit?: ZombieOutfit;
   fakeDead?: boolean;
   wander?: boolean;
@@ -82,7 +84,7 @@ export class Zombie implements Combatant, PlayerTarget {
     this.model.mesh.userData.owner = this;
     this.hitMeshList = [this.model.mesh];
     scene.add(this.model.root);
-    this.position.set(spawn.x, 0, spawn.z);
+    this.position.set(spawn.x, spawn.y ?? 0, spawn.z);
     this.home = this.position.clone();
     this.yaw = spawn.yaw;
     this.maxHp = this.hp = 110 + Math.random() * 90; // hidden randomised HP (RE2R)
@@ -117,7 +119,7 @@ export class Zombie implements Combatant, PlayerTarget {
     if (!this.alive || this.state === 'dead') return;
     const d = pos.distanceTo(this.position);
     // walls muffle sound: halve effective radius without line of sight
-    const eff = this.ctx().physics.lineOfSight(pos.clone().setY(1.2), this.position.clone().setY(1.5)) ? radius : radius * 0.5;
+    const eff = this.ctx().physics.lineOfSight(pos.clone().setY(pos.y + 1.2), this.position.clone().setY(this.position.y + 1.5)) ? radius : radius * 0.5;
     if (d > eff) return;
     if (this.state === 'fakeDead' && d < eff * 0.5 && kind !== 'walk') { this.setState('rising'); return; }
     if (['idle', 'wander', 'investigate'].includes(this.state)) {
@@ -273,7 +275,7 @@ export class Zombie implements Combatant, PlayerTarget {
   shove(from: THREE.Vector3): void {
     this.vel.copy(this.position.clone().sub(from).setY(0).normalize().multiplyScalar(3.2));
     this.setState(Math.random() < 0.3 ? 'knockdown' : 'shoved');
-    audio.flesh(this.position.clone().setY(1.3));
+    audio.flesh(this.position.clone().setY(this.position.y + 1.3));
   }
 
   releaseGrab(countered: boolean): void {
@@ -295,7 +297,7 @@ export class Zombie implements Combatant, PlayerTarget {
     if (this.burnT > 0 && this.alive) {
       this.burnT -= dt;
       this.hp -= 12 * dt;
-      if (Math.random() < dt * 20) c.bloodFx.burst(this.position.clone().setY(1 + Math.random()), UP, 1, 0.5, 1, 0.4);
+      if (Math.random() < dt * 20) c.bloodFx.burst(this.position.clone().setY(this.position.y + 1 + Math.random()), UP, 1, 0.5, 1, 0.4);
       if (this.hp <= 0 && this.state !== 'down') this.goDown();
     }
     if (this.state === 'dead') { this.syncModel(dt, 0); return; }
@@ -525,7 +527,7 @@ export class Zombie implements Combatant, PlayerTarget {
     const targetRX = -Math.PI / 2 * lying + Math.PI / 2 * lyingFace;
     root.rotation.x = k(root.rotation.x, targetRX, lying === 1 || lyingFace ? 8 : 12);
     lift = Math.abs(Math.sin(root.rotation.x)) * 0.14;
-    root.position.y = lift;
+    root.position.y = this.position.y + lift;
 
     const fl = this.flinch;
     const localFl = fl.clone().applyAxisAngle(UP, -this.yaw);

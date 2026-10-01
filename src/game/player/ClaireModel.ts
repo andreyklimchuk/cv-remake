@@ -210,6 +210,14 @@ export class ClaireModel {
     }
   }
 
+  /** attach every gun model once so their materials compile during loading; returns the undo */
+  preloadWeapons(): () => void {
+    const g = new THREE.Group();
+    for (const id of ['m9f', 'm3', 'mp5', 'python', 'gl', 'bowgun', 'linear']) { try { g.add(makeWeaponModel(id)); } catch { /* optional */ } }
+    this.gunHolder.add(g);
+    return () => { this.gunHolder.remove(g); };
+  }
+
   setWeapon(id: string): void {
     if (id === this.gunId) return;
     this.gunId = id;

@@ -5,7 +5,7 @@ export interface SaveData {
   version: 1;
   savedAt: number;
   level: string;
-  player: { x: number; z: number; yaw: number; hp: number; poisoned: boolean };
+  player: { x: number; y?: number; z: number; yaw: number; hp: number; poisoned: boolean };
   camYaw: number;
   inventory: ItemInstance[];
   box: ItemInstance[];

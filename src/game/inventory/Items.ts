@@ -1,5 +1,5 @@
 /** Item database. RE2-Remake style inventory: 8 slots, every item (or stack) occupies exactly one slot. */
-export type ItemKind = 'weapon' | 'ammo' | 'herb' | 'gunpowder' | 'key' | 'part' | 'misc';
+export type ItemKind = 'weapon' | 'ammo' | 'herb' | 'gunpowder' | 'key' | 'part' | 'pouch' | 'misc';
 
 export interface ItemDef {
   id: string;
@@ -31,6 +31,8 @@ export const ITEMS: Record<string, ItemDef> = {
   ammo_hg: { id: 'ammo_hg', name: 'Handgun Ammo', kind: 'ammo', w: 1, h: 1, maxStack: 60, color: '#664', glyph: '▮', desc: 'Патроны 9 мм.' },
   ammo_sg: { id: 'ammo_sg', name: 'Shotgun Shells', kind: 'ammo', w: 1, h: 1, maxStack: 30, color: '#733', glyph: '▮', desc: 'Патроны 12 калибра.' },
   ammo_bolt: { id: 'ammo_bolt', name: 'Bow Gun Bolts', kind: 'ammo', w: 1, h: 1, maxStack: 60, color: '#654', glyph: '➶', desc: 'Стальные болты.' },
+  bolt_exp: { id: 'bolt_exp', name: 'Explosive Bolts', kind: 'ammo', w: 1, h: 1, maxStack: 30, color: '#a52', glyph: '➶', desc: 'Болты с пороховым зарядом в наконечнике — взрываются при попадании и сбивают с ног.' },
+  bolt_fire: { id: 'bolt_fire', name: 'Flame Bolts', kind: 'ammo', w: 1, h: 1, maxStack: 30, color: '#d62', glyph: '➶', desc: 'Зажигательные болты: поджигают цель, огонь перекидывается на соседних.' },
   ammo_smg: { id: 'ammo_smg', name: 'SMG Ammo', kind: 'ammo', w: 1, h: 1, maxStack: 150, color: '#456', glyph: '▮', desc: 'Магазинные патроны 9 мм.' },
   ammo_mag: { id: 'ammo_mag', name: 'Magnum Rounds', kind: 'ammo', w: 1, h: 1, maxStack: 18, color: '#765', glyph: '▮', desc: '.357 Magnum.' },
   gren_exp: { id: 'gren_exp', name: 'Explosive Rounds', kind: 'ammo', w: 1, h: 1, maxStack: 10, color: '#552', glyph: '●', desc: 'Фугасные 40-мм гранаты.' },
@@ -41,6 +43,9 @@ export const ITEMS: Record<string, ItemDef> = {
   gp_a: { id: 'gp_a', name: 'Gunpowder A', kind: 'gunpowder', w: 1, h: 1, maxStack: 1, color: '#555', glyph: 'A', desc: 'Порох A. A+A = патроны к пистолету.' },
   gp_b: { id: 'gp_b', name: 'Gunpowder B', kind: 'gunpowder', w: 1, h: 1, maxStack: 1, color: '#555', glyph: 'B', desc: 'Порох B. A+B = дробь. B+B = порох C.' },
   gp_c: { id: 'gp_c', name: 'Gunpowder C', kind: 'gunpowder', w: 1, h: 1, maxStack: 1, color: '#555', glyph: 'C', desc: 'Порох C. A+C = болты, B+C = магнум, C+C = гранаты.' },
+  bow_powder: { id: 'bow_powder', name: 'Bow Gun Powder', kind: 'gunpowder', w: 1, h: 1, maxStack: 1, color: '#635', glyph: 'P', desc: 'Банка пороха для арбалетных болтов. Совместите с болтами — получатся взрывные болты (вся пачка).' },
+  reload_tool: { id: 'reload_tool', name: 'Reloading Tool', kind: 'key', w: 1, h: 1, maxStack: 1, color: '#665', glyph: '⚒', desc: 'Пресс для снаряжения боеприпасов. Не расходуется. Инструмент + порох A = болты ×20, + B = взрывные болты ×10, + C = зажигательные болты ×10.' },
+  side_pack: { id: 'side_pack', name: 'Side Pack', kind: 'pouch', w: 1, h: 1, maxStack: 1, color: '#553', glyph: '▣', desc: 'Набедренный подсумок. +2 слота инвентаря.' },
   herb_g: { id: 'herb_g', name: 'Green Herb', kind: 'herb', w: 1, h: 1, maxStack: 1, color: '#2a5', glyph: '✿', heal: 25, desc: 'Зелёная трава. Восстанавливает немного здоровья.' },
   herb_r: { id: 'herb_r', name: 'Red Herb', kind: 'herb', w: 1, h: 1, maxStack: 1, color: '#a22', glyph: '✿', desc: 'Красная трава. Сама по себе бесполезна — усиливает зелёную.' },
   herb_b: { id: 'herb_b', name: 'Blue Herb', kind: 'herb', w: 1, h: 1, maxStack: 1, color: '#25a', glyph: '✿', heal: 0, cure: true, desc: 'Синяя трава. Нейтрализует яд.' },

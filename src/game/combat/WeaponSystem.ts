@@ -79,7 +79,7 @@ export class WeaponSystem {
     this.current = inst;
     this.def = inst ? WEAPONS[ITEMS[inst.defId].weaponId!] : WEAPONS.knife;
     if (inst && inst.mag === undefined) inst.mag = 0;
-    if (inst && this.def.id === 'gl' && !inst.loaded) inst.loaded = 'gren_exp';
+    if (inst && this.def.ammo.length > 1 && !inst.loaded) inst.loaded = this.def.ammo[0];
     this.focus = 0; this.reloadT = 0; this.patternIdx = 0;
   }
 
@@ -111,7 +111,7 @@ export class WeaponSystem {
     if (!this.current || this.def.type === 'melee' || this.reloadT > 0) return;
     if (this.inMag() >= magSize(this.current) || this.reserve() <= 0) {
       // Grenade launcher: cycle round type when full/empty of current type
-      if (this.def.id === 'gl') this.cycleGrenade();
+      if (this.def.ammo.length > 1) this.cycleGrenade();
       return;
     }
     this.reloadT = this.def.reloadTime;
@@ -119,7 +119,7 @@ export class WeaponSystem {
   }
 
   cycleGrenade(): void {
-    if (!this.current || this.def.id !== 'gl') return;
+    if (!this.current || this.def.ammo.length < 2) return;
     const types = this.def.ammo;
     const cur = types.indexOf(this.ammoType());
     for (let k = 1; k <= types.length; k++) {
@@ -127,7 +127,7 @@ export class WeaponSystem {
       if (this.inv.count(t) > 0) {
         if (this.current.mag && this.current.loaded) this.inv.add(this.current.loaded, this.current.mag);
         this.current.mag = 0; this.current.loaded = t;
-        bus.emit('message', { text: `Снаряд: ${ITEMS[t].name}` });
+        bus.emit('message', { text: `${this.def.id === 'gl' ? 'Снаряд' : 'Болты'}: ${ITEMS[t].name}` });
         this.reloadT = this.def.reloadTime; audio.reload(this.def.reloadTime);
         return;
       }
@@ -249,7 +249,8 @@ export class WeaponSystem {
     } else if (d.type === 'beam') {
       this.fireBeam(input);
     } else {
-      for (let p = 0; p < d.pellets; p++) this.fireRound(spread, d.id === 'bowgun');
+      const bolt = d.id === 'bowgun' ? this.ammoType() : '';
+      for (let p = 0; p < d.pellets; p++) this.fireRound(spread, !!bolt, bolt, p === 0);
     }
 
     // recoil pattern
@@ -264,7 +265,7 @@ export class WeaponSystem {
     return { pitch: kp, yaw: ky };
   }
 
-  private fireRound(spread: number, isBolt: boolean): void {
+  private fireRound(spread: number, isBolt: boolean, boltType = '', lead = false): void {
     const d = this.def;
     const { origin, dir } = this.aimRay(spread);
     const wall = this.ctx.physics.raycast(origin, dir, d.range);
@@ -283,6 +284,8 @@ export class WeaponSystem {
       this.bloodFx(h.point, dir, res.headBurst || res.severed ? 3 : 1);
       audio.flesh(h.point, res.headBurst || !!res.severed);
       if (isBolt) this.stickBolt(h.point, dir, h.object);
+      if (boltType === 'bolt_exp') { this.projectiles.boltBlast(h.point.clone(), lead); return; }
+      if (boltType === 'bolt_fire') z.owner.areaHit?.(6, h.point, { knockdown: false, burn: 4 });
       // exit wound decal on nearby wall
       const behind = this.ctx.physics.raycast(h.point, dir, 3);
       if (behind) this.ctx.blood.add(behind.point, behind.normal, 0.4 + Math.random() * 0.5);
@@ -290,6 +293,7 @@ export class WeaponSystem {
       if (struck.size >= d.penetration) return;
     }
     if (wall) {
+      if (boltType === 'bolt_exp') { this.projectiles.boltBlast(wall.point.clone().addScaledVector(wall.normal, 0.1), lead); return; }
       if (isBolt) this.stickBolt(wall.point, dir);
       else {
         this.ctx.holes.add(wall.point, wall.normal, 0.06);

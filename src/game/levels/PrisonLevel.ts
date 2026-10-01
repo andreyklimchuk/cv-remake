@@ -12,6 +12,7 @@ import type { ZombieSpawn } from '../ai/Zombie';
 import { audio } from '../../engine/AudioEngine';
 import { bus } from '../../engine/Events';
 import { buildAnnex, doorLeaf } from './PrisonAnnex';
+import { buildExterior } from './RockfortExterior';
 import { placeProp, propInstances } from '../world/Props';
 
 export interface LevelContext {
@@ -129,11 +130,13 @@ export function buildPrisonLevel(ctx: LevelContext): Level {
     });
   };
 
-  const annex = buildAnnex(ctx, {
+  const helpers = {
     M: M as unknown as Record<string, THREE.Material>, item,
-    flicker: (l, base, mat, broken) => flickerLight(l, base, mat, broken),
-    onUpdate: (fn) => lightsForUpdate.push({ update: fn }),
-  });
+    flicker: (l: THREE.PointLight | THREE.SpotLight, base: number, mat?: THREE.MeshStandardMaterial, broken?: boolean) => flickerLight(l, base, mat, broken),
+    onUpdate: (fn: (dt: number, t: number) => void) => lightsForUpdate.push({ update: fn }),
+  };
+  const annex = buildAnnex(ctx, helpers);
+  const exterior = buildExterior(ctx, helpers);
 
   // =====================================================================
   // ZONE 1 — COURTYARD (outdoor)
@@ -148,8 +151,8 @@ export function buildPrisonLevel(ctx: LevelContext): Level {
   let cellDoor: Door | null = null;
 
   streamer.add({
-    id: 'yard', bounds: yardBounds, neighbors: ['west', 'guard'], outdoor: true,
-    portalOpen: (n) => n === 'west' || !!guardDoor?.open,
+    id: 'yard', bounds: yardBounds, neighbors: ['west', 'guard', 'gate_out'], outdoor: true,
+    portalOpen: (n) => n === 'west' || (n === 'gate_out' ? flags.has('gateOpen') : !!guardDoor?.open),
     build: (G) => {
       const b = new LevelBuilder(physics);
       // ground
@@ -313,14 +316,11 @@ export function buildPrisonLevel(ctx: LevelContext): Level {
           g.flags.add('gateOpen'); self.enabled = false;
           audio.explosion(new THREE.Vector3(0, 2, 40));
           bus.emit('cameraShake', { strength: 0.2, duration: 1.5 });
-          g.message('Эмблема встала на место. Главные ворота поднимаются...', 4);
+          g.message('Эмблема встала на место. Главные ворота поднимаются — путь к мосту открыт.', 4);
         }));
       const panel = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.7, 0.15), M.steel); panel.position.set(4.3, 1.3, 39.7); b2.addMesh(panel);
       const panelLight = new THREE.Mesh(new THREE.SphereGeometry(0.03, 6, 4), M.red); panelLight.position.set(4.3, 1.7, 39.6); b2.addMesh(panelLight, false);
       b2.flush(G);
-      ctx.addInteractable(new ScriptedInteractable('exit', new THREE.Vector3(0, 0, 41.5), 2.5,
-        (g) => g.flags.has('gateOpen') ? 'Выйти за ворота' : '',
-        (g) => { if (g.flags.has('gateOpen')) g.completeLevel(); }));
 
       // zombies
       ctx.spawnZombie({ id: 'yard_1', x: -5, z: 13, yaw: Math.PI, outfit: 'prisoner' }, G);
@@ -364,7 +364,8 @@ export function buildPrisonLevel(ctx: LevelContext): Level {
       if (placeProp(G, physics, 'desk', 21.65, 0, 2.55, 0, { scale: [0.8, 1, 0.85] })) placeProp(G, physics, 'typewriter', 21.6, 0.78, 2.55, 0, { collide: false });
       else { b.box(21.6, 0.4, 3, 1.4, 0.8, 0.7, M.wood, { tile: 1 }); b.box(21.6, 0.9, 3, 0.45, 0.2, 0.35, M.dark, { collide: false }); }
       if (!placeProp(G, physics, 'itembox', 25, 0, 2.55, 0)) b.box(25, 0.4, 2.6, 1.3, 0.8, 0.7, M.rust, { tile: 1 });
-      if (!placeProp(G, physics, 'bench', 23.3, 0, 6.4, 0)) b.box(23.3, 0.25, 6.4, 1.6, 0.5, 0.45, M.wood, { tile: 1 });
+      // bench along the west wall (keeps the doorway at x 23–24.5 clear)
+      if (!placeProp(G, physics, 'bench', 21.0, 0, 5.0, Math.PI / 2)) b.box(21.0, 0.25, 5.0, 0.45, 0.5, 1.6, M.wood, { tile: 1 });
       // main room: desk with monitors, lockers, cabinet, chair
       const propsOk = !!placeProp(G, physics, 'desk', 29.5, 0, 17.3, Math.PI);
       if (propsOk) {
@@ -404,7 +405,7 @@ export function buildPrisonLevel(ctx: LevelContext): Level {
       item('g_mag', 'part_mag', 1, 28.9, 0.81, 16.9, G);
       item('g_herbR', 'herb_r', 1, 30.5, 0, 3.4, G);
       item('g_ammo', 'ammo_hg', 15, 31.2, 0, 8.3, G);
-      item('g_herbG', 'herb_g', 1, 23.3, propsOk ? 0.47 : 0.51, 6.4, G);
+      item('g_herbG', 'herb_g', 1, 21.0, propsOk ? 0.47 : 0.51, 5.2, G);
       item('g_brake', 'part_brake', 1, propsOk ? 20.95 : 21.2, propsOk ? 1.33 : 1.41, 18.8, G);
       // file / lore note
       ctx.addInteractable(new ScriptedInteractable('note1', new THREE.Vector3(29.9, 0, 16.6), 1.2, () => 'Прочитать: журнал охраны', (g) => g.readDoc('guard_log')));
@@ -583,12 +584,20 @@ export function buildPrisonLevel(ctx: LevelContext): Level {
     nav.add(x, z);
   }
 
-  const outdoorBounds = [yardBounds, westBounds];
+  const outdoorBounds = [yardBounds, westBounds, ...exterior.outdoorBounds];
   return {
     name: 'Rockfort Island — Prison',
     spawn: { pos: new THREE.Vector3(0, 0, 3), yaw: 0 },
     outdoorBounds,
     saveRoom,
-    update: (dt, t) => { for (const l of lightsForUpdate) l.update(dt, t); },
+    update: (dt, t, player) => {
+      for (const l of lightsForUpdate) l.update(dt, t);
+      // moon shadow frustum follows the player (snapped to 4 m to avoid shimmering)
+      const sx = Math.round(player.x / 4) * 4, sz = Math.round(player.z / 4) * 4;
+      if (moon.target.position.x !== sx || moon.target.position.z !== sz) {
+        moon.target.position.set(sx, 0, sz); moon.position.set(sx - 30, 50, sz);
+        moon.target.updateMatrixWorld();
+      }
+    },
   };
 }

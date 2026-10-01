@@ -5,9 +5,18 @@ export class Inventory {
   items: ItemInstance[] = [];
   onChange?: () => void;
 
-  constructor(public cols = 4, public rows = 2) {}
+  /** number of usable slots (grows with Side Packs: 8 → 10 → 12 → 14) */
+  slotCount: number;
 
-  get capacity(): number { return this.cols * this.rows; }
+  constructor(public cols = 4, public rows = 2) { this.slotCount = cols * rows; }
+
+  get capacity(): number { return this.slotCount; }
+  /** Side Pack: adds n slots (new row appears when needed) */
+  expand(n: number): void {
+    this.slotCount += n;
+    this.rows = Math.ceil(this.slotCount / this.cols);
+    this.onChange?.();
+  }
   freeSlots(): number { return this.capacity - this.items.length; }
 
   private occupied(ignoreUid = -1): (number | null)[][] {
@@ -23,6 +32,7 @@ export class Inventory {
   canPlace(defId: string, x: number, y: number, rot: boolean, ignoreUid = -1): boolean {
     const { w, h } = footprint({ defId, rot });
     if (x < 0 || y < 0 || x + w > this.cols || y + h > this.rows) return false;
+    if ((y + h - 1) * this.cols + (x + w - 1) >= this.slotCount) return false;
     const g = this.occupied(ignoreUid);
     for (let yy = y; yy < y + h; yy++) for (let xx = x; xx < x + w; xx++) if (g[yy][xx] !== null) return false;
     return true;
@@ -116,7 +126,7 @@ export class Inventory {
     bumpUid(Math.max(0, ...items.map((i) => i.uid)));
     for (const src of items) {
       const it = { ...src, rot: false };
-      if (!(it.x < this.cols && it.y < this.rows && !this.itemAt(it.x, it.y))) {
+      if (!(it.x < this.cols && it.y < this.rows && it.y * this.cols + it.x < this.slotCount && !this.itemAt(it.x, it.y))) {
         const spot = this.findSpot(it.defId);
         if (!spot) { overflow.push(it); continue; }
         it.x = spot.x; it.y = spot.y;

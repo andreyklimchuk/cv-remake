@@ -23,6 +23,21 @@ export class Projectiles {
   private time = 0;
   constructor(private ctx: CombatContext) { ctx.scene.add(this.flashLight); }
 
+  /** Explosive bolt: small blast at the impact point (lead bolt of a volley knocks down). */
+  boltBlast(p: THREE.Vector3, lead: boolean): void {
+    this.flashLight.position.copy(p).add(new THREE.Vector3(0, 0.3, 0));
+    this.flashT = Math.max(this.flashT, 0.14);
+    if (lead) { audio.explosion(p); bus.emit('noise', { pos: p.clone(), radius: 25, kind: 'explosion' }); bus.emit('cameraShake', { strength: 0.15, duration: 0.25 }); }
+    const up = new THREE.Vector3(0, 1, 0);
+    this.ctx.sparks.burst(p, up, Math.round(22 * this.ctx.particleScale), 6, 1.6, 0.6);
+    if (p.y < 0.4) this.ctx.scorch.add(new THREE.Vector3(p.x, 0.01, p.z), up, 1.1);
+    for (const e of this.ctx.enemies()) {
+      if (!e.alive) continue;
+      const d = e.position.distanceTo(new THREE.Vector3(p.x, e.position.y, p.z));
+      if (d < 1.8) e.areaHit(18 + 30 * (1 - d / 1.8), p, { knockdown: lead && d < 1.2 });
+    }
+  }
+
   launch(origin: THREE.Vector3, dir: THREE.Vector3, type: string): void {
     const mesh = new THREE.Mesh(this.geo, this.mats[type] ?? this.mats.gren_exp);
     mesh.position.copy(origin);

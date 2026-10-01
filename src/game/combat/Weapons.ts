@@ -46,7 +46,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
     sound: { thump: 0.7, crack: 0.9, tail: 0.5, pitch: 1.1 }, noise: 22, muzzle: 1, shell: true, laser: true,
   },
   bowgun: {
-    id: 'bowgun', name: 'Bow Gun', type: 'hitscan', ammo: ['ammo_bolt'], ammoPerShot: 3, magSize: 18, damage: 16, pellets: 3,
+    id: 'bowgun', name: 'Bow Gun', type: 'hitscan', ammo: ['ammo_bolt', 'bolt_exp', 'bolt_fire'], ammoPerShot: 3, magSize: 18, damage: 16, pellets: 3,
     fireRate: 1.3, auto: false, spreadMin: 1.8, spreadMax: 5, moveSpread: 2.5, focusTime: 1.2,
     recoil: { kick: 1.8, pattern: [[0, 1]], recovery: 10, camShake: 0.08 },
     reloadTime: 2.3, penetration: 2, range: 45, stagger: 0.35, crit: 0.04, limbMult: 1.3,

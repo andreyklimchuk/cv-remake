@@ -51,6 +51,16 @@ export class ItemPickup implements Interactable {
   }
   prompt(): string { return `Взять: ${ITEMS[this.defId].name}${this.qty > 1 ? ' ×' + this.qty : ''}`; }
   interact(g: GameAPI): void {
+    if (ITEMS[this.defId].kind === 'pouch') {
+      // Side Pack: applied on pickup (RE2R hip pouch), never occupies a slot
+      g.inventory.expand(2);
+      g.flags.add('pouch:' + this.id);
+      audio.pickup();
+      g.message(`Получено: ${ITEMS[this.defId].name}. Инвентарь расширен до ${g.inventory.capacity} слотов.`, 4);
+      this.enabled = false; g.flags.add('picked:' + this.id);
+      this.mesh.removeFromParent(); this.sparkle.removeFromParent();
+      return;
+    }
     const left = g.inventory.add(this.defId, this.qty);
     if (left === this.qty) { g.message('Инвентарь полон. Освободите слот или оставьте предметы в сундуке.'); return; }
     audio.pickup();

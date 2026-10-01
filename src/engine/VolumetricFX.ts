@@ -1,3 +1,4 @@
+import { LightPool } from './LightPool';
 import * as THREE from 'three';
 import { RenderCaps } from './Renderer';
 import { glowTexture } from './Materials';
@@ -122,6 +123,7 @@ export class FireEmitter {
     if (castShadow) { this.light.shadow.mapSize.set(512, 512); this.light.shadow.bias = -0.002; }
     this.group.add(this.flames, this.smoke, this.light);
     scene.add(this.group);
+    LightPool.active?.adopt(this.group);
   }
 
   private respawn(i: number, life = 0): void {

@@ -11,29 +11,38 @@ export class NavGraph {
 
   constructor(private physics: PhysicsWorld, private clearance = 0.35, private maxLink = 14) {}
 
-  add(x: number, z: number): number {
-    this.nodes.push(new THREE.Vector3(x, 0, z));
+  /** manual links (e.g. along staircases) that survive rebuild() */
+  private extra: [number, number][] = [];
+
+  add(x: number, z: number, y = 0): number {
+    this.nodes.push(new THREE.Vector3(x, y, z));
     return this.nodes.length - 1;
   }
+
+  /** Connect two nodes explicitly (stairs: different heights are never auto-linked). */
+  link(i: number, j: number): void { this.extra.push([i, j]); }
 
   rebuild(): void {
     this.links = this.nodes.map(() => []);
     for (let i = 0; i < this.nodes.length; i++) {
       for (let j = i + 1; j < this.nodes.length; j++) {
         const a = this.nodes[i], b = this.nodes[j];
-        if (a.distanceTo(b) > this.maxLink) continue;
+        if (a.distanceTo(b) > this.maxLink || Math.abs(a.y - b.y) > 0.3) continue;
         if (this.physics.walkable(a, b, this.clearance)) {
           this.links[i].push(j);
           this.links[j].push(i);
         }
       }
     }
+    for (const [i, j] of this.extra) { if (this.links[i] && this.links[j]) { this.links[i].push(j); this.links[j].push(i); } }
   }
 
   nearest(pos: THREE.Vector3, requireWalkable = true): number {
     let best = -1, bestD = Infinity;
     for (let i = 0; i < this.nodes.length; i++) {
-      const d = this.nodes[i].distanceToSquared(pos);
+      const n = this.nodes[i];
+      if (Math.abs(n.y - pos.y) > 1.2) continue;
+      const d = n.distanceToSquared(pos);
       if (d < bestD && (!requireWalkable || this.physics.walkable(pos, this.nodes[i], 0.2))) { bestD = d; best = i; }
     }
     return best;

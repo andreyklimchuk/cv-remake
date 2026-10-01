@@ -67,8 +67,14 @@ d.line([P(-380, by - 55), P(380, by - 55)], fill=INK, width=6 * SS); d.line([P(-
 fp = '/usr/share/fonts/msttcore/impact.ttf'
 if not os.path.exists(fp):
     fp = [os.path.join(r, f) for r, _, fs in os.walk('/usr/share/fonts') for f in fs if 'impact' in f.lower() or 'Bold' in f][0]
-font = ImageFont.truetype(fp, 92 * SS)
-d.text(P(0, by + 2), 'VALKYRIE', fill=INK, font=font, anchor='mm')
+TXT = 'LET ME LIVE'
+fs = 92
+while True:
+    font = ImageFont.truetype(fp, fs * SS)
+    bb = d.textbbox((0, 0), TXT, font=font)
+    if bb[2] - bb[0] <= 700 * SS * (P(1, 0)[0] - P(0, 0)[0]) / SS or fs <= 50: break
+    fs -= 2
+d.text(P(0, by + 2), TXT, fill=INK, font=font, anchor='mm')
 img = img.resize((W, W), Image.LANCZOS)
 os.makedirs('/data/assets_src/work', exist_ok=True)
 img.save('/data/assets_src/work/valkyrie.png')
