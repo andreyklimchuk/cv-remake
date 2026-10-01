@@ -16,6 +16,7 @@ const CONTROLS = `
 <tr><td>ЛКМ</td><td>выстрел</td></tr>
 <tr><td>Shift</td><td>бег</td></tr>
 <tr><td>R</td><td>перезарядка / смена гранат</td></tr>
+<tr><td>Space (удерж.)</td><td>стойка с ножом: ЛКМ — взмах, ПКМ — колющий выпад</td></tr>
 <tr><td>F</td><td>нож · добивание лежачих · контратака</td></tr>
 <tr><td>Q</td><td>оттолкнуть зомби</td></tr>
 <tr><td>E</td><td>взаимодействие · двери открываются, если идти в них</td></tr>
@@ -25,7 +26,7 @@ const CONTROLS = `
 <tr><td>L</td><td>фонарик (Стив)</td></tr>
 <tr><td>Esc</td><td>пауза</td></tr>
 <tr><td>F3</td><td>отладка (FPS, draw calls)</td></tr>
-<tr><td>Геймпад</td><td>LS/RS · LT прицел · RT огонь · B нож · X перезарядка · Y действие · LB толчок · D-pad ↑ смена персонажа · D-pad ↓ фонарик</td></tr>
+<tr><td>Геймпад</td><td>LS/RS · LT прицел · RT огонь · B нож · X перезарядка · Y действие · LB толчок · RB (удерж.) стойка с ножом · D-pad ↑ смена персонажа · D-pad ↓ фонарик</td></tr>
 </table>`;
 
 /** Title / pause / settings / death / end screens and confirm dialogs (DOM). */

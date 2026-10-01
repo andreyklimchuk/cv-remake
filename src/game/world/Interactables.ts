@@ -42,9 +42,9 @@ export class ItemPickup implements Interactable {
   radius = 1.4;
   sparkle: THREE.Sprite;
   constructor(public id: string, public pos: THREE.Vector3, public defId: string, public qty: number, public mesh: THREE.Object3D, parent: THREE.Object3D) {
-    this.sparkle = new THREE.Sprite(new THREE.SpriteMaterial({ map: sparkleTex, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
-    this.sparkle.position.copy(pos).add(new THREE.Vector3(0, 0.15, 0));
-    this.sparkle.scale.setScalar(0.25);
+    this.sparkle = new THREE.Sprite(new THREE.SpriteMaterial({ map: sparkleTex, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.5 }));
+    this.sparkle.position.copy(pos).add(new THREE.Vector3(0, 0.12, 0));
+    this.sparkle.scale.setScalar(0.1);
     mesh.position.copy(pos);
     mesh.traverse((o) => { o.castShadow = false; });
     parent.add(mesh, this.sparkle);
@@ -72,8 +72,11 @@ export class ItemPickup implements Interactable {
     this.sparkle.removeFromParent();
   }
   update(_dt: number, t: number): void {
-    const s = 0.18 + Math.max(0, Math.sin(t * 3 + this.pos.x)) * 0.2;
-    this.sparkle.scale.setScalar(s);
+    // subtle RE glint: a small dim point with a short twinkle every ~2.5 s (was a big constantly pulsing flare)
+    const ph = (t * 0.4 + this.pos.x * 0.37 + this.pos.z * 0.21) % 1;
+    const tw = ph < 0.12 ? Math.sin((ph / 0.12) * Math.PI) : 0;
+    this.sparkle.scale.setScalar(0.07 + tw * 0.11);
+    this.sparkle.material.opacity = 0.35 + tw * 0.35;
     this.sparkle.material.rotation = t;
   }
 }

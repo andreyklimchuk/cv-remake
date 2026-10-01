@@ -343,26 +343,27 @@ export class WeaponSystem {
   }
 
   /** Knife: short fan of rays in front of Claire. Returns true if something was hit. */
-  knifeAttack(origin: THREE.Vector3, forward: THREE.Vector3, finisher = false): boolean {
+  /** knife strike: quick slash (wide arc), `heavy` = stance thrust (narrow, longer reach, ~2.2× damage) */
+  knifeAttack(origin: THREE.Vector3, forward: THREE.Vector3, finisher = false, heavy = false): boolean {
     const d = WEAPONS.knife;
     audio.knife(origin);
     bus.emit('noise', { pos: origin.clone(), radius: d.noise, kind: 'melee' });
     const meshes = this.ctx.enemies().filter((e) => e.alive).flatMap((e) => e.hitMeshes);
     const struck = new Set<Combatant>();
-    const heights = finisher ? [-1.2, -0.9, -0.6] : [0.1, -0.2, -0.5];
-    for (const hOff of heights) for (const a of [-0.5, -0.25, 0, 0.25, 0.5]) {
+    const heights = finisher ? [-1.2, -0.9, -0.6] : heavy ? [0.15, -0.1, -0.35] : [0.1, -0.2, -0.5];
+    for (const hOff of heights) for (const a of heavy ? [-0.14, 0, 0.14] : [-0.5, -0.25, 0, 0.25, 0.5]) {
       const dir = forward.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), a);
       dir.y = finisher ? -0.55 : 0; dir.normalize();
       const o = origin.clone(); o.y += hOff * (finisher ? 0.3 : 1);
-      this.ray.set(o, dir); this.ray.far = finisher ? 2.2 : d.range;
+      this.ray.set(o, dir); this.ray.far = finisher ? 2.2 : d.range + (heavy ? 0.45 : 0);
       const hits = this.ray.intersectObjects(meshes, false);
       for (const h of hits) {
         const z = zoneOfHit(h);
         if (!z || struck.has(z.owner)) continue;
         struck.add(z.owner);
         const zone = finisher && z.owner.isDowned() ? 'head' : z.zone;
-        const res = z.owner.takeHit(buildHit(d, zone, finisher ? 55 : d.damage, h.point.clone(), dir));
-        this.bloodFx(h.point, dir, finisher ? 2 : 1);
+        const res = z.owner.takeHit(buildHit(d, zone, finisher ? 55 : heavy ? d.damage * 2.2 : d.damage, h.point.clone(), dir));
+        this.bloodFx(h.point, dir, finisher || heavy ? 2 : 1);
         audio.flesh(h.point, finisher || !!res.severed);
         break;
       }

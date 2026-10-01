@@ -19,7 +19,7 @@ export interface PlayerTarget {
 }
 
 const ACTION_TIME: Partial<Record<ClaireState, number>> = {
-  dodge: 0.5, knife: 0.42, shove: 0.55, hurt: 0.45, finisher: 0.95, counter: 0.8, dead: 1.2,
+  dodge: 0.5, knife: 0.42, stab: 0.62, shove: 0.55, hurt: 0.45, finisher: 0.95, counter: 0.8, dead: 1.2,
 };
 
 /**
@@ -41,6 +41,8 @@ export class PlayerController {
   state: ClaireState = 'normal';
   stateTime = 0;
   aiming = false;
+  /** knife stance (Space held) */
+  knifeReady = false;
   radius = 0.3;
   grabbedBy: PlayerTarget | null = null;
   private struggle = 0;
@@ -155,8 +157,18 @@ export class PlayerController {
     const running = input.run() && wishLen > 0.1;
 
     if (this.state === 'normal') {
-      this.aiming = input.aim() && weapons.def.type !== 'melee';
-      if (this.aiming) {
+      const melee = weapons.def.type === 'melee';
+      const busy = this.model.weaponBusy();
+      // knife stance: Space (or RMB with the knife equipped) — LMB slash, RMB thrust, F still quick-slashes
+      const spaceKnife = input.knifeHold();
+      this.knifeReady = spaceKnife || (melee && input.aim());
+      this.aiming = !this.knifeReady && !busy && input.aim() && !melee;
+      if (this.knifeReady) {
+        this.yaw = this.turnToward(this.yaw, rig.yaw, 16, dt);
+        targetSpeed = (danger ? 0.8 : 1.05) * wishLen;
+        if (input.firePressed()) this.startKnife(targets);
+        else if (spaceKnife && input.aimPressed()) this.setState('stab');
+      } else if (this.aiming) {
         this.yaw = this.turnToward(this.yaw, rig.yaw, 18, dt);
         targetSpeed = (danger ? 0.8 : 1.15) * wishLen;
       } else {
@@ -168,6 +180,7 @@ export class PlayerController {
       else if (input.shove()) this.startShove(targets);
     } else {
       this.aiming = false;
+      if (this.state !== 'knife' && this.state !== 'stab') this.knifeReady = false;
     }
 
 
@@ -181,6 +194,16 @@ export class PlayerController {
           weapons.knifeAttack(this.pos.clone().add(new THREE.Vector3(0, 1.25, 0)), this.forward());
         }
         break;
+      case 'stab': {
+        // lunge a half step into the thrust
+        const lunge = this.stateTime > 0.17 && this.stateTime < 0.3 ? 2.2 : 0;
+        desired.copy(this.forward()).multiplyScalar(lunge);
+        if (!this.actionDone && this.stateTime > 0.24) {
+          this.actionDone = true;
+          weapons.knifeAttack(this.pos.clone().add(new THREE.Vector3(0, 1.3, 0)), this.forward(), false, true);
+        }
+        break;
+      }
       case 'finisher':
       case 'counter':
         desired.set(0, 0, 0);
@@ -277,6 +300,7 @@ export class PlayerController {
       reloading: weapons.isReloading(),
       lookTarget: this.aiming ? weapons.aimPoint : this.nearestThreat(targets),
       shots: weapons.shots,
+      knifeReady: this.knifeReady,
     });
   }
 

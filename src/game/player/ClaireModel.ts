@@ -14,7 +14,7 @@ const CLAIRE_AIM: Record<string, string> = {
   pony0: 'pony1', pony1: 'pony2', pony2: 'pony3',
 };
 
-export type ClaireState = 'normal' | 'dodge' | 'knife' | 'shove' | 'grabbed' | 'hurt' | 'dead' | 'finisher' | 'counter';
+export type ClaireState = 'normal' | 'dodge' | 'knife' | 'stab' | 'shove' | 'grabbed' | 'hurt' | 'dead' | 'finisher' | 'counter';
 
 export interface AnimParams {
   speed: number;         // horizontal speed m/s
@@ -31,7 +31,15 @@ export interface AnimParams {
   lookTarget: THREE.Vector3 | null;
   /** WeaponSystem shot counter: a change triggers recoil + mechanism animation */
   shots?: number;
+  /** knife stance (Space held, RE2R/RE4R style): combat knife raised in the off hand, guns away */
+  knifeReady?: boolean;
 }
+
+/** knife-type states (knife visible in the hand, guns hidden / holstered) */
+const KNIFE_STATES = new Set<ClaireState>(['knife', 'stab', 'finisher', 'counter']);
+
+/** Steve's thigh holster: leather pouch + strap on each thigh bone; `slot` holds the holstered Luger */
+interface Holster { side: 'l' | 'r'; thigh: THREE.Bone; slot: THREE.Object3D; gun: THREE.Group; grip: THREE.Vector3 }
 
 /** animated action parts of a weapon (Luger toggle-lock: rear link, front link, breech block) */
 interface Toggle { r: THREE.Object3D; f: THREE.Object3D; b: THREE.Object3D; R: THREE.Vector3; K: THREE.Vector3; B: THREE.Vector3; lf: number; phi0: number }
@@ -112,6 +120,7 @@ export class ClaireModel {
       this.knifeModel.rotation.x = Math.PI / 2;
       this.knifeModel.position.set(0.0, -0.08, 0.03);
       this.root.add(this.gunHolder, this.gunHolderL);
+      if (key === 'steve') this.buildHolsters();
       return;
     }
     this.detailed = false;
@@ -260,6 +269,56 @@ export class ClaireModel {
     }
   }
 
+  /** leather thigh holsters for Steve's twin Lugers. Built in character space at the rest pose (model faces +Z,
+   *  +X = character's left), then re-parented to the thigh bones so they follow the legs. */
+  private buildHolsters(): void {
+    const leather = new THREE.MeshStandardMaterial({ color: 0x2c1b10, roughness: 0.6, metalness: 0.02 });
+    const strapM = new THREE.MeshStandardMaterial({ color: 0x1b120b, roughness: 0.7 });
+    const buckle = new THREE.MeshStandardMaterial({ color: 0xb9bcc0, roughness: 0.3, metalness: 1 });
+    const r = this.rig;
+    this.root.updateMatrixWorld(true);
+    const hipJ = r.lThigh.getWorldPosition(new THREE.Vector3()), kneeJ = r.lShin.getWorldPosition(new THREE.Vector3());
+    this.root.worldToLocal(hipJ); this.root.worldToLocal(kneeJ);
+    const axisX = (y: number) => THREE.MathUtils.lerp(Math.abs(hipJ.x), Math.abs(kneeJ.x), (hipJ.y - y) / (hipJ.y - kneeJ.y));
+    for (const side of ['l', 'r'] as const) {
+      const thigh = (side === 'l' ? r.lThigh : r.rThigh) as THREE.Bone;
+      const sx = side === 'l' ? 1 : -1;
+      const g = new THREE.Group(); g.name = 'holster_' + side;
+      const H = 0.22, top = hipJ.y - 0.11, cy = top - H / 2;
+      const ox = sx * (axisX(cy) + 0.1), oz = 0.005;
+      // pouch: tapered leather sheath (wider at the mouth), flattened against the thigh
+      const pouchGeo = new THREE.CylinderGeometry(0.034, 0.026, H, 12, 1, true);
+      pouchGeo.scale(0.62, 1, 1.25);
+      const pouch = new THREE.Mesh(pouchGeo, leather); pouch.position.set(ox, cy, oz); pouch.castShadow = true; g.add(pouch);
+      const tip = new THREE.Mesh(new THREE.SphereGeometry(0.026, 10, 6, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), leather);
+      tip.scale.set(0.62, 0.5, 1.25); tip.position.set(ox, top - H, oz); g.add(tip);
+      leather.side = THREE.DoubleSide;
+      const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.034, 0.005, 6, 16), strapM);
+      mouth.scale.set(0.62, 1.25, 1); mouth.rotation.x = Math.PI / 2; mouth.position.set(ox, top, oz); g.add(mouth);
+      // two leg straps around the thigh + buckles, drop strap up to the belt
+      for (const [y, rad] of [[top - 0.055, 0.092], [top - 0.165, 0.082]] as const) {
+        const st = new THREE.Mesh(new THREE.TorusGeometry(rad, 0.007, 5, 28), strapM);
+        st.rotation.x = Math.PI / 2; st.scale.set(1.05, 1.12, 1); st.position.set(sx * axisX(y), y, 0.0); g.add(st);
+        const bk = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.018, 0.006), buckle); bk.position.set(sx * axisX(y) * 0.6, y, 0.098); g.add(bk);
+      }
+      const drop = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.12, 0.024), strapM); drop.position.set(ox - sx * 0.012, top + 0.055, oz); drop.rotation.z = sx * 0.12; g.add(drop);
+      // the holstered gun: barrel down into the pouch, grip up and back, flat side outward
+      const gun = makeWeaponModel('luger');
+      const bb = new THREE.Box3().setFromObject(gun);
+      const slot = new THREE.Object3D();
+      slot.rotation.x = Math.PI / 2;                       // gun +Z (barrel) → −Y, gun +Y (top) → +Z
+      slot.position.set(ox, top - H + 0.004 + bb.max.z, oz - (bb.max.y - 0.016));
+      slot.add(gun); g.add(slot);
+      gun.visible = false;
+      this.root.add(g); g.updateMatrixWorld(true);
+      thigh.attach(g);
+      // where the hand closes on the grip (thigh-bone space)
+      const gripRoot = new THREE.Vector3(ox, top + 0.035, oz - 0.06);
+      const grip = thigh.worldToLocal(this.root.localToWorld(gripRoot));
+      this.holsters.push({ side, thigh, slot, gun, grip });
+    }
+  }
+
   /** attach every gun model once so their materials compile during loading; returns the undo */
   preloadWeapons(): () => void {
     const g = new THREE.Group();
@@ -272,7 +331,27 @@ export class ClaireModel {
   private fireT = 9;
   private toggles: Toggle[] = [];
 
+  /** Steve owns his Lugers (set by World from the inventory): holstered pair shown on the thighs */
+  hasLugers = true;
+  private holsters: Holster[] = [];
+  /** holster / draw animation of the Lugers: t = seconds since start, `pending` = weapon to switch to */
+  private holsterAnim: { mode: 'put' | 'draw'; t: number; pending: string } | null = null;
+  private knifeK = 0;
+  static readonly HOLSTER = { put: { dur: 0.72, swap: 0.4 }, draw: { dur: 0.62, swap: 0.27 } };
+
+  /** guns can't be raised while the Lugers are going into / coming out of the holsters */
+  weaponBusy(): boolean { return !!this.holsterAnim; }
+
   setWeapon(id: string): void {
+    if (this.holsterAnim?.mode === 'put') { this.holsterAnim.pending = id; return; }
+    if (id === this.gunId) return;
+    const anim = this.holsters.length > 0 && this.root.visible && this.gunId !== 'none';
+    if (anim && weaponHold(this.gunId) === 'dual') { this.holsterAnim = { mode: 'put', t: 0, pending: id }; return; }
+    this.applyWeapon(id);
+    if (anim && weaponHold(id) === 'dual' && this.hasLugers) this.holsterAnim = { mode: 'draw', t: 0, pending: id };
+  }
+
+  private applyWeapon(id: string): void {
     if (id === this.gunId) return;
     this.gunId = id;
     if (this.gun) this.gunHolder.remove(this.gun);
@@ -392,8 +471,19 @@ export class ClaireModel {
   animate(dt: number, t: number, p: AnimParams): void {
     const r = this.rig;
     const hold = weaponHold(this.gunId === 'none' ? 'knife' : this.gunId);
-    this.aimBlend = damp(this.aimBlend, p.aim && p.state === 'normal' ? 1 : 0, 14, dt);
+    this.aimBlend = damp(this.aimBlend, p.aim && p.state === 'normal' && !this.holsterAnim ? 1 : 0, 14, dt);
     const a = this.aimBlend;
+    this.knifeK = damp(this.knifeK, p.knifeReady && (p.state === 'normal' || p.state === 'hurt') ? 1 : 0, 12, dt);
+    const kr = this.knifeK;
+    // holster / draw timeline
+    if (this.holsterAnim) {
+      const ha = this.holsterAnim; ha.t += dt;
+      const HS = ClaireModel.HOLSTER[ha.mode];
+      if (ha.t >= HS.dur || p.state === 'dead') {
+        this.holsterAnim = null;
+        if (ha.mode === 'put') { const id = ha.pending; this.applyWeapon(id); }
+      }
+    }
 
     // ----- locomotion (biomechanical gait curves, see Gait below) -----------
     const limp = p.hpRatio < 0.34;
@@ -488,6 +578,14 @@ export class ClaireModel {
       lUx = THREE.MathUtils.lerp(lUx, -0.85, e); lFx = THREE.MathUtils.lerp(lFx, -1.15, e); lUz = THREE.MathUtils.lerp(lUz, -0.22, e);
     }
     if (p.reloading) { lUx = -0.9; lFx = -1.4; lUz = -0.3; rUx = -0.8; rFx = -0.9; rUz = 0.2; }
+    if (kr > 0.001) {
+      // knife stance: off hand brings the blade up in front of the chest, the other hand guards, knees soft
+      const L = THREE.MathUtils.lerp;
+      lUx = L(lUx, -1.0 - pitch * 0.55, kr); lUz = L(lUz, -0.32, kr); lUy = L(lUy, -0.25, kr); lFx = L(lFx, -1.45, kr);
+      rUx = L(rUx, -0.5, kr); rUz = L(rUz, 0.36, kr); rUy = L(rUy, 0.2, kr); rFx = L(rFx, -1.75, kr);
+      spineX += 0.1 * kr; hipY -= 0.04 * kr * (1 - g * 0.5);
+      lTh -= 0.12 * kr * idle; rTh -= 0.12 * kr * idle; lSh += 0.24 * kr * idle; rSh += 0.24 * kr * idle; lFt -= 0.12 * kr * idle; rFt -= 0.12 * kr * idle;
+    }
 
     // ----- action layers ----------------------------------------------------
     const k = p.stateT;
@@ -505,6 +603,16 @@ export class ClaireModel {
         const e = Math.min(1, k * 2.2);
         lUx = THREE.MathUtils.lerp(-2.3, -0.5, e); lUz = THREE.MathUtils.lerp(0.9, -0.7, e); lFx = -0.3;
         hipsRotY = THREE.MathUtils.lerp(0.35, -0.35, e);
+        break;
+      }
+      case 'stab': {
+        // committed thrust: wind back, drive the blade straight forward from the stance, recover
+        const e = k < 0.28 ? -Math.sin((k / 0.28) * Math.PI / 2) * 0.35 : k < 0.45 ? THREE.MathUtils.lerp(-0.35, 1, (k - 0.28) / 0.17) : Math.max(0, 1 - (k - 0.45) / 0.55);
+        lUx = -1.25 - e * 0.32; lUz = -0.3 + e * 0.12; lUy = -0.2; lFx = THREE.MathUtils.lerp(-1.35, -0.06, Math.max(0, e));
+        rUx = -0.6; rUz = 0.32; rFx = -1.5;
+        spineX = 0.12 + 0.22 * Math.max(0, e); hipsRotY = -0.38 * Math.max(0, e) + 0.12 * Math.min(0, e);
+        hipY -= 0.05 * Math.abs(e);
+        lTh = -0.35 * Math.max(0, e); lSh = 0.4 * Math.max(0, e); rTh = 0.18 * Math.max(0, e);
         break;
       }
       case 'finisher':
@@ -621,8 +729,38 @@ export class ClaireModel {
       seg.rotation.z = damp(seg.rotation.z, -yawRate * 8 * (i + 1) * 0.5 + Math.sin(this.phase * TAU * 2) * amp * 0.08, 8, dt);
     });
 
+    // ----- holster / draw: both hands reach down to the thigh holsters (two-bone IK) ----------------
+    if (this.holsterAnim && this.holsters.length) {
+      const ha = this.holsterAnim, HS = ClaireModel.HOLSTER[ha.mode];
+      const up = ha.mode === 'put' ? 0.3 : 0.22, dn0 = ha.mode === 'put' ? 0.44 : 0.31;
+      const w = ha.t < up ? THREE.MathUtils.smootherstep(ha.t, 0, up) : ha.t < dn0 ? 1 : 1 - THREE.MathUtils.smootherstep(ha.t, dn0, HS.dur);
+      if (w > 0.001) {
+        this.root.updateMatrixWorld(true);
+        const rq = this.root.getWorldQuaternion(new THREE.Quaternion());
+        for (const h of this.holsters) {
+          const [U, F, Hd] = h.side === 'l' ? [r.lUpperArm, r.lForearm, r.lHand] : [r.rUpperArm, r.rForearm, r.rHand];
+          const target = h.thigh.localToWorld(h.grip.clone());
+          // push / pull the gun along the pouch around the swap moment
+          const dip = Math.max(0, 1 - Math.abs(ha.t - HS.swap) / 0.12) * 0.03;
+          target.y -= ha.mode === 'put' ? dip : dip * 0.5;
+          const sh = U.getWorldPosition(new THREE.Vector3());
+          const wrist = target.clone().addScaledVector(sh.clone().sub(target).normalize(), 0.06);
+          const sx = h.side === 'l' ? 1 : -1;
+          twoBoneIK(U, F, Hd, wrist, new THREE.Vector3(sx * 0.5, 0.1, -1).applyQuaternion(rq), w);
+        }
+      }
+    }
+
     // ----- weapon placement ------------------------------------------------
-    this.knifeModel.visible = p.state === 'knife' || p.state === 'finisher' || p.state === 'counter';
+    const knifeOut = KNIFE_STATES.has(p.state) || this.knifeK > 0.25;
+    this.knifeModel.visible = knifeOut;
+    // stance: blade turned up to point forward (the slash keys off the default grip)
+    this.knifeModel.rotation.x = Math.PI / 2 - this.knifeK * 0.75;
+    // Lugers: in the hands unless knifing / mid-holster; otherwise they sit in the thigh holsters
+    const ha = this.holsterAnim, HS = ClaireModel.HOLSTER;
+    const inHolster = !!ha && (ha.mode === 'put' ? ha.t >= HS.put.swap : ha.t < HS.draw.swap);
+    const handGuns = !knifeOut && !inHolster;
+    for (const h of this.holsters) h.gun.visible = this.hasLugers && p.state !== 'dead' && (hold !== 'dual' || !handGuns);
     if (this.detailed) {
       const holding = !!this.gun && this.gun.visible !== false && this.gunId !== 'none';
       this.gripR = damp(this.gripR, holding ? 1 : 0.15, 12, dt);
@@ -630,7 +768,7 @@ export class ClaireModel {
       this.setMorph('grip_R', this.gripR); this.setMorph('grip_L', this.gripL);
     }
     if (this.lighter) {
-      const show = this.lighterOn && hold !== 'dual' && !this.knifeModel.visible && p.state !== 'dead' && !p.reloading;
+      const show = this.lighterOn && hold !== 'dual' && !knifeOut && p.state !== 'dead' && !p.reloading;
       this.lighter.visible = show;
       if (show) {
         this.root.updateMatrixWorld(true);
@@ -642,7 +780,7 @@ export class ClaireModel {
       }
     }
     if (this.gunL) {
-      this.gunL.visible = p.state !== 'knife' && p.state !== 'finisher' && p.state !== 'counter';
+      this.gunL.visible = handGuns;
       this.root.updateMatrixWorld(true);
       const hand = this.detailed ? r.lHand.localToWorld(new THREE.Vector3(0, -0.075, 0.015)) : r.lHand.getWorldPosition(new THREE.Vector3());
       const local = this.root.worldToLocal(hand.clone());
@@ -682,7 +820,7 @@ export class ClaireModel {
       twoBoneIK(r.rUpperArm, r.rForearm, r.rHand, grip.clone().addScaledVector(shW.clone().sub(grip).normalize(), 0.075),
         new THREE.Vector3(-0.8, -1, -0.3).applyQuaternion(rq), 1);
     } else if (this.gun) {
-      this.gun.visible = p.state !== 'knife' && p.state !== 'finisher' && p.state !== 'counter';
+      this.gun.visible = handGuns;
       this.root.updateMatrixWorld(true);
       const hand = this.detailed ? r.rHand.localToWorld(new THREE.Vector3(0, -0.075, 0.015)) : r.rHand.getWorldPosition(new THREE.Vector3());
       const local = this.root.worldToLocal(hand.clone());

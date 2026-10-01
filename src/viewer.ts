@@ -58,7 +58,13 @@ export async function runViewer(): Promise<void> {
     r.hips.position.y = zombie.hipRest - 0.02;
     if (q.get('sever')) { const piece = zombie.sever(q.get('sever') as any); if (piece) { piece.position.set(0.5, 0.1, 0.3); piece.rotation.z = 1.4; scene.add(piece); } }
   } else if (!creature) scene.add(claire.root);
-  if (pose === 'aim' || pose === 'gun') claire.setWeapon(q.get('weapon') || 'm9f');
+  if (pose === 'aim' || pose === 'gun' || pose === 'knife' || pose === 'stab' || q.get('weapon')) claire.setWeapon(q.get('weapon') || 'm9f');
+  // holster=<t>: freeze the Lugers holster animation at t seconds (put → weapon=knife) / draw=<t>
+  if (q.get('holster') || q.get('draw')) {
+    const put = !!q.get('holster');
+    claire.setWeapon(put ? 'knife' : 'gold_lugers');
+    const ha = (claire as any).holsterAnim; if (ha) { ha.t = Number(q.get('holster') || q.get('draw')); ha.freeze = true; }
+  }
   if (q.get('lighter')) claire.setLighter(true);
   const hide = q.get('hide');
   if (hide) scene.traverse((o) => { if ((o as THREE.Mesh).isMesh && o.name.includes(hide)) o.visible = false; });
@@ -74,13 +80,15 @@ export async function runViewer(): Promise<void> {
     speed: q.get('speed') ? Number(q.get('speed')) : pose === 'run' ? 4 : pose === 'walk' ? 2.2 : 0, localMove: new THREE.Vector2(0, pose === 'run' || pose === 'walk' ? 1 : 0), running: pose === 'run', aim: pose === 'aim',
     aimPitch: 0, aimPoint: new THREE.Vector3(0, 1.4, 10), state: 'normal', stateT: 0, dodgeDir: new THREE.Vector2(),
     hpRatio: 1, reloading: false, lookTarget: new THREE.Vector3(0, 1.55, 5),
+    knifeReady: pose === 'knife',
   };
+  if (pose === 'stab' || pose === 'slash') { p.state = pose === 'stab' ? 'stab' : 'knife'; p.stateT = Number(q.get('k') || 0.45); }
   if (pose === 'pain') claire.expressionPain = 5;
   const t0 = performance.now();
   let frames = 0;
   const tick = () => {
     const t = (performance.now() - t0) / 1000;
-    if (!zombie && !creature) { if (q.get('phase')) (claire as any).phase = Number(q.get('phase')); if (q.get('fireT')) (claire as any).fireT = Number(q.get('fireT')) - 1 / 60; claire.animate(1 / 60, t, p); }
+    if (!zombie && !creature) { if (q.get('phase')) (claire as any).phase = Number(q.get('phase')); if (q.get('fireT')) (claire as any).fireT = Number(q.get('fireT')) - 1 / 60; { const ha = (claire as any).holsterAnim; if (ha?.freeze) ha.t -= 1 / 60; } claire.animate(1 / 60, t, p); }
     r.render(scene, cam);
     frames++;
     (window as any).__frames = frames; (window as any).__viewerReady = frames > 4 && (!!ModelLibrary.has(which) || !!ModelLibrary.has('enemy_' + which));

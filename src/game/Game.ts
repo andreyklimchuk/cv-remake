@@ -415,7 +415,7 @@ export class Game {
     // weather / ambience per zone
     const zone = w.streamer.current;
     const outdoor = zone?.outdoor ?? true;
-    w.rain.lines.visible = outdoor || (zone?.neighbors.some((n) => w.streamer.zones.get(n)?.outdoor && w.streamer.zones.get(n)?.group.visible) ?? false);
+    w.rain.lines.visible = outdoor || (zone?.neighbors.some((n) => w.streamer.zones.get(n)?.outdoor && w.streamer.shown.has(n)) ?? false);
     if (w.rain.lines.visible) w.rain.update(dt, p.pos, w.level.outdoorBounds, this.rainGround);
     audio.setIndoor(!outdoor);
     audio.saveRoom(w.level.saveRoom.containsPoint(new THREE.Vector3(p.pos.x, 1, p.pos.z)));

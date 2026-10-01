@@ -92,6 +92,9 @@ export class Input {
   }
   aim(): boolean { return this.mouseDown.has(2) || (this.pad?.buttons[6]?.value ?? 0) > 0.4; }
   fire(): boolean { return this.mouseDown.has(0) || (this.pad?.buttons[7]?.value ?? 0) > 0.4; }
+  aimPressed(): boolean { return this.mousePressed.has(2) || this.btnPressed(6); }
+  /** hold to ready the combat knife (RE2R / RE4R knife stance) */
+  knifeHold(): boolean { return this.key('Space') || this.btn(5); }
   firePressed(): boolean { return this.mousePressed.has(0) || this.btnPressed(7); }
   run(): boolean { return this.key('ShiftLeft') || this.key('ShiftRight') || this.btn(10); }
   dodge(): boolean { return this.keyPressed('Space') || this.btnPressed(0); }

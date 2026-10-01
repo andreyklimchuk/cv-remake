@@ -174,6 +174,8 @@ export class World {
 
   equip(it: import('./inventory/Items').ItemInstance | null): void {
     this.weapons.equip(it);
+    // Steve's twin Lugers stay visible in the thigh holsters while he carries them
+    this.player.models.steve.hasLugers = !!this.inventories.steve.firstOf('gold_lugers');
     this.player.model.setWeapon(this.weapons.def.id);
   }
 
@@ -207,7 +209,7 @@ export class World {
       if (!far || Math.floor(this.time * 30) % 2 === 0) z.update(far ? dt * 2 : dt);
       if (wasAlive && !z.alive) { this.stats.kills++; this.flags.add('dead:' + z.spawn.id); }
       const zone = this.streamer.zoneAt(z.position);
-      z.model.root.visible = zone ? zone.group.visible : true;
+      z.model.root.visible = zone ? this.streamer.shown.has(zone.id) : true;
     }
   }
 
