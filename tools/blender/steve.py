@@ -1,5 +1,5 @@
 """Steve Burnside (CODE: Veronica) — Blender Studio male base mesh (CC0) + rig + outfit
-   (navy short-sleeve jacket with white trim, yellow tank top, tiger-stripe camo cargo pants, laced boots,
+   (navy short-sleeve jacket with white trim, yellow crew-neck T-shirt, tiger-stripe camo cargo pants, laced boots,
    belt with silver buckle, choker, wristbands), auburn curtain hair (cap + cards), shape keys blink/pain/grip.
    Separate baked texture sets: skin / outfit / eyes + strand hair atlas.  TEXSIZE=2048 python3 tools/steve.py"""
 import sys, os, json, time, math; sys.path.insert(0, '/data/assets_src/tools')
@@ -98,12 +98,23 @@ def make_high(o, levels, fold):
     h = dup(o, o.name + '_high')
     for g in list(h.vertex_groups): h.vertex_groups.remove(g)
     subdivide(h, levels); displace_along_normals(h, fold); h.hide_render = True; highs.append(h); return h
-def garment(vmask, name, ffilter=None):
+def detooth(o, rounds=4):
+    """Remove saw-teeth along a cut: faces with 2+ open edges (they fold over when the edge is smoothed)."""
+    for _ in range(rounds):
+        bm = bmesh.new(); bm.from_mesh(o.data)
+        bad = [f for f in bm.faces if sum(1 for e in f.edges if e.is_boundary) >= 2]
+        if not bad: bm.free(); break
+        bmesh.ops.delete(bm, geom=bad, context='FACES')
+        loose = [v for v in bm.verts if not v.link_faces]
+        if loose: bmesh.ops.delete(bm, geom=loose, context='VERTS')
+        bm.to_mesh(o.data); bm.free()
+def garment(vmask, name, ffilter=None, teeth=False):
     f = face_mask_from_verts(body0, vmask, 'all')
     if ffilter is not None: f &= ffilter(centers(body0))
     o = extract_faces(body0, f, name)
     for m in list(o.modifiers): o.modifiers.remove(m)
     o.parent = None; o.hide_render = False
+    if teeth: detooth(o)
     smooth_boundary(o, 14)
     return o
 def fold_fn(amp=1.0):
@@ -117,12 +128,15 @@ def fold_fn(amp=1.0):
                       + 0.0045 * ankle * nz(x * 9, y * 9, z * 70) + 0.00025 * nz(x * 110, y * 110, z * 110))
     return f
 parts = {}
-# ---- yellow tank top
-def tank_filter(C):
+# ---- yellow crew-neck T-shirt (short sleeves under the jacket sleeves, full chest coverage)
+def tee_filter(C):
     x, y, zz = C.T
-    return ~(((y < 0) & (zz > Z(1.30) - 0.0 * x)) | ((y > 0) & (zz > Z(1.36))) | ((np.abs(x) > 0.105) & (zz > Z(1.33))))
-tk = garment((z0 > Z(0.90)) & (z0 < Z(1.42)) & (arm0 < 0.25) & (nh0 < 0.3), 'tank', tank_filter)
-cloth_shell(tk, bvh, 0.0035, smooth_iters=6, passes=3, pin=boundary_verts(tk)); make_high(tk, 2, fold_fn(0.6)); parts['tank'] = tk
+    u = np.clip(1 - (x / 0.085) ** 2, 0, 1)   # rounded crew neckline (deepest at the centre)
+    front = (y < 0) & (zz > Z(1.405) - (Z(1.405) - Z(1.372)) * np.sqrt(u)) & (np.abs(x) < 0.085)
+    backn = (y >= 0) & (zz > Z(1.408)) & (np.abs(x) < 0.07)
+    return ~(front | backn)
+tk = garment((z0 > Z(0.90)) & (z0 < Z(1.47)) & (nh0 < 0.35) & (fh0 < 0.2) & ~((arm0 > 0.3) & (z0 < Z(1.20))), 'tank', tee_filter, teeth=True)
+cloth_shell(tk, bvh, 0.0035, smooth_iters=6, passes=3, pin=boundary_verts(tk)); make_high(tk, 2, fold_fn(0.7)); parts['tank'] = tk
 tbvh = bvh_of(tk)
 # ---- navy jacket: short sleeves, stand collar, open front
 def vest_filter(C):
@@ -208,7 +222,7 @@ make_high(bo_hi_src, 1, lambda p, n: 0.0006 * nz(p[0] * 30, p[1] * 30, p[2] * 30
 parts['boots'] = bo
 # ---- hide covered body
 W1 = weights(body, groups); P1 = V(body)
-cover = (((P1[:, 2] > Z(0.92)) & (P1[:, 2] < Z(1.28)) & (wsum(W1, ARM) < 0.1)) | ((P1[:, 2] > Z(0.22)) & (P1[:, 2] < Z(0.95)) & (wsum(W1, ARM) < 0.1))) & (wsum(W1, ['neck', 'head']) < 0.2)
+cover = (((P1[:, 2] > Z(0.92)) & (P1[:, 2] < Z(1.31)) & (wsum(W1, ARM) < 0.1)) | ((P1[:, 2] > Z(1.235)) & (P1[:, 2] < np.where(np.abs(P1[:, 0]) < 0.14, Z(1.31), Z(1.40))) & (wsum(W1, ARM) >= 0.1) & (wsum(W1, FH) < 0.1)) | ((P1[:, 2] > Z(0.22)) & (P1[:, 2] < Z(0.95)) & (wsum(W1, ARM) < 0.1))) & (wsum(W1, ['neck', 'head']) < 0.2)
 cover |= (P1[:, 2] < boot_top - 0.03) & (wsum(W1, ARM) < 0.1)
 delete_faces(body, face_mask_from_verts(body, cover, 'all'))
 bm = bmesh.new(); bm.from_mesh(body.data)
@@ -269,13 +283,17 @@ rigid_weight(cap, 'head')
 verts, faces, uvs = [], [], []
 rnd = random.Random(23)
 def add_card(path, widths, normals, variant):
-    n = len(path); base = len(verts); u0 = 0.5 + 0.125 * variant; u1 = u0 + 0.125
+    # 3 vertices across: the centre line is lifted off the head (V-fold) so each card reads as a lock with volume
+    n = len(path); base = len(verts); u0 = 0.5 + 0.125 * variant; u1 = u0 + 0.125; um = (u0 + u1) / 2
     for i in range(n):
         tng = (path[min(i + 1, n - 1)] - path[max(i - 1, 0)]).normalized()
         side = normals[i].cross(tng).normalized() * widths[i] * 0.5; v = i / (n - 1)
-        verts.append(path[i] - side); uvs.append((u0 + 0.004, 1 - v * 0.98)); verts.append(path[i] + side); uvs.append((u1 - 0.004, 1 - v * 0.98))
+        lift = normals[i] * widths[i] * 0.22
+        verts.append(path[i] - side); uvs.append((u0 + 0.004, 1 - v * 0.98))
+        verts.append(path[i] + lift); uvs.append((um, 1 - v * 0.98))
+        verts.append(path[i] + side); uvs.append((u1 - 0.004, 1 - v * 0.98))
     for i in range(n - 1):
-        a = base + 2 * i; faces.append((a, a + 1, a + 3, a + 2))
+        a = base + 3 * i; faces.append((a, a + 1, a + 4, a + 3)); faces.append((a + 1, a + 2, a + 5, a + 4))
 def slerp_dir(a, b, t):
     a = a.normalized(); b = b.normalized(); om = math.acos(max(-1, min(1, a.dot(b))))
     if om < 1e-4: return a
@@ -284,8 +302,8 @@ def dir_of(az_, el_):
     ar, er = math.radians(az_), math.radians(el_); return Vector((math.sin(ar) * math.cos(er), -math.cos(ar) * math.cos(er), math.sin(er)))
 count = 0
 # centre-parted curtain: roots along the part line, strands sweep to the sides and down
-for layer, offl in enumerate((0.005, 0.0085, 0.012)):
-    for k in range(95):
+for layer, offl in enumerate((0.0045, 0.0075, 0.0105, 0.0138)):
+    for k in range(175):
         u = rnd.random(); s = rnd.choice((-1, 1))
         phi = 44 + u * 118                                 # front hairline -> crown/back
         root_dir = Vector((s * 0.04, -math.cos(math.radians(phi)), math.sin(math.radians(phi))))
@@ -294,14 +312,14 @@ for layer, offl in enumerate((0.005, 0.0085, 0.012)):
             end_az = s * rnd.uniform(14, 58); end_el = 22 - 0.42 * abs(end_az) + rnd.uniform(-4, 3)
         end_dir = dir_of(end_az, end_el)
         pts, nrs = [], []
-        nseg = 11
+        nseg = 17
         for i in range(nseg + 1):
             t = i / nseg; dd = slerp_dir(root_dir, end_dir, t)
             p, nr = surf(dd, offl + 0.010 * math.sin(t * math.pi) * (1 - 0.4 * t) + 0.004 * t)
             pts.append(p); nrs.append(nr)
         # tips fall a bit more vertically
         for i in range(nseg - 2, nseg + 1): pts[i] = pts[i] + Vector((0, 0, -0.012 * (i - nseg + 3) / 3))
-        w = rnd.uniform(0.022, 0.036)
+        w = rnd.uniform(0.016, 0.028) * (1.15 if layer == 3 else 1.0)
         add_card(pts, [w * (1 - 0.55 * (i / nseg) ** 2) for i in range(nseg + 1)], nrs, rnd.randrange(4)); count += 1
 cards = mesh_from('hair_cards', verts, faces)
 ulc = cards.data.uv_layers.new(name='UVMap')
@@ -422,8 +440,10 @@ def outfit_shade(P, Nn, ids):
         c = c * (1 + 0.12 * lo[:, None] + 0.06 * mid[:, None] + 0.07 * weave[:, None])
         col[mask] = c[mask]; rough[mask] = (r + 0.05 * mid)[mask]; h[mask] = ((0.00003 * weave) + (hh if hh is not None else 0))[mask]
     # tank top: mustard yellow ribbed knit
-    rib = ss(0.2, 0.8, np.abs(np.sin(x * 2 * math.pi / 0.004)))
-    cloth(M('tank'), np.tile(np.array([0.62, 0.48, 0.08]), (n, 1)) * (0.92 + 0.08 * rib[:, None]), 0.85, -0.00004 * rib)
+    # T-shirt: mustard-yellow cotton jersey, ribbed collar band and hems
+    rib = ss(0.2, 0.8, np.abs(np.sin(x * 2 * math.pi / 0.0016)))
+    band = ((z > Z(1.355)) & (np.abs(x) < 0.09)) | ((z < Z(0.935)))
+    cloth(M('tank'), np.tile(np.array([0.68, 0.50, 0.07]), (n, 1)) * (0.95 + 0.05 * rib[:, None] - 0.08 * band[:, None]), 0.88, -0.00002 * rib - 0.00006 * band * rib)
     # jacket: dark navy cotton twill, white piping on sleeve hems / collar edge, seams
     m = M('jacket')
     if np.any(m):
@@ -535,7 +555,7 @@ build_set(eyes, 'steve_eyes', 512, eye_shade, None, 256, 0.01); eyes.hide_render
 # ============================================================ hair atlas
 HS = 1024; rng = np.random.RandomState(9)
 acc = np.zeros((HS, HS, 3), np.float32); alpha = np.zeros((HS, HS), np.float32)
-dark = np.array([0.11, 0.036, 0.013]); light = np.array([0.40, 0.14, 0.05]); rows = np.arange(HS)
+dark = np.array([0.15, 0.045, 0.014]); light = np.array([0.58, 0.21, 0.07]); rows = np.arange(HS)
 def strand(x0, r0, r1, amp, freq, ph, width, col_s, alpha_s, wrap=None, taper=True):
     rr = rows[r0:r1]; t = (rr - r0) / max(1, (r1 - r0 - 1))
     xc = x0 + amp * np.sin(rr * freq + ph)
@@ -549,7 +569,7 @@ def strand(x0, r0, r1, amp, freq, ph, width, col_s, alpha_s, wrap=None, taper=Tr
         acc[ri, xi_] = acc[ri, xi_] * (1 - a_[:, None]) + cc * a_[:, None]; alpha[ri, xi_] = 1 - (1 - alpha[ri, xi_]) * (1 - a_)
 for vi in range(4):
     xa = 512 + vi * 128
-    for k in range(95):
+    for k in range(170):
         L = rng.uniform(0.55, 1.0); r1 = HS; r0 = int(HS - L * HS * 0.98)
         strand(xa + rng.uniform(6, 122), r0, r1, rng.uniform(0.5, 3.0), rng.uniform(0.004, 0.02), rng.uniform(0, 6.28), rng.uniform(1.0, 2.3), dark + (light - dark) * rng.uniform(0.1, 0.9), rng.uniform(0.6, 1.0))
 r_cap0 = int(0.08 * HS)

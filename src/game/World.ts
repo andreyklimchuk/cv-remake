@@ -15,7 +15,7 @@ import { WeaponSystem } from './combat/WeaponSystem';
 import type { CombatContext } from './combat/CombatContext';
 import { Zombie, type ZombieContext, type Enemy } from './ai/Zombie';
 import { Creature } from './ai/Creature';
-import type { Interactable } from './world/Interactables';
+import { Door, type Interactable, type DoorAgent } from './world/Interactables';
 import { buildPrisonLevel, type Level } from './levels/PrisonLevel';
 import type { SaveData } from './SaveSystem';
 
@@ -30,6 +30,7 @@ export class World {
   inventories = { claire: this.inventory, steve: new Inventory(4, 2) };
   private equippedBy: Record<'claire' | 'steve', number | null> = { claire: null, steve: null };
   itemBox = new ItemBox();
+  flashlight!: THREE.SpotLight;
   flags: Set<string>;
   player: PlayerController;
   weapons: WeaponSystem;
@@ -69,6 +70,12 @@ export class World {
       debris: this.combat.debris, bloodFx, blood, time: 0,
     };
 
+    Door.flags = this.flags;
+    Door.agents = () => {
+      const out: DoorAgent[] = [{ pos: this.player.pos, vel: this.player.vel, radius: this.player.radius, player: true }];
+      for (const z of this.zombies) if (z.alive && z.position.distanceToSquared(this.player.pos) < 900) out.push({ pos: z.position, radius: 0.32 });
+      return out;
+    };
     this.level = buildPrisonLevel({
       scene: s, physics: this.physics, nav: this.nav, streamer: this.streamer, quality: q, flags: this.flags,
       spawnZombie: (spawn) => {
@@ -92,6 +99,11 @@ export class World {
     this.lights = new LightPool(s, big ? 8 : small ? 4 : 6, big ? 3 : 2, Math.max(0, sh - 1), Math.min(1, sh), q.shadowMapSize);
     this.lights.adopt(s);
     LightPool.active = this.lights;
+    // Steve's flashlight: a virtual spot (always present → constant light counts), pooled with top priority
+    this.flashlight = new THREE.SpotLight(0xfff0d8, 0, 34, 0.36, 0.55, 1.35);
+    this.flashlight.castShadow = !!q.shadows; this.flashlight.userData.priority = 40;
+    s.add(this.flashlight, this.flashlight.target);
+    this.lights.adopt(this.flashlight);
 
     // player start / restore
     if (save) {

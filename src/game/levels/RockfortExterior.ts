@@ -511,20 +511,12 @@ export function buildExterior(ctx: LevelContext, H: AnnexHelpers) {
         p.rotation.y = s < 0 ? 0 : Math.PI; p.userData.base = p.rotation.y; G.add(p); leaves.push(p);
       }
       palaceCol = physics.addMinMax(-1.5, 159.8, 1.5, 160.2, U, U + 4, 'door', true);
-      if (palaceOpen) { palaceCol.enabled = false; leaves[0].rotation.y = -Math.PI / 2; leaves[1].rotation.y = Math.PI * 1.5; }
-      H.onUpdate((dt) => {
-        if (!palaceOpen) return;
-        leaves[0].rotation.y = THREE.MathUtils.damp(leaves[0].rotation.y, -Math.PI / 2, 2.5, dt);
-        leaves[1].rotation.y = THREE.MathUtils.damp(leaves[1].rotation.y, Math.PI * 1.5, 2.5, dt);
+      const pd = new Door('palaceDoor', new THREE.Vector3(0, U, 158.9), leaves, palaceCol, null, '', 0, {
+        maxAngle: Math.PI * 0.5,
+        onOpen: (g) => { palaceOpen = true; g?.message('Тяжёлые резные двери медленно расходятся. Дворец Эшфордов.', 4); },
       });
-      ctx.addInteractable(new ScriptedInteractable('palaceDoor', new THREE.Vector3(0, U, 158.9), 1.8,
-        () => palaceOpen ? '' : 'Открыть двери дворца',
-        (g, self) => {
-          if (palaceOpen) return;
-          palaceOpen = true; g.flags.add('open:palaceDoor'); if (palaceCol) palaceCol.enabled = false; self.enabled = false;
-          audio.click(true); bus.emit('doorsChanged', null);
-          g.message('Тяжёлые резные двери медленно расходятся. Дворец Эшфордов.', 4);
-        }));
+      if (palaceOpen) pd.openNow(flags, new THREE.Vector3(0, U, 150));
+      ctx.addInteractable(pd);
       if (palaceOpen) { /* nothing */ }
       H.item('x_herb2', 'herb_r', 1, 13.8, U, 145, G);
       ctx.spawnZombie({ id: 'py_1', x: 5, y: U, z: 151, yaw: -Math.PI / 2, outfit: 'guard' }, G);
@@ -625,20 +617,12 @@ export function buildExterior(ctx: LevelContext, H: AnnexHelpers) {
         leaf.scale.set(1.3, 3.4, 1); p.add(leaf); p.rotation.y = sx < 0 ? 0 : Math.PI; G.add(p); hl.push(p);
       }
       const hallCol = physics.addMinMax(-1.3, 189.7, 1.3, 190.3, U, U + 3.4, 'door', true);
-      const openHall = (now: boolean) => { hallCol.enabled = false; if (now) { hl[0].rotation.y = -Math.PI / 2; hl[1].rotation.y = Math.PI / 2; } };
-      if (hallDoorOpen) openHall(true);
-      H.onUpdate((dt) => {
-        if (!hallDoorOpen) return;
-        hl[0].rotation.y = THREE.MathUtils.damp(hl[0].rotation.y, -Math.PI / 2, 3, dt);
-        hl[1].rotation.y = THREE.MathUtils.damp(hl[1].rotation.y, Math.PI / 2, 3, dt);
+      const hd = new Door('hallEnd', new THREE.Vector3(0, U, 189.85), hl, hallCol, null, '', 0, {
+        maxAngle: Math.PI * 0.5,
+        onOpen: (g) => { hallDoorOpen = true; g?.message('Двери под галереей открываются в длинный тёмный коридор.', 3); },
       });
-      ctx.addInteractable(new ScriptedInteractable('hallEnd', new THREE.Vector3(0, U, 188.9), 1.6, () => hallDoorOpen ? '' : 'Открыть дверь',
-        (g, self) => {
-          if (hallDoorOpen) return;
-          hallDoorOpen = true; g.flags.add('open:hallEnd'); openHall(false); self.enabled = false;
-          audio.click(true); bus.emit('doorsChanged', null);
-          g.message('Двери под галереей открываются в длинный тёмный коридор.', 3);
-        }));
+      if (hallDoorOpen) hd.openNow(flags, new THREE.Vector3(0, U, 185));
+      ctx.addInteractable(hd);
       H.item('x_pack3', 'side_pack', 1, 12.6, G2, 186.5, G);
       H.item('x_bfire', 'bolt_fire', 6, -12.8, U, 162, G);
       H.item('x_hg2', 'ammo_hg', 15, -12.6, G2, 187.5, G);

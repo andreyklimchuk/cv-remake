@@ -29,7 +29,7 @@ function zoneOfBone(kind: CreatureKind, n: string): HitZone {
     return 'torso';
   }
   if (n.startsWith('rUpper') || n.startsWith('rFore') || n.startsWith('rHand')) return 'rArm';
-  if (n === 'lStump') return 'lArm';
+  if (n.startsWith('lStump')) return 'lArm';
   if (n.startsWith('lThigh') || n.startsWith('lShin') || n.startsWith('lFoot')) return 'lLeg';
   if (n.startsWith('rThigh') || n.startsWith('rShin') || n.startsWith('rFoot')) return 'rLeg';
   return 'torso';
@@ -75,9 +75,9 @@ export class CreatureModel {
     for (const t of [m0.map, m0.normalMap, m0.roughnessMap]) if (t) t.anisotropy = 8;
     let mat: THREE.Material = m0;
     if (kind === 'bandersnatch') {
-      // pale rubbery skin: a touch of sheen + clearcoat for the wet look
+      // ochre wet skin: sheen + clearcoat for the glossy, slimy look
       const p = new THREE.MeshPhysicalMaterial({ map: m0.map, normalMap: m0.normalMap, roughnessMap: m0.roughnessMap, metalnessMap: m0.metalnessMap,
-        aoMap: m0.roughnessMap, aoMapIntensity: 0.75, roughness: 1, metalness: 1, sheen: 0.25, sheenRoughness: 0.6, clearcoat: 0.25, clearcoatRoughness: 0.45 });
+        aoMap: m0.roughnessMap, aoMapIntensity: 0.75, roughness: 1, metalness: 1, sheen: 0.3, sheenRoughness: 0.5, clearcoat: 0.55, clearcoatRoughness: 0.3 });
       mat = p;
     }
     if (src.geometry.attributes.uv1) src.geometry.deleteAttribute('uv1');

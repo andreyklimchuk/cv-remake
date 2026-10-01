@@ -69,7 +69,7 @@ export async function runViewer(): Promise<void> {
   const [ty, dist] = shots[q.get('shot') || 'full'] ?? shots.full;
   cam.position.set(Math.sin(yaw) * dist, ty + 0.05, Math.cos(yaw) * dist); cam.lookAt(0, ty, 0);
   const p: AnimParams = {
-    speed: pose === 'run' ? 4 : 0, localMove: new THREE.Vector2(0, pose === 'run' ? 1 : 0), running: pose === 'run', aim: pose === 'aim',
+    speed: q.get('speed') ? Number(q.get('speed')) : pose === 'run' ? 4 : pose === 'walk' ? 2.2 : 0, localMove: new THREE.Vector2(0, pose === 'run' || pose === 'walk' ? 1 : 0), running: pose === 'run', aim: pose === 'aim',
     aimPitch: 0, aimPoint: new THREE.Vector3(0, 1.4, 10), state: 'normal', stateT: 0, dodgeDir: new THREE.Vector2(),
     hpRatio: 1, reloading: false, lookTarget: new THREE.Vector3(0, 1.55, 5),
   };
@@ -78,7 +78,7 @@ export async function runViewer(): Promise<void> {
   let frames = 0;
   const tick = () => {
     const t = (performance.now() - t0) / 1000;
-    if (!zombie && !creature) claire.animate(1 / 60, t, p);
+    if (!zombie && !creature) { if (q.get('phase')) (claire as any).phase = Number(q.get('phase')); claire.animate(1 / 60, t, p); }
     r.render(scene, cam);
     frames++;
     (window as any).__frames = frames; (window as any).__viewerReady = frames > 4 && (!!ModelLibrary.has(which) || !!ModelLibrary.has('enemy_' + which));

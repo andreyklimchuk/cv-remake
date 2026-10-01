@@ -72,7 +72,14 @@ export class ClaireModel {
   private eyeBones: THREE.Bone[] = [];
   private blinkW = 0; private painW = 0; private gripL = 0; private gripR = 0;
   onFootstep?: (foot: 'l' | 'r') => void;
-  private lastStepSign = 0;
+  private lastStep = '';
+  private idleT = 0;
+  private lastFwdSpeed = 0;
+  private accLean = 0;
+  private bank = 0;
+  private lastYawG = 0;
+  private hipRestX = 0;
+  private feet: (THREE.Bone | undefined)[] = [];
 
   /** which GLB character this is ('claire' | 'steve') */
   readonly key: string;
@@ -172,7 +179,8 @@ export class ClaireModel {
     root.updateMatrixWorld(true);
     const bones = [...bm.values()];
     const B = (n: string) => bm.get(n)!;
-    this.hipRest = B('hips').position.y;
+    this.hipRest = B('hips').position.y; this.hipRestX = B('hips').position.x;
+    this.feet = [bm.get('lFoot'), bm.get('rFoot')];
     const aniso = texSize >= 1024 ? 8 : 4;
     for (const src of skinnedMeshesOf(g)) {
       const mat0 = src.material as THREE.MeshStandardMaterial;
@@ -293,34 +301,68 @@ export class ClaireModel {
     this.aimBlend = damp(this.aimBlend, p.aim && p.state === 'normal' ? 1 : 0, 14, dt);
     const a = this.aimBlend;
 
-    // ----- locomotion -------------------------------------------------------
+    // ----- locomotion (biomechanical gait curves, see Gait below) -----------
     const limp = p.hpRatio < 0.34;
-    const stride = p.running ? 1.7 : 1.1;
-    this.phase += (p.speed / stride) * Math.PI * dt * (limp ? 0.85 : 1);
-    const s = Math.sin(this.phase);
-    const amp = Math.min(1, p.speed / 2) * (p.running ? 0.8 : 0.5);
-    const back = p.localMove.y < -0.2 && a > 0.5 ? -1 : 1;
-    const legAmpL = amp * (limp ? 0.6 : 1), legAmpR = amp;
-    let lTh = -s * legAmpL * back, rTh = s * legAmpR * back;
-    let lSh = Math.max(0, s) * amp * 1.3, rSh = Math.max(0, -s) * amp * 1.3;
-    let hipY = this.hipRest - Math.abs(Math.cos(this.phase)) * 0.035 * amp - (limp ? Math.max(0, s) * 0.03 : 0);
-    let spineX = (p.running ? 0.18 : 0.04) * Math.min(1, p.speed / 2) + a * 0.03;
-    let hipsRotY = 0, rootLeanZ = 0, rootLeanX = 0, rootY = 0;
+    const sp = p.speed;
+    const g = THREE.MathUtils.smoothstep(sp, 0.05, 0.6);                 // gait weight (0 = idle)
+    const rb = THREE.MathUtils.smoothstep(sp, 2.5, 3.9);                 // walk → run blend
+    const L = THREE.MathUtils.lerp(0.9 + 0.85 * Math.min(1, sp / 2.2), 2.9, rb); // stride length (m per cycle)
+    const back = p.localMove.y < -0.25 ? -1 : 1;
+    const fwdK = Math.abs(p.localMove.y), sideK = p.localMove.x;
+    this.phase = (this.phase + back * (sp / L) * dt * (limp ? 0.88 : 1) + 1) % 1;
+    const uL = this.phase, uR = (this.phase + 0.5) % 1;
+    const legL = Gait.leg(uL, rb), legR = Gait.leg(uR, rb);
+    const limpK = limp ? 0.6 : 1;
+    const amp = g * (0.75 + 0.25 * Math.min(1, sp / 2.2));
+    const sag = amp * Math.max(0.35, fwdK);
+    let lTh = -legL.hip * sag * limpK, rTh = -legR.hip * sag;
+    let lSh = legL.knee * amp * (limp ? 0.75 : 1) + 0.06, rSh = legR.knee * amp + 0.06;
+    let lFt = -legL.ankle * amp, rFt = -legR.ankle * amp;
+    const TAU = Math.PI * 2;
+    // pelvis: vertical bob (walk: lowest at heel strike; run: lowest at mid-stance), yaw with the swing leg,
+    // obliquity (swing side drops), lateral shift over the stance foot
+    const bobW = -0.022 * (Math.cos(2 * TAU * uL) + 1) / 2, bobR = -0.045 * (Math.cos(2 * TAU * (uL - 0.15)) + 1) / 2 - 0.035;
+    let hipY = this.hipRest + THREE.MathUtils.lerp(bobW, bobR, rb) * amp - (limp ? Math.max(0, Math.sin(TAU * uL)) * 0.035 * g : 0);
+    let gYaw = -THREE.MathUtils.lerp(0.09, 0.14, rb) * Math.cos(TAU * uL) * amp * back;
+    let gRoll = THREE.MathUtils.lerp(0.06, 0.035, rb) * Math.sin(TAU * uL) * amp * (limp ? 1.6 : 1);
+    let gSway = THREE.MathUtils.lerp(0.022, 0.01, rb) * Math.sin(TAU * uL) * amp;
+    // idle: slow weight shift & micro-sway
+    this.idleT += dt;
+    const idle = 1 - g;
+    const ws = Math.sin(this.idleT * 0.55) * 0.6 + Math.sin(this.idleT * 0.23) * 0.4;
+    gSway += ws * 0.014 * idle; gRoll += ws * 0.025 * idle;
+    lSh += Math.max(0, -ws) * 0.12 * idle; rSh += Math.max(0, ws) * 0.12 * idle;
+    lTh -= Math.max(0, -ws) * 0.06 * idle; rTh -= Math.max(0, ws) * 0.06 * idle;
+    lFt += Math.max(0, -ws) * 0.06 * idle; rFt += Math.max(0, ws) * 0.06 * idle;
+    // acceleration / braking lean and banking into turns
+    const fwdSpeed = sp * p.localMove.y;
+    const acc = (fwdSpeed - this.lastFwdSpeed) / Math.max(1e-3, dt); this.lastFwdSpeed = fwdSpeed;
+    this.accLean = damp(this.accLean, THREE.MathUtils.clamp(acc * 0.028, -0.16, 0.22), 5, dt);
+    let yawRate0 = this.root.rotation.y - this.lastYawG; yawRate0 = Math.atan2(Math.sin(yawRate0), Math.cos(yawRate0)); this.lastYawG = this.root.rotation.y;
+    this.bank = damp(this.bank, THREE.MathUtils.clamp(-yawRate0 / Math.max(1e-3, dt) * sp * 0.018, -0.18, 0.18), 6, dt);
+    let spineX = THREE.MathUtils.lerp(0.035, 0.2, rb) * g + this.accLean + a * 0.03 + (limp ? 0.08 : 0);
+    let spineY = -gYaw * 1.25, spineZ = -gRoll * 0.6;
+    let hipsRotY = 0, rootLeanZ = this.bank * (1 - a), rootLeanX = 0, rootY = 0;
 
-    // strafe while aiming: cross-step
-    if (a > 0.5 && Math.abs(p.localMove.x) > 0.3) {
-      r.lThigh.rotation.z = Math.max(0, s) * 0.25 * Math.sign(p.localMove.x);
-      r.rThigh.rotation.z = -Math.max(0, -s) * 0.25 * Math.sign(p.localMove.x);
-    } else { r.lThigh.rotation.z = damp(r.lThigh.rotation.z, 0, 10, dt); r.rThigh.rotation.z = damp(r.rThigh.rotation.z, 0, 10, dt); }
+    // strafe while aiming / side steps: abduct the leading leg on its swing, cross-step otherwise
+    const side = Math.abs(sideK) > 0.3 ? Math.sign(sideK) : 0;
+    const lAbd = side ? Math.max(0, Math.sin(TAU * uL)) * 0.22 * side * g : 0;
+    const rAbd = side ? -Math.max(0, Math.sin(TAU * uR)) * 0.22 * side * g : 0;
+    r.lThigh.rotation.z = damp(r.lThigh.rotation.z, lAbd, 14, dt);
+    r.rThigh.rotation.z = damp(r.rThigh.rotation.z, rAbd, 14, dt);
 
-    // footstep events at zero crossings
-    const sign = Math.sign(s);
-    if (p.speed > 0.3 && sign !== this.lastStepSign) { this.onFootstep?.(sign > 0 ? 'l' : 'r'); this.lastStepSign = sign; }
+    // footstep events at heel strike
+    const stepNow = uL < 0.5 ? 'l' : 'r';
+    if (sp > 0.3 && stepNow !== this.lastStep) { this.onFootstep?.(stepNow); this.lastStep = stepNow; }
 
     // ----- arms -------------------------------------------------------------
     const pitch = p.aimPitch;
-    let lUx = s * amp * 0.8, lUz = this.detailed ? 0.06 : 0.1, lFx = -0.25 - amp * 0.4, lUy = 0;
-    let rUx = -s * amp * 0.8, rUz = this.detailed ? -0.06 : -0.1, rFx = -0.25 - amp * 0.4, rUy = 0;
+    const armA = THREE.MathUtils.lerp(0.32, 0.75, rb) * amp, cl = Math.cos(TAU * uL);
+    const elb = THREE.MathUtils.lerp(0.22, 1.35, rb) * g + 0.18 * idle;
+    let lUx = cl * armA + 0.04, lUz = (this.detailed ? 0.07 : 0.1) - rb * 0.05 * g, lFx = -elb - Math.max(0, -cl) * armA * 0.6, lUy = rb * 0.12 * g;
+    let rUx = -cl * armA + 0.04, rUz = (this.detailed ? -0.07 : -0.1) + rb * 0.05 * g, rFx = -elb - Math.max(0, cl) * armA * 0.6, rUy = -rb * 0.12 * g;
+    // relaxed idle arms breathe/sway slightly
+    lUx += Math.sin(this.idleT * 0.9) * 0.015 * idle; rUx += Math.sin(this.idleT * 0.9 + 1) * 0.015 * idle;
     const lit = this.lighterOn && hold !== 'dual' && p.state === 'normal' && !p.reloading;
     if (hold === 'dual' && a > 0.001) {
       // Steve: both arms extended, one Luger in each hand
@@ -400,14 +442,20 @@ export class ClaireModel {
       }
     }
 
+    const free = p.state === 'normal' || p.state === 'hurt' ? 1 : 0.25;
+    if (p.state === 'dead') { gYaw = gRoll = gSway = spineY = spineZ = 0; }
     r.hips.position.y = damp(r.hips.position.y, hipY, 18, dt);
-    r.hips.rotation.y = damp(r.hips.rotation.y, hipsRotY, 14, dt);
-    r.spine.rotation.x = damp(r.spine.rotation.x, spineX, 14, dt);
-    r.spine.rotation.y = damp(r.spine.rotation.y, -hipsRotY * 0.5, 14, dt);
-    r.lThigh.rotation.x = damp(r.lThigh.rotation.x, lTh, 20, dt);
-    r.rThigh.rotation.x = damp(r.rThigh.rotation.x, rTh, 20, dt);
-    r.lShin.rotation.x = damp(r.lShin.rotation.x, lSh, 20, dt);
-    r.rShin.rotation.x = damp(r.rShin.rotation.x, rSh, 20, dt);
+    r.hips.position.x = damp(r.hips.position.x, this.hipRestX + gSway * free, 10, dt);
+    r.hips.rotation.y = damp(r.hips.rotation.y, hipsRotY + gYaw * free * (1 - a * 0.6), 14, dt);
+    r.spine.rotation.x = damp(r.spine.rotation.x, spineX, 12, dt);
+    r.spine.rotation.y = damp(r.spine.rotation.y, -hipsRotY * 0.5 + spineY * free * (1 - a * 0.8), 12, dt);
+    r.spine.rotation.z = damp(r.spine.rotation.z, spineZ * free * (1 - a * 0.7), 12, dt);
+    r.lThigh.rotation.x = damp(r.lThigh.rotation.x, lTh, 30, dt);
+    r.rThigh.rotation.x = damp(r.rThigh.rotation.x, rTh, 30, dt);
+    r.lShin.rotation.x = damp(r.lShin.rotation.x, lSh, 30, dt);
+    r.rShin.rotation.x = damp(r.rShin.rotation.x, rSh, 30, dt);
+    if (this.feet[0]) this.feet[0].rotation.x = damp(this.feet[0].rotation.x, lFt, 30, dt);
+    if (this.feet[1]) this.feet[1].rotation.x = damp(this.feet[1].rotation.x, rFt, 30, dt);
     const armK = p.state === 'normal' && a > 0.5 ? 30 : 16;
     r.lUpperArm.rotation.set(damp(r.lUpperArm.rotation.x, lUx, armK, dt), damp(r.lUpperArm.rotation.y, lUy, armK, dt), damp(r.lUpperArm.rotation.z, lUz, armK, dt));
     r.rUpperArm.rotation.set(damp(r.rUpperArm.rotation.x, rUx, armK, dt), damp(r.rUpperArm.rotation.y, rUy, armK, dt), damp(r.rUpperArm.rotation.z, rUz, armK, dt));
@@ -415,7 +463,7 @@ export class ClaireModel {
     r.rForearm.rotation.x = damp(r.rForearm.rotation.x, rFx, armK, dt);
     const dead = p.state === 'dead';
     r.root.children.forEach(() => {});
-    r.hips.rotation.z = damp(r.hips.rotation.z, rootLeanZ, 12, dt);
+    r.hips.rotation.z = damp(r.hips.rotation.z, rootLeanZ + gRoll * free, 12, dt);
     r.hips.rotation.x = damp(r.hips.rotation.x, rootLeanX, dead ? 4 : 12, dt);
     if (dead) r.hips.position.y = damp(r.hips.position.y, 0.2 + rootY, 3, dt);
 
@@ -433,7 +481,9 @@ export class ClaireModel {
       yaw = Math.atan2(Math.sin(yaw), Math.cos(yaw));
       if (Math.abs(yaw) < 1.4) { headYaw = THREE.MathUtils.clamp(yaw, -0.9, 0.9); headPitch = Math.atan2(d.y, Math.hypot(d.x, d.z)) * 0.6; }
     }
-    r.neck.rotation.y = damp(r.neck.rotation.y, headYaw * (1 - a * 0.7), 8, dt);
+    const stab = -(r.hips.rotation.y + r.spine.rotation.y) * 0.85;
+    r.neck.rotation.y = damp(r.neck.rotation.y, headYaw * (1 - a * 0.7) + stab, 8, dt);
+    r.neck.rotation.z = damp(r.neck.rotation.z, -(r.hips.rotation.z + r.spine.rotation.z) * 0.7, 8, dt);
     r.neck.rotation.x = damp(r.neck.rotation.x, -headPitch, 8, dt);
     for (const e of this.eyes) { e.rotation.y = damp(e.rotation.y, headYaw * 0.3, 20, dt); }
     for (const e of this.eyeBones) { e.rotation.y = damp(e.rotation.y, headYaw * 0.35, 20, dt); e.rotation.x = damp(e.rotation.x, -headPitch * 0.3, 20, dt); }
@@ -463,14 +513,14 @@ export class ClaireModel {
     if (this.detailed) {
       const e = new THREE.Euler(); const dq = new THREE.Quaternion();
       this.pony.forEach((seg, i) => {
-        const sway = -yawRate * 8 * (i + 1) * 0.5 + Math.sin(this.phase) * amp * 0.1;
+        const sway = -yawRate * 8 * (i + 1) * 0.5 + Math.sin(this.phase * TAU * 2) * amp * 0.1;
         seg.userData.sway = damp(seg.userData.sway ?? 0, sway, 8, dt);
         e.set((this.ponyAng - 0.25) * (i === 0 ? 0.6 : 0.3), 0, seg.userData.sway * 0.6);
         seg.quaternion.copy(this.ponyRest[i]).multiply(dq.setFromEuler(e));
       });
     } else this.pony.forEach((seg, i) => {
       seg.rotation.x = -this.ponyAng * (i === 0 ? 1 : 0.35) - (i === 0 ? 0.5 : 0);
-      seg.rotation.z = damp(seg.rotation.z, -yawRate * 8 * (i + 1) * 0.5 + Math.sin(this.phase) * amp * 0.08, 8, dt);
+      seg.rotation.z = damp(seg.rotation.z, -yawRate * 8 * (i + 1) * 0.5 + Math.sin(this.phase * TAU * 2) * amp * 0.08, 8, dt);
     });
 
     // ----- weapon placement ------------------------------------------------
@@ -525,3 +575,25 @@ export class ClaireModel {
   }
 }
 
+
+/**
+ * Sagittal joint angles over one gait cycle (u = 0 → heel strike of that leg), radians.
+ * Walk: adapted from normative clinical gait data (Winter); run: typical jogging kinematics.
+ * hip: + flexion, knee: + flexion, ankle: + dorsiflexion. Periodic Catmull-Rom over 10 samples.
+ */
+export const Gait = (() => {
+  const D = Math.PI / 180;
+  const W = { hip: [25, 22, 14, 5, -4, -10, -5, 12, 24, 28], knee: [3, 16, 14, 8, 5, 12, 38, 60, 45, 12], ankle: [0, -6, 3, 8, 10, 4, -16, -6, 0, 1] };
+  const R = { hip: [35, 28, 14, 0, -8, -4, 15, 38, 48, 44], knee: [20, 40, 35, 22, 30, 70, 100, 105, 75, 35], ankle: [5, 15, 12, -5, -25, -15, 0, 8, 8, 5] };
+  const cr = (k: number[], u: number) => {
+    const n = k.length, x = (((u % 1) + 1) % 1) * n, i = Math.floor(x), t = x - i;
+    const p0 = k[(i - 1 + n) % n], p1 = k[i % n], p2 = k[(i + 1) % n], p3 = k[(i + 2) % n];
+    return 0.5 * ((2 * p1) + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t + (-p0 + 3 * p1 - 3 * p2 + p3) * t * t * t) * D;
+  };
+  return {
+    leg(u: number, run: number) {
+      const l = (a: number, b: number) => a + (b - a) * run;
+      return { hip: l(cr(W.hip, u), cr(R.hip, u)), knee: Math.max(0, l(cr(W.knee, u), cr(R.knee, u))), ankle: l(cr(W.ankle, u), cr(R.ankle, u)) };
+    },
+  };
+})();

@@ -1,5 +1,6 @@
 import { ModelLibrary } from './assets/ModelLibrary';
 import * as THREE from 'three';
+import { Door } from './world/Interactables';
 import { RenderBackend, RenderCaps } from '../engine/Renderer';
 import { Input } from '../engine/Input';
 import { audio } from '../engine/AudioEngine';
@@ -80,6 +81,7 @@ export class Game {
       readDoc: (id) => this.readDoc(id),
       codeLock: (title, digits, check, solved) => this.codeLock(title, digits, check, solved),
     };
+    Door.api = this.api;
     const game = this;
     document.addEventListener('pointerlockchange', () => {
       if (!document.pointerLockElement && this.mode === 'playing' && !this.input.usingGamepad) this.pause();
@@ -399,6 +401,8 @@ export class Game {
     this.rig.addLook(out.kickYaw, -out.kickPitch);
     if (w.weapons.def.type === 'melee' && inp.aim() && WEAPONS.knife) void 0;
 
+    this.updateFlashlight(dt, w);
+
     // AI + FX
     w.updateZombies(dt);
     const c = w.combat;
@@ -443,5 +447,51 @@ export class Game {
     // grab UI
     this.hud.setStruggle(p.state === 'grabbed', (p as any).struggle ?? 0, p.counterCooldown <= 0);
   }
-}
 
+  private flashMesh: THREE.Group | null = null;
+  private flashAim = new THREE.Vector3();
+  /** Steve's chest-mounted flashlight: follows where the camera looks (L / D-pad ↓ toggles). */
+  private updateFlashlight(dt: number, w: World): void {
+    const p = w.player, fl = w.flashlight;
+    if (this.input.flashlight() && this.mode === 'playing') {
+      if (w.character !== 'steve') this.hud.message('Фонарик у Стива.');
+      else { if (w.flags.has('flashOff')) w.flags.delete('flashOff'); else w.flags.add('flashOff'); audio.click(); }
+    }
+    const isSteve = w.character === 'steve';
+    const on = isSteve && !w.flags.has('flashOff') && p.state !== 'dead';
+    if (!this.flashMesh || this.flashMesh.parent !== w.scene) {
+      const g = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.018, 0.13, 12), new THREE.MeshStandardMaterial({ color: 0x1b1d20, roughness: 0.45, metalness: 0.6 }));
+      body.rotation.x = Math.PI / 2; g.add(body);
+      const head = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.024, 0.04, 14), body.material); head.rotation.x = Math.PI / 2; head.position.z = 0.075; g.add(head);
+      const lens = new THREE.Mesh(new THREE.CircleGeometry(0.026, 14), new THREE.MeshBasicMaterial({ color: 0xfff4dc }));
+      lens.position.z = 0.096; g.add(lens); g.userData.lens = lens;
+      const clip = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.05, 0.02), body.material); clip.position.set(0, 0, -0.03); clip.position.y = -0.02; g.add(clip);
+      w.scene.add(g); this.flashMesh = g;
+    }
+    const m = this.flashMesh;
+    m.visible = isSteve && p.state !== 'dead';
+    (m.userData.lens.material as THREE.MeshBasicMaterial).color.setHex(on ? 0xfff4dc : 0x333333);
+    if (!m.visible) { fl.intensity = 0; return; }
+    // mount on the left chest strap (follows the torso)
+    const fwd = p.forward(), right = new THREE.Vector3(fwd.z, 0, -fwd.x);
+    const mount = p.pos.clone().addScaledVector(fwd, 0.17).addScaledVector(right, 0.11).add(new THREE.Vector3(0, 1.33, 0));
+    const chest = p.models.steve.root.getObjectByName('chest') ?? p.models.steve.root.getObjectByName('spine2');
+    if (chest) { const cw = new THREE.Vector3(); chest.getWorldPosition(cw); mount.y = cw.y + 0.02; }
+    // aim where the camera looks (ray hit or far point)
+    const dir = new THREE.Vector3(); this.camera.getWorldDirection(dir);
+    const hit = w.physics.raycast(this.camera.position, dir, 45);
+    const target = hit ? hit.point : this.camera.position.clone().addScaledVector(dir, 45);
+    if (this.flashAim.lengthSq() === 0) this.flashAim.copy(target);
+    const k = 1 - Math.exp(-14 * dt);
+    this.flashAim.lerp(target, k);
+    m.position.copy(mount); m.lookAt(this.flashAim);
+    // emit just past the hands/guns so Steve's own arms don't shadow the beam
+    fl.position.copy(mount).addScaledVector(this.flashAim.clone().sub(mount).normalize(), 0.38);
+    fl.target.position.copy(this.flashAim); fl.target.updateMatrixWorld();
+    // keep the spot on the aimed surface evenly exposed: no blow-out on a door 1 m away, still a visible pool 15 m down a corridor
+    const d = Math.max(0.6, this.flashAim.distanceTo(mount));
+    const want = on ? THREE.MathUtils.clamp(5 * Math.pow(d, fl.decay), 5, 150) : 0;
+    fl.intensity = on && fl.intensity > 0 ? THREE.MathUtils.lerp(fl.intensity, want, 1 - Math.exp(-8 * dt)) : want;
+  }
+}

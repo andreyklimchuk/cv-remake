@@ -92,55 +92,82 @@ if CV == 'cerberus':
         bone(s + 'hToe', (sx * 0.08, 0.295, 0.025), (sx * 0.08, 0.27, 0.02), s + 'hFoot')
     LOW_VOX, HIGH_VOX, TARGET = 0.011, 0.0042, 11000
 else:
-    # ---------------- Bandersnatch: ≈2.4 m, hunched, one enormous stretching right arm, left arm a stump
-    ell((0, 0.02, 1.05), 0.19, 0.13, 0.14)                         # pelvis
-    limb((0, 0.0, 1.12), (0, -0.06, 1.48), 0.155, 0.17)            # abdomen
-    ell((0, -0.10, 1.70), 0.25, 0.17, 0.23, (0.3, 0, 0))           # chest (hunched forward)
-    ell((0, -0.04, 1.93), 0.22, 0.11, 0.08, (0.2, 0, 0))           # trapezius hump
-    ell((-0.30, -0.10, 1.86), 0.13, 0.13, 0.12)                    # right deltoid (huge)
-    ell((0.25, -0.08, 1.82), 0.09, 0.09, 0.09)                     # left shoulder stump
-    limb((0.25, -0.08, 1.82), (0.33, -0.06, 1.68), 0.075, 0.065, 2)
-    limb((0, -0.2, 1.9), (0, -0.30, 2.04), 0.095, 0.085, 2)        # neck
-    ell((0, -0.34, 2.13), 0.095, 0.105, 0.115)                     # head
-    ell((0, -0.40, 2.05), 0.085, 0.07, 0.05, (0.4, 0, 0))          # grinning mouth / jaw
-    limb((-0.36, -0.10, 1.84), (-0.47, -0.12, 1.34), 0.105, 0.085) # upper arm
-    ell((-0.41, -0.16, 1.58), 0.07, 0.08, 0.17, (0.1, 0.15, 0))    # biceps
-    limb((-0.47, -0.12, 1.34), (-0.51, -0.20, 0.74), 0.10, 0.068)  # forearm
-    ell((-0.49, -0.14, 1.15), 0.09, 0.085, 0.16, (0.1, 0.05, 0))   # forearm flexors
-    ell((-0.515, -0.23, 0.62), 0.055, 0.1, 0.11)                   # palm
-    for k in range(3):
-        fx = -0.515 + (k - 1) * 0.04
-        limb((fx, -0.27, 0.56), (fx - 0.005, -0.30, 0.40), 0.026, 0.02, 2)
-        limb((fx - 0.005, -0.30, 0.40), (fx - 0.005, -0.27, 0.30), 0.02, 0.015, 1)
-        CLAWS.append(((fx - 0.005, -0.27, 0.295), (0, 0.25, -1), 0.06, 0.012, 'rHand'))
-    limb((-0.47, -0.2, 0.68), (-0.45, -0.31, 0.6), 0.03, 0.022, 2)  # thumb
+    # ---------------- Bandersnatch (CV reference): ≈2.9 m, hunched, a colossal right shoulder towering over the
+    # small skull-like head, one huge lumpy right arm that drags its club hand on the floor, a withered thin left arm,
+    # long sinewy legs; ochre-yellow wet skin with orange-red marbling (see bander_shade)
+    ell((0, 0.03, 1.25), 0.2, 0.14, 0.13)                                  # pelvis
+    limb((0, 0.03, 1.32), (0, -0.03, 1.72), 0.14, 0.16)                    # thin waist / abdomen
+    ell((-0.06, -0.05, 1.96), 0.29, 0.19, 0.25, (0.35, 0, 0))              # chest (hunched, heavier on the right)
+    ell((-0.34, -0.03, 2.30), 0.26, 0.23, 0.30)                            # colossal right shoulder mound
+    ell((-0.17, 0.03, 2.38), 0.21, 0.16, 0.18)                             # trapezius ridge up to the mound
+    ball((-0.50, -0.07, 2.20), 0.17); ball((-0.42, 0.06, 2.42), 0.12); ball((-0.28, -0.16, 2.42), 0.1)
+    ell((-0.16, -0.15, 2.02), 0.14, 0.09, 0.12, (0.3, 0, 0))               # right pectoral mass
+    ell((0.24, -0.04, 2.06), 0.1, 0.1, 0.1)                                # small left shoulder
+    limb((0, -0.08, 2.12), (0.01, -0.25, 2.23), 0.095, 0.085, 2)           # short neck, head thrust forward
+    ell((0.02, -0.33, 2.28), 0.10, 0.115, 0.125)                           # skull
+    ell((0.02, -0.425, 2.335), 0.09, 0.035, 0.03)                          # brow ridge
     for sx in (1, -1):
-        limb((sx * 0.17, 0.0, 1.0), (sx * 0.2, -0.08, 0.56), 0.125, 0.08)
-        ell((sx * 0.18, 0.03, 0.82), 0.1, 0.11, 0.2)                # thigh mass
-        limb((sx * 0.2, -0.08, 0.56), (sx * 0.2, 0.02, 0.11), 0.07, 0.05)
-        ell((sx * 0.2, 0.04, 0.38), 0.065, 0.075, 0.14)             # calf
-        limb((sx * 0.2, 0.04, 0.06), (sx * 0.2, -0.17, 0.04), 0.05, 0.04, 2)
-        EYES.append(((sx * 0.036, -0.425, 2.165), 0.012, 'head'))
-    for i in range(7):                                             # spinal knobs / growths
-        ball((0, 0.10 - 0.02 * i, 1.25 + 0.1 * i), 0.035)
-    ball((-0.2, 0.05, 1.95), 0.07); ball((-0.12, 0.1, 1.88), 0.05)
-    for i in range(12):                                            # grin: upper / lower teeth on an arc
-        a = (i - 5.5) / 5.5 * 1.15
-        TEETH.append(((math.sin(a) * 0.072, -0.36 - math.cos(a) * 0.078, 2.075), (0, -0.2, -1), 0.024, 0.0065, 'head'))
-        TEETH.append(((math.sin(a) * 0.066, -0.36 - math.cos(a) * 0.07, 2.025), (0, -0.2, 1), 0.02, 0.006, 'jaw'))
-    for c, r in (((0.1, -0.2, 1.3), 0.07), ((-0.12, 0.12, 1.55), 0.06), ((0.34, -0.06, 1.65), 0.06)):
+        ball((0.02 + sx * 0.058, -0.425, 2.25), 0.03)                      # cheekbones
+        ball((0.02 + sx * 0.038, -0.45, 2.297), 0.027, neg=True)           # deep eye sockets
+        EYES.append(((0.02 + sx * 0.038, -0.428, 2.297), 0.0125, 'head'))
+    ball((0.02, -0.468, 2.255), 0.017, neg=True)                           # nasal cavity
+    ell((0.02, -0.415, 2.175), 0.075, 0.06, 0.045, (0.3, 0, 0))            # jaw
+    for k in range(6):                                                     # tendons / veins over skull and neck
+        a_ = (k - 2.5) * 0.35
+        limb((0.02 + math.sin(a_) * 0.09, -0.30 + math.cos(a_) * 0.02, 2.38), (0.02 + math.sin(a_) * 0.11, -0.2, 2.16), 0.014, 0.012, 2)
+    for i in range(12):                                                    # lipless grin
+        a_ = (i - 5.5) / 5.5 * 1.1
+        TEETH.append(((0.02 + math.sin(a_) * 0.062, -0.40 - math.cos(a_) * 0.07, 2.205), (0, -0.2, -1), 0.026, 0.007, 'head'))
+        TEETH.append(((0.02 + math.sin(a_) * 0.057, -0.40 - math.cos(a_) * 0.063, 2.172), (0, -0.2, 1), 0.022, 0.0065, 'jaw'))
+    # right arm: thick upper arm, very long lumpy forearm, club hand resting on the floor
+    limb((-0.50, -0.06, 2.14), (-0.62, -0.14, 1.40), 0.17, 0.14)
+    ell((-0.55, -0.18, 1.80), 0.12, 0.12, 0.24, (0.1, 0.1, 0))             # biceps
+    ell((-0.63, 0.0, 1.78), 0.1, 0.1, 0.22)                                # triceps
+    limb((-0.62, -0.14, 1.40), (-0.60, -0.30, 0.34), 0.15, 0.13)
+    for k in range(7):                                                     # bulbous growths along the forearm
+        t_ = (k + 0.5) / 7; c_ = Vector((-0.62, -0.14, 1.40)).lerp(Vector((-0.60, -0.30, 0.34)), t_)
+        ang = k * 2.1; off = Vector((math.cos(ang) * 0.09, math.sin(ang) * 0.07, 0))
+        ball(tuple(c_ + off), 0.1 + 0.03 * math.sin(k * 1.7))
+    ell((-0.60, -0.33, 0.20), 0.13, 0.14, 0.13)                            # club palm
+    for k in range(4):                                                     # thick curled fingers, knuckles on the ground
+        fx = -0.60 + (k - 1.5) * 0.06
+        limb((fx, -0.38, 0.18), (fx, -0.45, 0.07), 0.04, 0.035, 2)
+        limb((fx, -0.45, 0.07), (fx, -0.40, 0.035), 0.033, 0.028, 1)
+        CLAWS.append(((fx, -0.39, 0.03), (0, 0.6, -0.4), 0.06, 0.014, 'rHand'))
+    limb((-0.52, -0.38, 0.24), (-0.50, -0.46, 0.14), 0.04, 0.03, 2)        # thumb
+    # withered left arm
+    limb((0.28, -0.04, 2.04), (0.36, -0.03, 1.62), 0.062, 0.05)
+    limb((0.36, -0.03, 1.62), (0.35, -0.12, 1.24), 0.045, 0.034)
+    ell((0.35, -0.14, 1.19), 0.03, 0.04, 0.05)
+    for k in range(3):
+        limb((0.35 + (k - 1) * 0.018, -0.15, 1.15), (0.35 + (k - 1) * 0.02, -0.17, 1.07), 0.012, 0.009, 1)
+    # long sinewy legs, three-toed feet
+    for sx in (1, -1):
+        limb((sx * 0.2, 0.02, 1.2), (sx * 0.24, -0.10, 0.66), 0.11, 0.075)
+        ell((sx * 0.21, 0.0, 0.98), 0.085, 0.095, 0.2)                     # lean thigh muscle
+        ball((sx * 0.24, -0.13, 0.66), 0.07)                               # knee
+        limb((sx * 0.24, -0.10, 0.66), (sx * 0.25, 0.04, 0.12), 0.065, 0.045)
+        ell((sx * 0.245, 0.03, 0.44), 0.055, 0.065, 0.14)                  # calf
+        ball((sx * 0.25, 0.05, 0.1), 0.05)
+        for k in range(3):
+            tx = sx * 0.25 + (k - 1) * 0.05
+            limb((sx * 0.25, 0.0, 0.07), (tx, -0.22, 0.035), 0.035, 0.025, 2)
+            CLAWS.append(((tx, -0.23, 0.03), (0, -1, -0.3), 0.04, 0.01, sx > 0 and 'lFoot' or 'rFoot'))
+    for i in range(10):                                                    # spinal knobs along the hunched back
+        t_ = i / 9; ball((0.0 - 0.06 * t_, 0.12 + 0.06 * math.sin(t_ * 2.5), 1.38 + 0.95 * t_), 0.035 + 0.01 * math.sin(i))
+    for c, r in (((0.1, -0.14, 1.45), 0.06), ((-0.14, 0.14, 1.75), 0.06), ((0.27, -0.03, 1.9), 0.05)):
         ball(c, r, neg=True); WOUNDS.append((Vector(c), r * 1.5))
-    bone('hips', (0, 0.02, 1.02), (0, -0.03, 1.42)); bone('spine', (0, -0.03, 1.42), (0, -0.12, 1.86), 'hips')
-    bone('neck', (0, -0.18, 1.9), (0, -0.30, 2.05), 'spine'); bone('head', (0, -0.32, 2.08), (0, -0.36, 2.3), 'neck')
-    bone('jaw', (0, -0.34, 2.06), (0, -0.46, 2.0), 'head')
-    bone('rUpperArm', (-0.36, -0.10, 1.85), (-0.47, -0.12, 1.34), 'spine'); bone('rForearm', (-0.47, -0.12, 1.34), (-0.51, -0.20, 0.74), 'rUpperArm')
-    bone('rHand', (-0.51, -0.20, 0.74), (-0.52, -0.28, 0.32), 'rForearm'); bone('rHandTip', (-0.52, -0.28, 0.32), (-0.52, -0.3, 0.26), 'rHand')
-    bone('lStump', (0.25, -0.08, 1.82), (0.34, -0.06, 1.66), 'spine')
+    bone('hips', (0, 0.03, 1.22), (0, 0.0, 1.62)); bone('spine', (0, 0.0, 1.62), (0, -0.05, 2.15), 'hips')
+    bone('neck', (0, -0.08, 2.13), (0.01, -0.25, 2.23), 'spine'); bone('head', (0.01, -0.27, 2.24), (0.02, -0.36, 2.45), 'neck')
+    bone('jaw', (0.02, -0.33, 2.21), (0.02, -0.46, 2.15), 'head')
+    bone('rUpperArm', (-0.50, -0.06, 2.14), (-0.62, -0.14, 1.40), 'spine'); bone('rForearm', (-0.62, -0.14, 1.40), (-0.60, -0.30, 0.34), 'rUpperArm')
+    bone('rHand', (-0.60, -0.30, 0.34), (-0.60, -0.36, 0.06), 'rForearm'); bone('rHandTip', (-0.60, -0.36, 0.06), (-0.60, -0.40, 0.0), 'rHand')
+    bone('lStump', (0.28, -0.04, 2.04), (0.36, -0.03, 1.62), 'spine'); bone('lStumpFore', (0.36, -0.03, 1.62), (0.35, -0.13, 1.18), 'lStump')
     for s, sx in (('l', 1), ('r', -1)):
-        bone(s + 'Thigh', (sx * 0.17, 0.0, 1.0), (sx * 0.2, -0.08, 0.56), 'hips')
-        bone(s + 'Shin', (sx * 0.2, -0.08, 0.56), (sx * 0.2, 0.02, 0.1), s + 'Thigh')
-        bone(s + 'Foot', (sx * 0.2, 0.02, 0.08), (sx * 0.2, -0.17, 0.035), s + 'Shin')
-    LOW_VOX, HIGH_VOX, TARGET = 0.016, 0.0065, 15000
+        bone(s + 'Thigh', (sx * 0.2, 0.02, 1.2), (sx * 0.24, -0.10, 0.66), 'hips')
+        bone(s + 'Shin', (sx * 0.24, -0.10, 0.66), (sx * 0.25, 0.04, 0.12), s + 'Thigh')
+        bone(s + 'Foot', (sx * 0.25, 0.04, 0.10), (sx * 0.25, -0.20, 0.03), s + 'Shin')
+    LOW_VOX, HIGH_VOX, TARGET = 0.016, 0.0065, 22000
 
 # ============================================================ mesh from metaballs
 bpy.context.view_layer.objects.active = mbo; mbo.select_set(True); bpy.context.view_layer.update()
@@ -179,7 +206,7 @@ else:
     disp += 0.0018 * veins * (1 - wm)
     wr = np.abs(perlin(P * np.array([40, 40, 160])))
     disp -= 0.0012 * (1 - ss(0.0, 0.12, wr))
-    abs_ = (y < -0.1) & (z > 1.15) & (z < 1.55) & (np.abs(x) < 0.12)
+    abs_ = (y < -0.1) & (z > 1.36) & (z < 1.74) & (np.abs(x) < 0.12)
     disp -= 0.004 * abs_ * (1 - ss(0.0, 0.25, np.abs(np.sin(z * 2 * math.pi / 0.11)))) - 0.003 * abs_ * (np.abs(x) < 0.012)
 disp += 0.004 * wm * fbm(P, 3, scale=120.0) - 0.004 * wm
 setV(high, P + Nn * disp[:, None])
@@ -276,32 +303,39 @@ def cerberus_shade(P, Nn, ids):
 def bander_shade(P, Nn, ids):
     n = len(P); x, y, z = P[:, 0], P[:, 1], P[:, 2]
     lo = fbm(P, 3, scale=5.0); mid = fbm(P, 3, scale=30.0); hi = fbm(P, 2, scale=260.0)
-    base = np.array([0.25, 0.23, 0.22]) * (1 + 0.12 * lo[:, None] + 0.06 * mid[:, None])
-    col = mix3(base, np.array([0.17, 0.18, 0.22]), ss(0.1, 0.7, lo) * 0.6)         # cold blue-grey blotches
-    veins = 1 - ss(0.0, 0.05, np.abs(fbm(P * np.array([1, 1, 0.35]), 3, scale=9.0)))
-    col = mix3(col, np.array([0.08, 0.07, 0.15]), veins * 0.6)
-    bruise = ss(0.25, 0.75, fbm(P, 3, scale=3.5))
-    col = mix3(col, np.array([0.15, 0.08, 0.12]), bruise * 0.5)
-    # joints / creases darker, wet red-raw stump + wounds, bloody gums
+    # ochre-yellow skin, paler on raised masses, orange-red marbling along the veins, brown in the creases
+    base = np.array([0.60, 0.40, 0.11]) * (1 + 0.14 * lo[:, None] + 0.07 * mid[:, None])
+    col = mix3(base, np.array([0.76, 0.60, 0.24]), ss(0.15, 0.8, mid) * 0.45)
+    veins = 1 - ss(0.0, 0.06, np.abs(fbm(P * np.array([1, 1, 0.35]), 3, scale=9.0)))
+    fine = 1 - ss(0.0, 0.04, np.abs(fbm(P * np.array([1, 1, 0.5]), 3, scale=26.0)))
+    col = mix3(col, np.array([0.55, 0.14, 0.03]), veins * 0.75)
+    col = mix3(col, np.array([0.62, 0.24, 0.05]), fine * 0.45)
+    marb = ss(0.2, 0.75, fbm(P, 3, scale=3.5))
+    col = mix3(col, np.array([0.50, 0.22, 0.06]), marb * 0.45)
+    crease = ss(0.0, 0.35, -Nn[:, 2]) * 0.0 + ss(0.15, 0.6, np.abs(fbm(P, 2, scale=55.0))) * 0.0
     wm = wound_mask(P)
-    flesh = mix3(np.array([0.30, 0.03, 0.025]), np.array([0.09, 0.008, 0.006]), ss(-0.2, 0.5, fbm(P, 3, scale=70.0)))
-    col = mix3(col, np.array([0.26, 0.13, 0.11]), (ss(0.2, 0.5, wm) * (1 - ss(0.5, 0.8, wm))) * 0.6)
+    flesh = mix3(np.array([0.36, 0.05, 0.03]), np.array([0.12, 0.012, 0.008]), ss(-0.2, 0.5, fbm(P, 3, scale=70.0)))
+    col = mix3(col, np.array([0.35, 0.14, 0.05]), (ss(0.2, 0.5, wm) * (1 - ss(0.5, 0.8, wm))) * 0.6)
     col = mix3(col, flesh, ss(0.45, 0.7, wm))
-    gums = np.exp(-((z - 2.05) / 0.035) ** 2) * (y < -0.38) * (np.abs(x) < 0.09)
-    col = mix3(col, np.array([0.28, 0.035, 0.035]), gums * 0.9)
-    knuck = ss(0.45, 0.25, z) * (x < -0.4)
-    col = mix3(col, col * np.array([0.7, 0.62, 0.6]), knuck * 0.5)
-    blood = ss(0.4, 0.95, fbm(P, 3, scale=12.0)) * (0.4 + 0.6 * (x < -0.3))
-    col = mix3(col, np.array([0.14, 0.015, 0.012]), blood * 0.5)
-    rough = 0.42 + 0.12 * mid - 0.25 * ss(0.45, 0.7, wm) - 0.15 * gums - 0.15 * blood
-    h = -0.00003 * (1 - ss(0.0, 0.3, worley(P, 1600.0)[0])) + 0.00005 * veins
+    # face: darker sunken sockets, gums
+    head = (z > 2.12) & (y < -0.28)
+    gums = np.exp(-((z - 2.19) / 0.03) ** 2) * (y < -0.42) * (np.abs(x - 0.02) < 0.08)
+    col = mix3(col, np.array([0.38, 0.07, 0.04]), gums * 0.9)
+    sock = head * np.exp(-((z - 2.297) / 0.03) ** 2) * np.exp(-((np.abs(x - 0.02) - 0.038) / 0.03) ** 2)
+    col = mix3(col, np.array([0.16, 0.06, 0.02]), np.clip(sock, 0, 1) * 0.8)
+    knuck = ss(0.3, 0.05, z) * (x < -0.45)
+    col = mix3(col, col * np.array([0.62, 0.5, 0.42]), knuck * 0.6)
+    blood = ss(0.45, 0.95, fbm(P, 3, scale=12.0)) * (0.3 + 0.7 * (x < -0.3))
+    col = mix3(col, np.array([0.2, 0.025, 0.015]), blood * 0.4)
+    rough = 0.34 + 0.1 * mid - 0.25 * ss(0.45, 0.7, wm) - 0.15 * gums - 0.12 * veins
+    h = -0.00003 * (1 - ss(0.0, 0.3, worley(P, 1600.0)[0])) + 0.00007 * veins + 0.00003 * fine
     metal = np.zeros(n, np.float32)
     tm = ids == 1
     if np.any(tm):
-        col[tm] = mix3(np.array([0.58, 0.52, 0.38]), np.array([0.25, 0.14, 0.06]), ss(0.0, 0.9, fbm(P, 2, scale=300.0)) * 0.7)[tm]; rough[tm] = 0.3
+        col[tm] = mix3(np.array([0.62, 0.55, 0.36]), np.array([0.3, 0.17, 0.06]), ss(0.0, 0.9, fbm(P, 2, scale=300.0)) * 0.7)[tm]; rough[tm] = 0.3
     em = ids == 2
     if np.any(em):
-        col[em] = np.array([0.62, 0.58, 0.5]) * (0.9 + 0.2 * hi[em, None]); rough[em] = 0.06
+        col[em] = np.array([0.7, 0.62, 0.42]) * (0.9 + 0.2 * hi[em, None]); rough[em] = 0.05
     return col, np.clip(rough, 0.06, 1), metal, h
 
 def build_set(o, name, size, shade, high_obj, ao_size=1024, ao_dist=0.08, extrusion=0.006, ray=0.02, bump=1.0):
@@ -328,7 +362,7 @@ def build_set(o, name, size, shade, high_obj, ao_size=1024, ao_dist=0.08, extrus
 for o in bpy.data.objects:
     if o.type == 'MESH': o.hide_render = True
 body.hide_render = False
-sz = 1.0 if CV == 'cerberus' else 2.4
+sz = 1.0 if CV == 'cerberus' else 2.9
 build_set(body, CV, Q, cerberus_shade if CV == 'cerberus' else bander_shade, high, 1024, 0.06 * sz, 0.006 * sz, 0.016 * sz)
 
 # ============================================================ export
