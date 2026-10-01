@@ -21,14 +21,15 @@ def _wl(name, prof, u, m, x, segs):
     o.rotation_euler = (math.pi / 2, 0, 0); apply_transform(o)   # local Z → -Y (forward)
     P = V(o); P[:, 1] *= 1; setV(o, P)
     o.location = (x, 0, u); apply_transform(o); return o
-def done(name, parts, muzzle):
+def done(name, parts, muzzle, extra=()):
     o = join([p for p in parts if p is not None], name)
     try:
         wn = o.modifiers.new('wn', 'WEIGHTED_NORMAL'); wn.keep_sharp = True; apply_modifier(o, 'wn')
     except Exception: pass
     e = bpy.data.objects.new('muzzle', None); link(e); e.location = W(*muzzle); e.parent = o
-    print(name, 'tris', tri_count(o))
-    export_glb(f'{OUT_GLB}/{name}.glb', [o, e], {'export_tangents': False})
+    for x in extra: x.parent = o
+    print(name, 'tris', tri_count(o) + sum(tri_count(x) for x in extra))
+    export_glb(f'{OUT_GLB}/{name}.glb', [o, e, *extra], {'export_tangents': False})
     return o
 
 def mats():
@@ -193,40 +194,97 @@ def linear():
     done('weapon_linear', P, (0.64, 0.026))
 
 # ------------------------------------------------------------------ Steve's gold Luger P08 (one of a pair)
+def pivot(o, f, u, name):
+    """re-origin a part at the (f, u) hinge so the game can animate it; returned as a separate exported node"""
+    o.name = name; P = V(o); c = np.array(W(f, u)); setV(o, P - c); o.location = Vector(c); return o
+def scroll(name, cx, cf, cu, r, turns, m, sx=1, a0=0.0, rr=0.00035):
+    """engraved arabesque: a small raised spiral with a tail on the X = cx surface"""
+    pts = []
+    n = int(10 * turns) + 4
+    for i in range(n):
+        t = i / (n - 1); a = a0 + t * turns * 2 * math.pi; rad = r * (0.25 + 0.75 * t)
+        pts.append(Vector((cx, -(cf + rad * math.cos(a)), cu + rad * math.sin(a) * sx)))
+    return tube(name, pts, rr, m, res=2, bev_res=1)
 def luger():
     M = mats(); P = []
     gold = mat('w_gold', (1.0, 0.74, 0.32), 0.22, 1.0, noise=0.15)
     gold2 = mat('w_gold_dark', (0.62, 0.42, 0.14), 0.35, 1.0)
-    ivory = mat('w_ivory', (0.86, 0.84, 0.78), 0.38, 0.0, coat=0.5, noise=0.25)
+    goldp = mat('w_gold_pol', (1.0, 0.8, 0.42), 0.12, 1.0)
+    ivory = mat('w_ivory', (0.8, 0.75, 0.64), 0.4, 0.0, coat=0.5, noise=0.3)
+    inlay = mat('w_ivory_ink', (0.32, 0.25, 0.16), 0.5, 0.0)
     M['ivory'] = ivory; M['blued'] = gold
-    # barrel + front sight + muzzle crown
-    P.append(wcyl('barrel', 0.0082, 0.07, 0.178, 0.024, gold, verts=24, r2=0.0072))
-    P.append(wcyl('bore', 0.0045, 0.177, 0.1795, 0.024, M['dark'], verts=16, bev=0))
-    P.append(wprism('fsight', [(0.162, 0.03), (0.172, 0.03), (0.17, 0.038), (0.165, 0.038)], 0.0035, gold, bev=0.0006))
-    P.append(wcyl('bring', 0.0105, 0.068, 0.078, 0.024, gold2, verts=24))
-    # receiver / barrel extension + frame
-    P.append(wprism('receiver', [(-0.045, 0.012), (0.07, 0.012), (0.07, 0.034), (0.0, 0.036), (-0.045, 0.036)], 0.021, gold, bev=0.0015))
-    P.append(wprism('frame', [(-0.04, -0.006), (0.07, -0.006), (0.075, 0.012), (-0.045, 0.014)], 0.024, gold, bev=0.0018))
-    # toggle-lock: links + knurled knobs
-    P.append(wbox('toggle1', -0.04, -0.005, 0.034, 0.045, 0.014, gold, bev=0.0012))
-    P.append(wbox('toggle2', -0.062, -0.04, 0.036, 0.047, 0.014, gold, bev=0.0012))
+    # ---- barrel: stepped shank, tapered tube, crowned muzzle, front sight on a dovetail base
+    P.append(_wl('barrel', [(0.0001, 0.068), (0.0104, 0.068), (0.0104, 0.084), (0.0086, 0.088), (0.0074, 0.172), (0.0069, 0.1785), (0.0046, 0.1785), (0.0046, 0.172)], 0.024, gold, 0, 28))
+    P.append(wcyl('bore', 0.0045, 0.17, 0.1788, 0.024, M['dark'], verts=16, bev=0))
+    P.append(wcyl('bring', 0.0108, 0.076, 0.08, 0.024, goldp, verts=28, bev=0.0003))
+    P.append(wbox('fsbase', 0.158, 0.172, 0.029, 0.0325, 0.006, gold, bev=0.0006))
+    P.append(wprism('fsight', [(0.161, 0.032), (0.17, 0.032), (0.168, 0.0395), (0.1645, 0.0395)], 0.0022, goldp, bev=0.0004))
+    # ---- barrel extension (receiver): fork with side walls the toggle sits between
     for sx in (1, -1):
-        P.append(cyl('knob', 0.0085, 0.008, (sx * 0.011, 0.04, 0.043), gold2, rot=(0, math.pi / 2, 0), verts=20, bev=0.0008))
-        for i in range(8):
-            a = i * math.pi / 4
-            P.append(wbox('knurl', -0.04 + 0.0086 * math.cos(a) - 0.0012, -0.04 + 0.0086 * math.cos(a) + 0.0012, 0.043 + 0.0086 * math.sin(a) - 0.0012, 0.043 + 0.0086 * math.sin(a) + 0.0012, 0.009, gold, x=sx * 0.011, bev=0.0003))
-    P.append(wprism('rsight', [(-0.064, 0.044), (-0.054, 0.044), (-0.055, 0.052), (-0.063, 0.052)], 0.008, gold, bev=0.0006))
-    # raked grip with white engraved grips + gold frame strap
+        P.append(wprism('rwall', [(-0.052, 0.012), (0.068, 0.012), (0.068, 0.033), (0.04, 0.035), (-0.03, 0.036), (-0.052, 0.034)], 0.0032, gold, bev=0.0006, x=sx * 0.0086))
+    P.append(wbox('rfloor', -0.052, 0.068, 0.012, 0.018, 0.0204, gold, bev=0.001))
+    P.append(wbox('rring', 0.058, 0.068, 0.012, 0.036, 0.021, goldp, bev=0.0012))
+    # ---- frame: forward frame under the extension, dished front, trigger guard, side plate
+    P.append(wprism('frame', [(-0.058, -0.006), (0.052, -0.006), (0.064, 0.0), (0.07, 0.008), (0.07, 0.012), (-0.058, 0.014)], 0.0236, gold, bev=0.0016))
+    P.append(tube('guard', [W(0.034, 0.0), W(0.03, -0.018), W(0.012, -0.03), W(-0.008, -0.03), W(-0.02, -0.022), W(-0.026, -0.006)], 0.0026, gold))
+    P.append(tube('trig', [W(0.002, -0.004), W(0.008, -0.012), W(0.006, -0.022), W(0.001, -0.026)], 0.0024, goldp))
+    P.append(wbox('sideplate', -0.026, 0.046, -0.002, 0.011, 0.0012, gold2, x=0.0124, bev=0.0003))
+    P.append(cyl('tdlever', 0.0032, 0.003, (0.0128, -0.05, 0.004), goldp, rot=(0, math.pi / 2, 0), verts=14, bev=0.0004))
+    P.append(wbox('safety', -0.054, -0.038, 0.005, 0.012, 0.0028, goldp, x=-0.0128, bev=0.0005))
+    P.append(cyl('safeknob', 0.0026, 0.004, (-0.014, 0.052, 0.009), goldp, rot=(0, math.pi / 2, 0), verts=12, bev=0.0004))
+    for f in (-0.03, 0.03): P.append(cyl('pin', 0.0016, 0.0254, (0, -f, 0.006), goldp, rot=(0, math.pi / 2, 0), verts=10))
+    # ---- raked grip: frame straps, ivory panels with chequering inside a plain border, mag base + lanyard loop
     rk = math.tan(math.radians(36)); h = 0.1
-    P.append(wprism('gripframe', [(-0.06, 0.002), (0.0, 0.002), (-0.006 - h * rk, -h), (-0.062 - h * rk, -h)], 0.024, gold, bev=0.002, seg=2))
-    P.append(wprism('grips', [(-0.054, -0.008), (-0.01, -0.008), (-0.013 - 0.087 * rk, -0.094), (-0.056 - 0.087 * rk, -0.094)], 0.031, ivory, bev=0.003, seg=3))
-    P.append(wbox('magbase', -0.064 - h * rk, -0.004 - h * rk, -0.11, -h + 0.002, 0.022, gold2, bev=0.002))
-    P.append(wcyl('lanyard', 0.003, -0.056 - h * rk, -0.05 - h * rk, -0.098, gold2, verts=10)) if False else None
-    # side plate + safety lever + engraving bosses
-    for sx in (1, -1): P.append(wbox('sideplate', -0.03, 0.05, 0.0, 0.01, 0.002, gold2, x=sx * 0.0125, bev=0.0004))
-    P.append(wbox('safety', -0.05, -0.038, 0.004, 0.012, 0.004, gold2, x=-0.014, bev=0.0006))
-    trigger(M, P, f=0.002, u=-0.004)
-    done('weapon_luger', P, (0.18, 0.024))
+    P.append(wprism('gripframe', [(-0.062, 0.002), (0.0, 0.002), (-0.006 - h * rk, -h), (-0.064 - h * rk, -h)], 0.0236, gold, bev=0.0022, seg=2))
+    gp = [(-0.054, -0.008), (-0.01, -0.008), (-0.013 - 0.087 * rk, -0.094), (-0.056 - 0.087 * rk, -0.094)]
+    for sx in (1, -1):
+        P.append(wprism('grip', gp, 0.0045, ivory, bev=0.0014, seg=3, x=sx * 0.0128))
+        for iu in range(22):
+            u = -0.014 - iu * 0.0035
+            fa = -0.051 + u * rk * 0.97; fb = -0.014 + u * rk * 0.97
+            nf = int((fb - fa) / 0.0035)
+            for jf in range(nf):
+                f = fa + 0.002 + jf * 0.0035 + (0.00175 if iu % 2 else 0)
+                if f > fb - 0.002: continue
+                c = Vector((sx * 0.0152, -f, u))
+                P.append(cyl('chq', 0.0013, 0.0008, tuple(c), ivory, rot=(0, math.pi / 2, math.pi / 4), verts=4, r2=0.0002))
+        # dark-inlaid scroll on the upper panel (engraved ivory)
+        P.append(scroll('iscroll', sx * 0.0151, -0.03 - 0.012 * rk, -0.012, 0.0045, 1.4, inlay, sx))
+    P.append(wbox('magbase', -0.066 - h * rk, -0.004 - h * rk, -0.111, -h + 0.002, 0.0216, gold2, bev=0.002))
+    P.append(cyl('magknob', 0.0042, 0.0236, (0, 0.035 + h * rk, -0.106), goldp, rot=(0, math.pi / 2, 0), verts=14, bev=0.0006))
+    P.append(torus('lanyard', 0.0045, 0.0011, tuple(W(-0.064 - 0.085 * rk, -0.085, 0)), goldp, rot=(0, math.pi / 2, 0), maj=14, mnr=5))
+    # ---- engraving: scrolls over the receiver walls, side plate and frame (raised arabesques)
+    for sx in (1, -1):
+        X = sx * 0.0103
+        for k in range(9):                                   # vine of small alternating curls along the receiver wall
+            cf = -0.046 + k * 0.0135; cu = 0.0255 + (0.003 if k % 2 else -0.003)
+            P.append(scroll('escroll', X, cf, cu, 0.0034, 1.5, goldp, sx if k % 2 else -sx, a0=k * 1.7, rr=0.00028))
+        P.append(tube('evine', [Vector((X, -(-0.05 + i * 0.0058), 0.0255 + 0.0032 * math.sin(i * 1.15))) for i in range(21)], 0.00026, goldp, res=2, bev_res=1))
+        Xf = sx * (0.0132 if sx > 0 else 0.0120)
+        for k in range(6):
+            cf = -0.044 + k * 0.016; cu = 0.0045 + (0.0018 if k % 2 else -0.0018)
+            P.append(scroll('fscroll', Xf, cf, cu, 0.0028, 1.4, goldp, -sx if k % 2 else sx, a0=2.3 * k, rr=0.00026))
+        P.append(scroll('gscroll', sx * 0.0122, -0.05 - 0.05 * rk, -0.05, 0.0038, 1.0, goldp, sx))
+    # ---- toggle-lock (separate animated nodes): rear link on the frame axle, front link, breech block
+    R = (-0.062, 0.035); K = (-0.036, 0.040); B = (-0.004, 0.035)
+    tr = [wprism('trl', [(R[0] - 0.004, R[1] - 0.004), (K[0], K[1] - 0.005), (K[0] + 0.002, K[1] + 0.005), (R[0] - 0.002, R[1] + 0.006)], 0.0136, gold, bev=0.0012)]
+    tr.append(wprism('rsight', [(-0.062, 0.04), (-0.054, 0.042), (-0.055, 0.048), (-0.061, 0.047)], 0.006, goldp, bev=0.0005))
+    for sx in (1, -1):
+        tr.append(cyl('knob', 0.0088, 0.0072, (sx * 0.0112, -K[0], K[1]), goldp, rot=(0, math.pi / 2, 0), verts=24, bev=0.0008))
+        for i in range(14):
+            a = i * 2 * math.pi / 14
+            tr.append(wbox('knurl', K[0] + 0.0089 * math.cos(a) - 0.0009, K[0] + 0.0089 * math.cos(a) + 0.0009, K[1] + 0.0089 * math.sin(a) - 0.0009, K[1] + 0.0089 * math.sin(a) + 0.0009, 0.0068, gold2, x=sx * 0.0112, bev=0.0003))
+    tr.append(wcyl('axle', 0.0028, -0.002, 0.002, 0, goldp)) if False else None
+    tr.append(cyl('axle', 0.0026, 0.0226, (0, -R[0], R[1]), goldp, rot=(0, math.pi / 2, 0), verts=12))
+    tog_r = pivot(join(tr, 'tog_r'), R[0], R[1], 'toggle_r')
+    tf = [wprism('tfl', [(K[0] - 0.002, K[1] - 0.004), (B[0], B[1] - 0.003), (B[0], B[1] + 0.003), (K[0], K[1] + 0.005)], 0.012, gold, bev=0.0012)]
+    tf.append(cyl('kpin', 0.0024, 0.0146, (0, -K[0], K[1]), goldp, rot=(0, math.pi / 2, 0), verts=12))
+    tog_f = pivot(join(tf, 'tog_f'), K[0], K[1], 'toggle_f')
+    br = [wbox('breech', B[0] - 0.002, 0.056, 0.019, 0.0355, 0.0138, gold, bev=0.001)]
+    br.append(wbox('extractor', 0.006, 0.05, 0.0355, 0.0375, 0.004, goldp, bev=0.0005))
+    br.append(cyl('bpin', 0.0024, 0.0146, (0, -B[0], B[1]), goldp, rot=(0, math.pi / 2, 0), verts=12))
+    brc = pivot(join(br, 'brc'), B[0], B[1], 'breech')
+    done('weapon_luger', P, (0.18, 0.024), extra=[tog_r, tog_f, brc])
 
 for k, fn in [('luger', luger), ('m3', m3), ('mp5', mp5), ('python', python), ('gl', gl), ('bowgun', bowgun), ('linear', linear)]:
     if ONLY and k not in ONLY: continue

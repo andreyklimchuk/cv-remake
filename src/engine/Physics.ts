@@ -13,6 +13,8 @@ export interface Collider {
   tag: string;
   /** true = blocks bullets & sight (walls). false = only blocks movement (e.g. low fences, fire) */
   blocksRays: boolean;
+  /** closed but unlocked doors: the nav graph paths through them (agents push them open) */
+  navPass?: boolean;
 }
 
 export interface RayHit {
@@ -193,7 +195,7 @@ export class PhysicsWorld implements ICollisionWorld {
       best = { distance: t, point: origin.clone().addScaledVector(dir, t), normal: new THREE.Vector3(nx, ny, nz), collider: null };
     }
     for (const c of this.colliders) {
-      if (!c.enabled || (!c.blocksRays && !includeNonBlocking)) continue;
+      if (!c.enabled || (!c.blocksRays && !includeNonBlocking) || (this.navQuery && c.navPass)) continue;
       let tmin = 0, tmax = bestT;
       let axisHit = -1, signHit = 0;
       let ok = true;
@@ -232,7 +234,12 @@ export class PhysicsWorld implements ICollisionWorld {
   }
 
   /** Clearance-aware walkability test used by the nav graph (three parallel rays at knee height). */
+  private navQuery = false;
   walkable(a: THREE.Vector3, b: THREE.Vector3, radius: number): boolean {
+    this.navQuery = true;
+    try { return this.walkable0(a, b, radius); } finally { this.navQuery = false; }
+  }
+  private walkable0(a: THREE.Vector3, b: THREE.Vector3, radius: number): boolean {
     const dir = new THREE.Vector3(b.x - a.x, 0, b.z - a.z);
     const d = dir.length();
     if (d < 1e-4) return true;

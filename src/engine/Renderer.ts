@@ -5,6 +5,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
+import { NO_AO } from './RenderFlags';
 import { QUALITY, type QualityLevel, type QualityPreset } from './Quality';
 
 /** Capabilities other modules can query (custom GLSL is unavailable on the WebGPU path). */
@@ -108,6 +109,12 @@ export class RenderBackend {
     if (p.ambientOcclusion) {
       const ao = new GTAOPass(this.scene, this.camera, w, h);
       ao.blendIntensity = 0.8;
+      const aoRender = ao.render.bind(ao);
+      ao.render = (...args: Parameters<GTAOPass['render']>) => {
+        const hid: THREE.Object3D[] = [];
+        for (const o of NO_AO) if (o.visible) { o.visible = false; hid.push(o); }
+        try { aoRender(...args); } finally { for (const o of hid) o.visible = true; }
+      };
       composer.addPass(ao);
     }
     if (p.bloom) {

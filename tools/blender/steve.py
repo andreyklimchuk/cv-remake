@@ -53,6 +53,11 @@ body0 = dup(male, 's_body_l0'); body0.modifiers.remove(body0.modifiers[0])
 body = male; body.modifiers[0].levels = 1; apply_modifier(body, body.modifiers[0].name)
 body.name = 'steve_body'; shade_smooth(body)
 for o in (body, body0, high): slim(o)
+# CV likeness: reshape the face (same smooth field on every LOD so weights/UVs stay valid)
+import faceshape
+_ez = V(eL).mean(0)[2] - 0.16
+_P = V(body); _L = faceshape.landmarks(_P[_P[:, 2] > _ez], V(eL).mean(0), V(eR).mean(0))
+faceshape.apply([body, body0, high], _L, faceshape.STEVE, lambda Q: Q[:, 2] > _ez)
 for o in (body, body0, high, eL, eR):
     o.location = o.location * S + Vector((0, 0, SOLE)); o.scale = (S, S, S); apply_transform(o)
 joints = {k: Vector(v) * S + Vector((0, 0, SOLE)) for k, v in jm.items()}
@@ -289,9 +294,9 @@ def add_card(path, widths, normals, variant):
         tng = (path[min(i + 1, n - 1)] - path[max(i - 1, 0)]).normalized()
         side = normals[i].cross(tng).normalized() * widths[i] * 0.5; v = i / (n - 1)
         lift = normals[i] * widths[i] * 0.22
-        verts.append(path[i] - side); uvs.append((u0 + 0.004, 1 - v * 0.98))
-        verts.append(path[i] + lift); uvs.append((um, 1 - v * 0.98))
-        verts.append(path[i] + side); uvs.append((u1 - 0.004, 1 - v * 0.98))
+        verts.append(path[i] - side); uvs.append((u0 + 0.004, 1 - v * 0.9))
+        verts.append(path[i] + lift); uvs.append((um, 1 - v * 0.9))
+        verts.append(path[i] + side); uvs.append((u1 - 0.004, 1 - v * 0.9))
     for i in range(n - 1):
         a = base + 3 * i; faces.append((a, a + 1, a + 4, a + 3)); faces.append((a + 1, a + 2, a + 5, a + 4))
 def slerp_dir(a, b, t):
@@ -301,25 +306,36 @@ def slerp_dir(a, b, t):
 def dir_of(az_, el_):
     ar, er = math.radians(az_), math.radians(el_); return Vector((math.sin(ar) * math.cos(er), -math.cos(ar) * math.cos(er), math.sin(er)))
 count = 0
-# centre-parted curtain: roots along the part line, strands sweep to the sides and down
-for layer, offl in enumerate((0.0045, 0.0075, 0.0105, 0.0138)):
-    for k in range(175):
-        u = rnd.random(); s = rnd.choice((-1, 1))
+# CV Steve: side part shifted to his left (+X); a long asymmetric fringe sweeps across the forehead and falls over his
+# right eye (-X), the short side is swept back over the left ear; crown/back strands layered for volume.
+_ez = float(joints['lEye'].z)
+_bz = (np.abs(Pb[:, 0]) < 0.06) & (Pb[:, 2] > _ez - 0.01) & (Pb[:, 2] < _ez + 0.035)
+browY = float(Pb[_bz, 1].min())                        # front-most point of brow/eyes: fringe must stay in front of it
+for layer, offl in enumerate((0.0045, 0.0072, 0.0100, 0.0130, 0.0165)):
+    for k in range(190):
+        u = rnd.random(); s = -1 if rnd.random() < 0.62 else 1
         phi = 44 + u * 118                                 # front hairline -> crown/back
-        root_dir = Vector((s * 0.04, -math.cos(math.radians(phi)), math.sin(math.radians(phi))))
+        px = 0.30 * (1 - 0.75 * min(1, u * 1.4)) + s * rnd.uniform(0, 0.05)    # part line drifts to centre at the crown
+        root_dir = Vector((px, -math.cos(math.radians(phi)), math.sin(math.radians(phi))))
         end_az = s * (30 + 140 * u ** 0.8 + rnd.uniform(-8, 8)); end_el = -4 - 34 * u ** 0.7 + rnd.uniform(-5, 4)
-        if u < 0.30:                                                                   # curtain fringe over the brows / temples
-            end_az = s * rnd.uniform(14, 58); end_el = 22 - 0.42 * abs(end_az) + rnd.uniform(-4, 3)
+        fr = 0.0
+        if u < 0.34 and s < 0:                             # long fringe: across the forehead, tips at eye level
+            end_az = rnd.uniform(-48, 12); end_el = (9 + 0.7 * (end_az + 15) if end_az > -15 else 9 + 0.3 * (-15 - end_az)) + rnd.uniform(-3, 3); fr = 1.0
+        elif u < 0.30:                                     # short side: swept back over the temple
+            end_az = rnd.uniform(38, 80); end_el = rnd.uniform(12, 26)
+        elif s > 0:                                        # short side, rest: tucked closer behind the ear
+            end_el -= 4; end_az = min(end_az, 175)
+        if 55 < abs(end_az) < 125 and not fr: end_el = max(end_el, 4 + rnd.uniform(0, 6))   # stay above the ear (no clumps)
         end_dir = dir_of(end_az, end_el)
         pts, nrs = [], []
         nseg = 17
         for i in range(nseg + 1):
             t = i / nseg; dd = slerp_dir(root_dir, end_dir, t)
-            p, nr = surf(dd, offl + 0.010 * math.sin(t * math.pi) * (1 - 0.4 * t) + 0.004 * t)
+            p, nr = surf(dd, offl + 0.010 * math.sin(t * math.pi) * (1 - 0.4 * t) + (0.004 + 0.013 * fr * t + 0.003 * (layer == 4)) * t)
             pts.append(p); nrs.append(nr)
         # tips fall a bit more vertically
-        for i in range(nseg - 2, nseg + 1): pts[i] = pts[i] + Vector((0, 0, -0.012 * (i - nseg + 3) / 3))
-        w = rnd.uniform(0.016, 0.028) * (1.15 if layer == 3 else 1.0)
+        for i in range(nseg - 2, nseg + 1): pts[i] = pts[i] + Vector((0, 0, -(0.016 if fr else 0.012) * (i - nseg + 3) / 3))
+        w = rnd.uniform(0.016, 0.028) * (1.15 if layer >= 3 else 1.0) * (1.1 if fr else 1.0)
         add_card(pts, [w * (1 - 0.55 * (i / nseg) ** 2) for i in range(nseg + 1)], nrs, rnd.randrange(4)); count += 1
 cards = mesh_from('hair_cards', verts, faces)
 ulc = cards.data.uv_layers.new(name='UVMap')
@@ -388,12 +404,13 @@ def skin_shade(P, Nn):
     brows = np.zeros(n, np.float32)
     for sx, E in ((1, EL), (-1, ER)):
         xl = x * sx; t = (xl - 0.010) / 0.054
-        zc = E[2] + 0.018 + 0.004 * np.sin(np.clip(t, 0, 1) * math.pi * 0.85) - 0.002 * np.clip(t, 0, 1)
-        thick = 0.0068 * (1 - 0.5 * np.clip(t, 0, 1)) + 0.001
-        m = (1 - ss(thick * 0.6, thick, np.abs(z - zc))) * ss(-0.05, 0.02, t) * (1 - ss(0.92, 1.05, t)) * (Nn[:, 1] < -0.2) * (y < E[1] + 0.02)
-        streak = ss(-0.1, 0.5, perlin(np.stack([xl * 900 - z * 300, z * 2500, y * 50], 1)))
-        brows = np.maximum(brows, m * (0.4 + 0.6 * streak))
-    col = mix3(col, np.array([0.09, 0.035, 0.018]), brows * 0.9)
+        tc = np.clip(t, 0, 1)
+        zc = E[2] + 0.0155 + 0.0045 * np.sin(tc * math.pi * 0.8) - 0.0035 * tc ** 2     # thin, gently arched, tapering
+        thick = 0.0042 * (1 - 0.6 * tc) + 0.0009
+        m = (1 - ss(thick * 0.35, thick, np.abs(z - zc))) * ss(-0.06, 0.06, t) * (1 - ss(0.85, 1.02, t)) * (Nn[:, 1] < -0.2) * (y < E[1] + 0.02)
+        streak = ss(-0.2, 0.45, perlin(np.stack([xl * 330 - z * 260, z * 4200 + xl * 900, y * 60], 1)))
+        brows = np.maximum(brows, m * (0.5 + 0.5 * streak))
+    col = mix3(col, np.array([0.13, 0.045, 0.02]), brows * 0.92)
     liner = np.zeros(n, np.float32)
     for E in (EL, ER):
         rel = P - E; d_ = np.linalg.norm(rel, axis=1); elv = np.degrees(np.arctan2(rel[:, 2], -rel[:, 1]))
@@ -562,15 +579,30 @@ def strand(x0, r0, r1, amp, freq, ph, width, col_s, alpha_s, wrap=None, taper=Tr
     for dx in range(-3, 4):
         xi = np.floor(xc).astype(int) + dx
         w = np.exp(-((xi + 0.5 - xc) / (width * 0.6)) ** 2)
-        a = alpha_s * w * ((1 - ss(0.75, 1.0, 1 - t)) if taper else 1)
+        a = alpha_s * w * ((1 - ss(0.88, 1.0, 1 - t)) if taper else 1)
         if wrap: xi = wrap[0] + (xi - wrap[0]) % (wrap[1] - wrap[0])
         ok = (xi >= 0) & (xi < HS); ri, xi_, a_ = rr[ok], xi[ok], a[ok]
         cc = col_s[None, :] * (0.55 + 0.6 * t[ok])[:, None]
         acc[ri, xi_] = acc[ri, xi_] * (1 - a_[:, None]) + cc * a_[:, None]; alpha[ri, xi_] = 1 - (1 - alpha[ri, xi_]) * (1 - a_)
+# opaque core under the strands: cards stay solid under mip-mapping/alpha test (sparse strands alone vanish at a
+# distance -> see-through hair); only the card edges and the staggered tips are wispy
+_xf = (np.arange(128) + 0.5) / 128; _rf = (rows + 0.5) / HS
+for vi in range(4):
+    xa = 512 + vi * 128
+    _p1, _p2, _k1, _k2 = rng.uniform(0, 6.28), rng.uniform(0, 6.28), rng.uniform(6, 14), rng.uniform(6, 14)
+    ex = ss(0.02, 0.22, _xf[None, :] + 0.07 * np.sin(_rf[:, None] * _k1 + _p1)) * ss(0.02, 0.22, 1 - _xf[None, :] + 0.07 * np.sin(_rf[:, None] * _k2 + _p2))
+    ey = ss(0.02 + 0.04 * rng.uniform(), 0.13, _rf)
+    _tip = np.convolve(rng.uniform(0.0, 0.16, 132) ** 1.4 * 1.6, np.ones(3) / 3, 'same')[2:130]   # jagged strand ends per column
+    stag = ss(0.0, 0.03, _rf[:, None] - _tip[None, :])
+    a_ = ey[:, None] * ex * stag * 0.98
+    lum = 0.12 + 0.75 * np.convolve(rng.uniform(0, 1, 140), np.ones(2) / 2, 'same')[:128] ** 1.3
+    c_ = (dark[None, None, :] + (light - dark)[None, None, :] * lum[None, :, None]) * (0.6 + 0.5 * _rf)[:, None, None]
+    acc[:, xa:xa + 128] = acc[:, xa:xa + 128] * (1 - a_[..., None]) + c_ * a_[..., None]
+    alpha[:, xa:xa + 128] = 1 - (1 - alpha[:, xa:xa + 128]) * (1 - a_)
 for vi in range(4):
     xa = 512 + vi * 128
     for k in range(170):
-        L = rng.uniform(0.55, 1.0); r1 = HS; r0 = int(HS - L * HS * 0.98)
+        L = rng.uniform(0.82, 1.0); r1 = HS; r0 = int(HS - L * HS * 0.98)
         strand(xa + rng.uniform(6, 122), r0, r1, rng.uniform(0.5, 3.0), rng.uniform(0.004, 0.02), rng.uniform(0, 6.28), rng.uniform(1.0, 2.3), dark + (light - dark) * rng.uniform(0.1, 0.9), rng.uniform(0.6, 1.0))
 r_cap0 = int(0.08 * HS)
 acc[r_cap0:, :512] = (dark * 0.9)[None, None, :]; alpha[r_cap0:, :512] = 1.0

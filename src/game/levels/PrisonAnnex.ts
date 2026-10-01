@@ -30,6 +30,47 @@ export function doorLeaf(alongZ: boolean, width: number, height: number, fallbac
   return leaf;
 }
 
+/** Real-world single door size (RE-Engine scale: a 1.7 m character reaches ~80 % of the leaf). */
+export const DOOR_W = 0.95, DOOR_H = 2.12;
+const frameMat = new THREE.MeshStandardMaterial({ color: 0x2a2c2e, metalness: 0.55, roughness: 0.5 });
+
+/**
+ * Single hinged door sized like a real door inside a wider wall opening (`x,z` = start corner of the opening on
+ * the wall plane, the opening runs +Z when `alongZ`, else +X). The leaf is centred (so nav paths through the
+ * opening centre stay valid); the rest of the opening is filled with wall panels + a steel frame (casing).
+ */
+export function singleDoor(G: THREE.Object3D, physics: LevelContext['physics'], o: {
+  x: number; z: number; y?: number; alongZ: boolean; openW: number; openH: number; thick?: number;
+  leafMat: THREE.Material; fillMat: THREE.Material;
+}): { pivot: THREE.Group; col: ReturnType<LevelContext['physics']['addMinMax']>; center: THREE.Vector3 } {
+  const y = o.y ?? 0, W = Math.min(DOOR_W, o.openW), H = Math.min(DOOR_H, o.openH), side = (o.openW - W) / 2, t = o.thick ?? 0.3;
+  const at = (a: number, py: number) => (o.alongZ ? new THREE.Vector3(o.x, py, o.z + a) : new THREE.Vector3(o.x + a, py, o.z));
+  const block = (a0: number, a1: number, y0: number, y1: number, th: number, mat: THREE.Material, collide: boolean) => {
+    const len = a1 - a0, hgt = y1 - y0; if (len < 0.01 || hgt < 0.01) return;
+    const m = new THREE.Mesh(o.alongZ ? new THREE.BoxGeometry(th, hgt, len) : new THREE.BoxGeometry(len, hgt, th), mat);
+    m.position.copy(at((a0 + a1) / 2, y + (y0 + y1) / 2)); m.castShadow = true; m.receiveShadow = true; G.add(m);
+    if (collide) {
+      const c = at(a0, 0), d = at(a1, 0);
+      if (o.alongZ) physics.addMinMax(o.x - th / 2, c.z, o.x + th / 2, d.z, y + y0, y + y1, 'wall', true);
+      else physics.addMinMax(c.x, o.z - th / 2, d.x, o.z + th / 2, y + y0, y + y1, 'wall', true);
+    }
+  };
+  // wall panels beside / above the door
+  block(0, side - 0.04, 0, o.openH, t + 0.01, o.fillMat, true);
+  block(side + W + 0.04, o.openW, 0, o.openH, t + 0.01, o.fillMat, true);
+  block(side - 0.04, side + W + 0.04, H + 0.05, o.openH, t + 0.01, o.fillMat, false);
+  // steel casing (jambs + head), slightly proud of the wall
+  block(side - 0.06, side, 0, H + 0.06, t + 0.06, frameMat, true);
+  block(side + W, side + W + 0.06, 0, H + 0.06, t + 0.06, frameMat, true);
+  block(side - 0.06, side + W + 0.06, H, H + 0.07, t + 0.06, frameMat, false);
+  const pivot = new THREE.Group(); pivot.position.copy(at(side, y));
+  pivot.add(doorLeaf(o.alongZ, W - 0.01, H - 0.01, o.leafMat)); G.add(pivot);
+  const a = at(side, 0), b = at(side + W, 0);
+  const col = o.alongZ ? physics.addMinMax(o.x - 0.12, a.z, o.x + 0.12, b.z, y, y + H, 'door', true)
+    : physics.addMinMax(a.x, o.z - 0.12, b.x, o.z + 0.12, y, y + H, 'door', true);
+  return { pivot, col, center: at(side + W / 2, y) };
+}
+
 /** Cheap steam jet (additive points) — WebGL/WebGPU safe (no custom shaders). */
 class SteamJet {
   points: THREE.Points;
@@ -176,9 +217,7 @@ export function buildAnnex(ctx: LevelContext, H: AnnexHelpers) {
       }
       // doors
       const mk = (id: string, px: number, pz: number, alongZ: boolean, openAngle: number, req: string | null = null, text = '') => {
-        const pivot = new THREE.Group(); pivot.position.set(px, 0, pz);
-        pivot.add(doorLeaf(alongZ, 2, 2.5, M.steel)); G.add(pivot);
-        const col = alongZ ? physics.addMinMax(px - 0.15, pz, px + 0.15, pz + 2, 0, 2.5, 'door', true) : physics.addMinMax(px, pz - 0.15, px + 2, pz + 0.15, 0, 2.5, 'door', true);
+        const { pivot, col } = singleDoor(G, physics, { x: px, z: pz, alongZ, openW: 2, openH: 2.5, leafMat: M.steel, fillMat: M.plaster });
         const d = new Door(id, new THREE.Vector3(alongZ ? px - 0.8 : px + 1, 0, alongZ ? pz + 1 : pz - 0.8), pivot, col, req, text, openAngle);
         if (flags.has('open:' + id)) d.openNow();
         ctx.addInteractable(d);

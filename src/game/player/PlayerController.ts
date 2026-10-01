@@ -276,6 +276,7 @@ export class PlayerController {
       hpRatio: this.hpRatio(),
       reloading: weapons.isReloading(),
       lookTarget: this.aiming ? weapons.aimPoint : this.nearestThreat(targets),
+      shots: weapons.shots,
     });
   }
 

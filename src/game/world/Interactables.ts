@@ -115,6 +115,10 @@ export class Door implements Interactable {
   private bumpT = 0;
   private maxA: number;
   private creak = 0;
+  private idleT = 0;
+  private opened = false;
+  /** seconds without anyone near before an open door swings shut by itself (door closer) */
+  static closeDelay = 3.5;
   constructor(
     public id: string,
     public pos: THREE.Vector3,
@@ -126,6 +130,7 @@ export class Door implements Interactable {
     private opts: DoorOptions = {},
   ) {
     this.maxA = opts.maxAngle ?? Math.PI * 0.53;
+    this.collider.navPass = !requires;
     for (const pv of Array.isArray(pivots) ? pivots : [pivots]) {
       // leaf direction/width from its geometry (pivot = hinge)
       const base = pv.rotation.y;
@@ -150,7 +155,7 @@ export class Door implements Interactable {
     if (this.open) return;
     if (this.requires && !g.flags.has('unlocked:' + this.id)) {
       if (!g.inventory.has(this.requires)) { g.message(this.lockedText); audio.click(); return; }
-      g.flags.add('unlocked:' + this.id);
+      g.flags.add('unlocked:' + this.id); this.collider.navPass = true;
       g.message(`Использовано: ${ITEMS[this.requires].name}. Замок открыт.`);
       if (this.requires === 'keycard') { const it = g.inventory.firstOf('keycard'); if (it) g.inventory.remove(it.uid); }
     }
@@ -179,12 +184,13 @@ export class Door implements Interactable {
       audio.click(true);
       bus.emit('noise', { pos: this.pos.clone(), radius: 8, kind: 'door' });
       bus.emit('doorsChanged', null);
-      this.opts.onOpen?.(g ?? Door.api);
+      if (!this.opened) { this.opened = true; this.opts.onOpen?.(g ?? Door.api); }
     }
     for (const l of this.leaves) l.w += this.awaySign(l, from) * speed;
   }
   /** open instantly (save restore / scripts) */
   openNow(flags?: Set<string>, from?: THREE.Vector3): void {
+    this.opened = true; this.idleT = 0;
     this.open = true; this.enabled = false; this.collider.enabled = false;
     flags?.add('open:' + this.id);
     for (const l of this.leaves) {
@@ -195,6 +201,7 @@ export class Door implements Interactable {
   }
   update(dt: number): void {
     dt = Math.min(dt, 0.05);
+    this.collider.navPass = !this.locked;
     const agents = Door.agents();
     if (!this.open) {
       // walking into the closed door: push it open (RE Engine style), locked doors just rattle
@@ -223,6 +230,19 @@ export class Door implements Interactable {
       } else this.pushT = 0;
       this.bumpT -= dt;
       return;
+    }
+    // door closer: nobody around for a while → the leaves swing back and the door latches again
+    let near = false;
+    for (const ag of agents) {
+      if (Math.abs(ag.pos.y - this.leaves[0].y0) > 1.6) continue;
+      for (const l of this.leaves) { const h = this.hinge(l); if (Math.hypot(ag.pos.x - h.x, ag.pos.z - h.y) < l.width + ag.radius + 0.9) near = true; }
+    }
+    this.idleT = near ? 0 : this.idleT + dt;
+    const closing = this.idleT > Door.closeDelay;
+    if (closing) {
+      // spring + constant latch push (must beat the Coulomb hinge friction below, or the leaf hangs ajar)
+      for (const l of this.leaves) l.w += (-7 * l.a - 0.9 * Math.sign(l.a) - 3.2 * l.w) * dt;
+      if (this.leaves.every((l) => Math.abs(l.a) < 0.035 && Math.abs(l.w) < 0.5)) { this.latch(); return; }
     }
     for (const l of this.leaves) {
       const h = this.hinge(l);
@@ -258,6 +278,16 @@ export class Door implements Interactable {
       const sp = Math.abs(l.w);
       if (sp > 0.8 && (this.creak -= dt) < 0) { this.creak = 0.9; bus.emit('noise', { pos: this.pos.clone(), radius: 5, kind: 'door' }); }
     }
+  }
+  /** closed again by the door closer: collider back, AI repaths, save flag cleared */
+  private latch(): void {
+    for (const l of this.leaves) { l.a = 0; l.w = 0; l.pivot.rotation.y = l.base; }
+    this.open = false; this.enabled = true; this.collider.enabled = true; this.pushT = 0; this.idleT = 0;
+    this.collider.navPass = !this.locked;
+    (Door.api?.flags ?? Door.flags)?.delete('open:' + this.id);
+    audio.click(true);
+    bus.emit('noise', { pos: this.pos.clone(), radius: 6, kind: 'door' });
+    bus.emit('doorsChanged', null);
   }
   /** sentinel for doors that must never open by walking (scripted exits) */
   static readonly NEVER = (): void => void 0;

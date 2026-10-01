@@ -26,6 +26,8 @@ export function makeWeaponModel(id: string): THREE.Group {
   if (glb) {
     // Blender-authored hard-surface model (same +Z barrel convention, 'muzzle' empty exported from the .blend)
     const m = glb.scene.clone(true);
+    // the P08 grip is raked 36° and sits ~4 cm behind the trigger: shift it so the hand closes on the grip, not the frame
+    if (id === 'luger') m.position.set(0, 0.04, 0.05);
     m.traverse((o) => { if ((o as THREE.Mesh).isMesh) { o.castShadow = true; } });
     g.add(m);
     if (!g.getObjectByName('muzzle')) muzzle(g, 0.16, 0.03);

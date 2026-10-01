@@ -24,6 +24,11 @@ eL.name, eR.name = 'claire_eye_L', 'claire_eye_R'
 for o in (body, body0, high, eL, eR):
     o.location = o.location * S + Vector((0, 0, SOLE)); o.scale = (S, S, S)
     apply_transform(o)
+# CV likeness: reshape the face (same smooth field on every LOD)
+import faceshape
+_ez = V(eL).mean(0)[2] - 0.16 * S
+_P = V(body); _L = faceshape.landmarks(_P[_P[:, 2] > _ez], V(eL).mean(0), V(eR).mean(0))
+faceshape.apply([body, body0, high], _L, faceshape.CLAIRE, lambda Q: Q[:, 2] > _ez)
 print('high faces', len(high.data.polygons), 'low', len(body.data.polygons))
 
 def J(v): return Vector(v) * S + Vector((0, 0, SOLE))

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { LevelContext } from './PrisonLevel';
 import type { AnnexHelpers } from './PrisonAnnex';
-import { doorLeaf } from './PrisonAnnex';
+import { doorLeaf, singleDoor } from './PrisonAnnex';
 import { LevelBuilder, instanced, T } from '../world/LevelBuilder';
 import { Door, ScriptedInteractable } from '../world/Interactables';
 import { placeProp, propClone, propInstances } from '../world/Props';
@@ -317,7 +317,7 @@ export function buildExterior(ctx: LevelContext, H: AnnexHelpers) {
       placeProp(G, physics, 'bookshelf', -27, U, 129.7, Math.PI); placeProp(G, physics, 'cabinet', -24.5, U, 129.6, Math.PI);
       propInstances(G, physics, 'crate', [[-29.5, U, 128.9, 0.1], [-30.4, U, 129.1, 0.6]]);
       // upper-floor door (blocked)
-      const ud = doorLeaf(false, 1.4, 2.4, M.steel); ud.position.set(-17.4, U, 129.78); ud.rotation.y += Math.PI; G.add(ud);
+      const ud = doorLeaf(false, 0.95, 2.12, M.steel); ud.position.set(-17.4, U, 129.78); ud.rotation.y += Math.PI; G.add(ud);
       ctx.addInteractable(new ScriptedInteractable('trainUpper', new THREE.Vector3(-18.1, U, 129), 1.2, () => 'Осмотреть дверь',
         (g) => { g.message('Дверь на лестницу второго этажа завалена с той стороны. Не открыть.'); audio.click(); }));
       for (const fx of [-33, -27, -21]) {
@@ -339,9 +339,7 @@ export function buildExterior(ctx: LevelContext, H: AnnexHelpers) {
       ctx.spawnZombie({ id: 'tr_1', x: -23, y: U, z: 124.5, yaw: -Math.PI / 2, outfit: 'guard' }, G);
       ctx.spawnZombie({ id: 'tr_2', x: -34.6, y: U, z: 120.4, yaw: 0.6, outfit: 'guard', fakeDead: true }, G);
       // entrance door (hinge x -28)
-      const pivot = new THREE.Group(); pivot.position.set(-28, U, 118);
-      pivot.add(doorLeaf(false, 2, 2.5, M.steel)); G.add(pivot);
-      const col = physics.addMinMax(-28, 117.85, -26, 118.15, U, U + 2.5, 'door', true);
+      const { pivot, col } = singleDoor(G, physics, { x: -28, y: U, z: 118, alongZ: false, openW: 2, openH: 2.6, thick: 0.4, leafMat: M.steel, fillMat: X.milConcrete });
       trainDoor = new Door('trainDoor', new THREE.Vector3(-27, U, 117.2), pivot, col, null, '', Math.PI * 0.55);
       if (flags.has('open:trainDoor')) trainDoor.openNow();
       ctx.addInteractable(trainDoor);
@@ -415,9 +413,7 @@ export function buildExterior(ctx: LevelContext, H: AnnexHelpers) {
       ctx.spawnZombie({ id: 'cb_3', x: -20, y: U, z: 140, yaw: -2.4, kind: 'cerberus' }, G);
       ctx.spawnZombie({ id: 'cb_z', x: -22, y: U, z: 132, yaw: 0.5, outfit: 'guard', fakeDead: true }, G);
       // steel door in the training-lobby back wall (hinge x -35)
-      const pivot = new THREE.Group(); pivot.position.set(-35, U, 130);
-      pivot.add(doorLeaf(false, 1.6, 2.4, M.steel)); G.add(pivot);
-      const col = physics.addMinMax(-35, 129.85, -33.4, 130.15, U, U + 2.4, 'door', true);
+      const { pivot, col } = singleDoor(G, physics, { x: -35, y: U, z: 130, alongZ: false, openW: 1.6, openH: 2.4, thick: 0.4, leafMat: M.steel, fillMat: X.milConcrete });
       barrDoor = new Door('barrDoor', new THREE.Vector3(-34.2, U, 129.2), pivot, col, null, '', -Math.PI * 0.55);
       if (flags.has('open:barrDoor')) barrDoor.openNow();
       ctx.addInteractable(barrDoor);

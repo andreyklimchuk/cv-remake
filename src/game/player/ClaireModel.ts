@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { NO_AO } from '../../engine/RenderFlags';
 import { buildHumanoid, bakeRigidSkinned, damp, type Humanoid } from '../Rig';
 import { pbr, skinMaterial } from '../../engine/Materials';
 import { makeWeaponModel, weaponHold } from './WeaponModels';
@@ -28,6 +29,17 @@ export interface AnimParams {
   hpRatio: number;
   reloading: boolean;
   lookTarget: THREE.Vector3 | null;
+  /** WeaponSystem shot counter: a change triggers recoil + mechanism animation */
+  shots?: number;
+}
+
+/** animated action parts of a weapon (Luger toggle-lock: rear link, front link, breech block) */
+interface Toggle { r: THREE.Object3D; f: THREE.Object3D; b: THREE.Object3D; R: THREE.Vector3; K: THREE.Vector3; B: THREE.Vector3; lf: number; phi0: number }
+function findToggle(g: THREE.Object3D | null): Toggle | null {
+  const r = g?.getObjectByName('toggle_r'), f = g?.getObjectByName('toggle_f'), b = g?.getObjectByName('breech');
+  if (!r || !f || !b) return null;
+  const R = r.position.clone(), K = f.position.clone(), B = b.position.clone();
+  return { r, f, b, R, K, B, lf: B.distanceTo(K), phi0: Math.atan2(B.y - K.y, B.z - K.z) };
 }
 
 /**
@@ -80,6 +92,11 @@ export class ClaireModel {
   private lastYawG = 0;
   private hipRestX = 0;
   private feet: (THREE.Bone | undefined)[] = [];
+  /** damped FK arm angles (kept apart from the bones, which IK may overwrite after FK) */
+  private fk = { lU: new THREE.Euler(), rU: new THREE.Euler(), lF: 0, rF: 0 };
+  /** gun orientation relative to each hand bone (natural grip: barrel along the forearm, slide on the thumb side) */
+  private gripOff = { r: new THREE.Quaternion(), l: new THREE.Quaternion() };
+  private ikL = 0;
 
   /** which GLB character this is ('claire' | 'steve') */
   readonly key: string;
@@ -180,6 +197,15 @@ export class ClaireModel {
     const bones = [...bm.values()];
     const B = (n: string) => bm.get(n)!;
     this.hipRest = B('hips').position.y; this.hipRestX = B('hips').position.x;
+    for (const [side, h] of [['r', B('rHand')], ['l', B('lHand')]] as const) {
+      const hq = h.getWorldQuaternion(new THREE.Quaternion());
+      const f = new THREE.Vector3(0, -1, 0).applyQuaternion(hq).normalize();            // fingers (bone aim)
+      const fw = new THREE.Vector3(0, 0, 1);                                              // thumb side at rest (model faces +Z)
+      const z = f.clone().multiplyScalar(Math.cos(0.45)).addScaledVector(fw, Math.sin(0.45)).normalize(); // wrist cocked
+      const y = fw.clone().addScaledVector(z, -fw.dot(z)).normalize(), x = new THREE.Vector3().crossVectors(y, z);
+      const gq = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, z));
+      this.gripOff[side].copy(hq.invert().multiply(gq));
+    }
     this.feet = [bm.get('lFoot'), bm.get('rFoot')];
     const aniso = texSize >= 1024 ? 8 : 4;
     for (const src of skinnedMeshesOf(g)) {
@@ -194,8 +220,10 @@ export class ClaireModel {
         mat = sk;
       } else if (src.name.includes('hair')) {
         const h = new THREE.MeshStandardMaterial({ map: mat0.map, roughness: 0.42, metalness: 0, side: THREE.DoubleSide,
-          alphaTest: 0.35, vertexColors: !!src.geometry.attributes.color, color: 0xffffff });
-        h.alphaToCoverage = true;
+          alphaTest: 0.42, vertexColors: !!src.geometry.attributes.color, color: 0xffffff });
+        // the post chain renders into a non-MSAA target: alpha-to-coverage would leave fractional alpha (see-through
+        // hair on Ultra), so plain alpha test + opaque output
+        h.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <dithering_fragment>', '#include <dithering_fragment>\n  gl_FragColor.a = 1.0;'); };
         mat = h;
       } else if (src.name.includes('eyes')) {
         mat = new THREE.MeshPhysicalMaterial({ map: mat0.map, normalMap: mat0.normalMap, color: 0xd6d2cc, roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.03 });
@@ -204,6 +232,7 @@ export class ClaireModel {
       }
       if (src.geometry.attributes.uv1) src.geometry.deleteAttribute('uv1');
       const m = reskin(src, bones, mat);
+      if (src.name.includes('hair')) NO_AO.add(m);
       if (src.name.includes('eyes')) m.castShadow = false;
       m.frustumCulled = false;
       root.add(m);
@@ -239,6 +268,10 @@ export class ClaireModel {
     return () => { this.gunHolder.remove(g); };
   }
 
+  private lastShots = -1;
+  private fireT = 9;
+  private toggles: Toggle[] = [];
+
   setWeapon(id: string): void {
     if (id === this.gunId) return;
     this.gunId = id;
@@ -248,6 +281,37 @@ export class ClaireModel {
     this.gun = id !== 'knife' && id !== 'none' ? makeWeaponModel(dual ? 'luger' : id) : null;
     if (this.gun) this.gunHolder.add(this.gun);
     if (dual) { this.gunL = makeWeaponModel('luger'); this.gunHolderL.add(this.gunL); }
+    this.toggles = [findToggle(this.gun), findToggle(this.gunL)].filter((x): x is Toggle => !!x);
+  }
+
+  /** 0..1 recoil envelope since the last shot (fast rise, exponential settle) */
+  private kickK(): number { const ft = this.fireT; return ft < 0.025 ? ft / 0.025 : Math.exp(-(ft - 0.025) * 13); }
+
+  /** recoil kick of the gun around its grip + Luger toggle-lock cycling (rear link breaks upward, breech slides back) */
+  private animateAction(dt: number, p: AnimParams, hold: string): void {
+    if (p.shots !== undefined) {
+      if (this.lastShots >= 0 && p.shots !== this.lastShots) this.fireT = 0;
+      this.lastShots = p.shots;
+    }
+    this.fireT += dt;
+    const k = this.kickK();
+    const rifle = hold === 'rifle';
+    for (const g of [this.gun, this.gunL]) {
+      if (!g) continue;
+      g.rotation.x = -k * (rifle ? 0.09 : hold === 'dual' ? 0.32 : 0.26);
+      g.position.z = -k * (rifle ? 0.03 : 0.014);
+    }
+    const o = this.fireT / 0.12, open = o < 0.35 ? Math.sin((o / 0.35) * Math.PI / 2) : o < 1 ? 0.5 + 0.5 * Math.cos((Math.PI * (o - 0.35)) / 0.65) : 0;
+    const th = open * 1.0;
+    for (const tg of this.toggles) {
+      tg.r.rotation.x = -th;
+      const d = tg.K.clone().sub(tg.R).applyAxisAngle(new THREE.Vector3(1, 0, 0), -th);
+      const K = tg.R.clone().add(d);
+      const dy = tg.B.y - K.y, dz = Math.sqrt(Math.max(1e-8, tg.lf * tg.lf - dy * dy));
+      tg.f.position.copy(K);
+      tg.f.rotation.x = tg.phi0 - Math.atan2(dy, dz);
+      tg.b.position.set(tg.B.x, tg.B.y, K.z + dz);
+    }
   }
 
   muzzleWorld(out: THREE.Vector3): THREE.Vector3 {
@@ -293,6 +357,36 @@ export class ClaireModel {
       LightPool.active?.adopt(g);
     }
     if (this.lighter) this.lighter.visible = on;
+  }
+
+  /** gun rotation (root space) for a natural grip in the given hand */
+  private handGunQ(hand: THREE.Bone, side: 'l' | 'r'): THREE.Quaternion {
+    const hq = hand.getWorldQuaternion(new THREE.Quaternion()).multiply(this.gripOff[side]);
+    return this.root.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(hq);
+  }
+
+  /** gun-local bounding box of the current gun (cached) */
+  private gunBox(): THREE.Box3 {
+    const g = this.gun!;
+    if (!g.userData.box) {
+      g.updateMatrixWorld(true);
+      const inv = new THREE.Matrix4().copy(g.matrixWorld).invert();
+      const bb = new THREE.Box3();
+      g.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) { m.geometry.computeBoundingBox(); bb.union(m.geometry.boundingBox!.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, m.matrixWorld))); } });
+      g.userData.box = bb;
+    }
+    return g.userData.box as THREE.Box3;
+  }
+
+  /** where the support hand grips the current gun (gun-local) */
+  private gunSupport(rifle: boolean): THREE.Vector3 {
+    const g = this.gun!;
+    if (!g.userData.support) {
+      const bb = this.gunBox();
+      g.userData.support = rifle ? new THREE.Vector3(0, THREE.MathUtils.lerp(bb.min.y, bb.max.y, 0.42), Math.max(0.12, bb.max.z * 0.55))
+        : new THREE.Vector3(-0.035, THREE.MathUtils.lerp(bb.min.y, 0, 0.55), -0.005);
+    }
+    return (g.userData.support as THREE.Vector3).clone();
   }
 
   animate(dt: number, t: number, p: AnimParams): void {
@@ -369,6 +463,7 @@ export class ClaireModel {
       rUx = THREE.MathUtils.lerp(rUx, -Math.PI / 2 - pitch * 0.85, a); rUz = THREE.MathUtils.lerp(rUz, 0.12, a); rFx = THREE.MathUtils.lerp(rFx, -0.04, a);
       lUx = THREE.MathUtils.lerp(lUx, -Math.PI / 2 - pitch * 0.85, a); lUz = THREE.MathUtils.lerp(lUz, -0.12, a); lFx = THREE.MathUtils.lerp(lFx, -0.04, a);
       spineX = THREE.MathUtils.lerp(spineX, -pitch * 0.3, a);
+      const kk = this.kickK() * a; rUx -= kk * 0.16; lUx -= kk * 0.16; rFx -= kk * 0.08; lFx -= kk * 0.08;
     } else if (hold === 'dual') {
       rUx = THREE.MathUtils.lerp(rUx, -0.45, 0.6); rFx = -0.65; lUx = THREE.MathUtils.lerp(lUx, -0.45, 0.6); lFx = -0.65;
     } else if (hold !== 'knife' && a > 0.001) {
@@ -382,6 +477,7 @@ export class ClaireModel {
       rUx = THREE.MathUtils.lerp(rUx, tRUx, a); rUz = THREE.MathUtils.lerp(rUz, tRUz, a); rFx = THREE.MathUtils.lerp(rFx, tRFx, a);
       lUx = THREE.MathUtils.lerp(lUx, tLUx, a); lUz = THREE.MathUtils.lerp(lUz, tLUz, a); lFx = THREE.MathUtils.lerp(lFx, tLFx, a);
       spineX = THREE.MathUtils.lerp(spineX, -pitch * 0.3, a);
+      if (pist) { const kk = this.kickK() * a; rUx -= kk * 0.13; rFx -= kk * 0.07; }
     } else if (hold !== 'knife') {
       // low-ready carry
       rUx = THREE.MathUtils.lerp(rUx, -0.5, 0.6); rFx = -0.6;
@@ -457,10 +553,12 @@ export class ClaireModel {
     if (this.feet[0]) this.feet[0].rotation.x = damp(this.feet[0].rotation.x, lFt, 30, dt);
     if (this.feet[1]) this.feet[1].rotation.x = damp(this.feet[1].rotation.x, rFt, 30, dt);
     const armK = p.state === 'normal' && a > 0.5 ? 30 : 16;
-    r.lUpperArm.rotation.set(damp(r.lUpperArm.rotation.x, lUx, armK, dt), damp(r.lUpperArm.rotation.y, lUy, armK, dt), damp(r.lUpperArm.rotation.z, lUz, armK, dt));
-    r.rUpperArm.rotation.set(damp(r.rUpperArm.rotation.x, rUx, armK, dt), damp(r.rUpperArm.rotation.y, rUy, armK, dt), damp(r.rUpperArm.rotation.z, rUz, armK, dt));
-    r.lForearm.rotation.x = damp(r.lForearm.rotation.x, lFx, armK, dt);
-    r.rForearm.rotation.x = damp(r.rForearm.rotation.x, rFx, armK, dt);
+    const fk = this.fk;
+    fk.lU.set(damp(fk.lU.x, lUx, armK, dt), damp(fk.lU.y, lUy, armK, dt), damp(fk.lU.z, lUz, armK, dt));
+    fk.rU.set(damp(fk.rU.x, rUx, armK, dt), damp(fk.rU.y, rUy, armK, dt), damp(fk.rU.z, rUz, armK, dt));
+    fk.lF = damp(fk.lF, lFx, armK, dt); fk.rF = damp(fk.rF, rFx, armK, dt);
+    r.lUpperArm.rotation.copy(fk.lU); r.rUpperArm.rotation.copy(fk.rU);
+    r.lForearm.rotation.set(fk.lF, 0, 0); r.rForearm.rotation.set(fk.rF, 0, 0);
     const dead = p.state === 'dead';
     r.root.children.forEach(() => {});
     r.hips.rotation.z = damp(r.hips.rotation.z, rootLeanZ + gRoll * free, 12, dt);
@@ -553,9 +651,37 @@ export class ClaireModel {
         const target = this.root.worldToLocal(p.aimPoint.clone());
         const m = new THREE.Matrix4().lookAt(target, local, new THREE.Vector3(0, 1, 0));
         this.gunHolderL.quaternion.slerp(new THREE.Quaternion().setFromRotationMatrix(m), 1 - Math.exp(-30 * dt));
-      } else this.gunHolderL.quaternion.slerp(new THREE.Quaternion().setFromEuler(new THREE.Euler(0.9, 0, 0)), 1 - Math.exp(-12 * dt));
+      } else this.gunHolderL.quaternion.slerp(this.handGunQ(r.lHand, 'l'), 1 - Math.exp(-18 * dt));
     }
-    if (this.gun) {
+    this.animateAction(dt, p, hold);
+    const longGun = this.detailed && !!this.gun && hold === 'rifle' && (p.state === 'normal' || p.state === 'hurt') && !p.reloading;
+    if (this.gun && longGun) {
+      // long guns: pose the gun from the body (stock in the shoulder pocket when aiming, low-ready at the hip),
+      // then put both hands on it with IK
+      this.gun.visible = true;
+      this.root.updateMatrixWorld(true);
+      const bb = this.gunBox();
+      const sh = this.root.worldToLocal(r.rUpperArm.getWorldPosition(new THREE.Vector3()));
+      const aimL = this.root.worldToLocal(p.aimPoint.clone());
+      const butt = sh.clone().add(new THREE.Vector3(0.07, 0.03, 0.06));                 // shoulder pocket (+X = left)
+      const dirA = aimL.clone().sub(butt).normalize();
+      const originA = butt.clone().addScaledVector(dirA, -bb.min.z).add(new THREE.Vector3(0, -0.02, 0));
+      const dirL = new THREE.Vector3(0.32, -0.5, 1).normalize();                        // low ready: muzzle down-left
+      const originL = new THREE.Vector3(-0.1, this.hipRest + 0.1 + (r.hips.position.y - this.hipRest), 0.2);
+      const dir = dirL.clone().lerp(dirA, a).normalize();
+      const org = originL.clone().lerp(originA, a);
+      const m = new THREE.Matrix4().lookAt(org.clone().add(dir), org, new THREE.Vector3(0, 1, 0));
+      // lookAt(eye=org+dir, target=org) gives +Z toward the eye = barrel along dir
+      const qq = new THREE.Quaternion().setFromRotationMatrix(m);
+      this.gunHolder.position.lerp(org, 1 - Math.exp(-25 * dt));
+      this.gunHolder.quaternion.slerp(qq, 1 - Math.exp(-(a > 0.3 ? 30 : 14) * dt));
+      this.root.updateMatrixWorld(true);
+      const rq = this.root.getWorldQuaternion(new THREE.Quaternion());
+      const grip = this.gun.localToWorld(new THREE.Vector3(0, -0.01, 0));
+      const shW = r.rUpperArm.getWorldPosition(new THREE.Vector3());
+      twoBoneIK(r.rUpperArm, r.rForearm, r.rHand, grip.clone().addScaledVector(shW.clone().sub(grip).normalize(), 0.075),
+        new THREE.Vector3(-0.8, -1, -0.3).applyQuaternion(rq), 1);
+    } else if (this.gun) {
       this.gun.visible = p.state !== 'knife' && p.state !== 'finisher' && p.state !== 'counter';
       this.root.updateMatrixWorld(true);
       const hand = this.detailed ? r.rHand.localToWorld(new THREE.Vector3(0, -0.075, 0.015)) : r.rHand.getWorldPosition(new THREE.Vector3());
@@ -567,9 +693,23 @@ export class ClaireModel {
         const q = new THREE.Quaternion().setFromRotationMatrix(m);
         this.gunHolder.quaternion.slerp(q, 1 - Math.exp(-30 * dt));
       } else {
-        const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.9, 0, 0));
-        r.rHand.getWorldQuaternion(new THREE.Quaternion());
-        this.gunHolder.quaternion.slerp(q, 1 - Math.exp(-12 * dt));
+        const q = this.detailed ? this.handGunQ(r.rHand, 'r') : new THREE.Quaternion().setFromEuler(new THREE.Euler(0.9, 0, 0));
+        this.gunHolder.quaternion.slerp(q, 1 - Math.exp(-18 * dt));
+      }
+    }
+    // support hand: left hand on the fore-end of long guns, cupping the grip of a pistol while aiming (two-bone IK)
+    if (this.detailed) {
+      const twoHand = !!this.gun && this.gun.visible && !this.gunL && p.state === 'normal' && !p.reloading && !lit &&
+        (hold === 'rifle' || (hold === 'pistol' && a > 0.5));
+      this.ikL = damp(this.ikL, twoHand ? 1 : 0, 10, dt);
+      if (this.ikL > 0.01 && this.gun) {
+        this.root.updateMatrixWorld(true);
+        const sup = this.gunSupport(hold === 'rifle').applyMatrix4(this.gun.matrixWorld);
+        const sh = r.lUpperArm.getWorldPosition(new THREE.Vector3());
+        const wrist = sup.clone().addScaledVector(sh.clone().sub(sup).normalize(), 0.075);
+        const rq = this.root.getWorldQuaternion(new THREE.Quaternion());
+        const pole = new THREE.Vector3(0.75, -1, -0.25).applyQuaternion(rq);   // elbow down & out (+X = character's left)
+        twoBoneIK(r.lUpperArm, r.lForearm, r.lHand, wrist, pole, this.ikL);
       }
     }
   }
@@ -597,3 +737,27 @@ export const Gait = (() => {
     },
   };
 })();
+
+
+/** Analytic two-bone IK in world space (shoulder→elbow→wrist), bending toward `pole`; `w` blends from FK. */
+export function twoBoneIK(upper: THREE.Object3D, fore: THREE.Object3D, hand: THREE.Object3D, target: THREE.Vector3, pole: THREE.Vector3, w = 1): void {
+  const S = upper.getWorldPosition(new THREE.Vector3()), E = fore.getWorldPosition(new THREE.Vector3()), W = hand.getWorldPosition(new THREE.Vector3());
+  const l1 = S.distanceTo(E), l2 = E.distanceTo(W);
+  const toT = target.clone().sub(S); const d = THREE.MathUtils.clamp(toT.length(), Math.abs(l1 - l2) + 1e-3, l1 + l2 - 1e-3);
+  const dir = toT.normalize();
+  const ca = THREE.MathUtils.clamp((l1 * l1 + d * d - l2 * l2) / (2 * l1 * d), -1, 1), sa = Math.sqrt(1 - ca * ca);
+  const u = pole.clone().addScaledVector(dir, -pole.dot(dir)).normalize();
+  const elbow = S.clone().addScaledVector(dir, ca * l1).addScaledVector(u, sa * l1);
+  const rotTo = (bone: THREE.Object3D, from: THREE.Vector3, to: THREE.Vector3) => {
+    const dq = new THREE.Quaternion().setFromUnitVectors(from.normalize(), to.normalize());
+    const wq = bone.getWorldQuaternion(new THREE.Quaternion());
+    const pq = bone.parent!.getWorldQuaternion(new THREE.Quaternion()).invert();
+    const goal = pq.multiply(dq.multiply(wq));
+    bone.quaternion.slerp(goal, w);
+    bone.updateMatrixWorld(true);
+  };
+  rotTo(upper, E.clone().sub(S), elbow.clone().sub(S));
+  const E2 = fore.getWorldPosition(new THREE.Vector3()), W2 = hand.getWorldPosition(new THREE.Vector3());
+  const T2 = S.clone().addScaledVector(dir, d);
+  rotTo(fore, W2.clone().sub(E2), T2.sub(E2));
+}

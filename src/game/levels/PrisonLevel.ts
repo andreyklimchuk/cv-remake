@@ -11,7 +11,7 @@ import { makeItemMesh } from '../world/ItemMeshes';
 import type { ZombieSpawn } from '../ai/Zombie';
 import { audio } from '../../engine/AudioEngine';
 import { bus } from '../../engine/Events';
-import { buildAnnex, doorLeaf } from './PrisonAnnex';
+import { buildAnnex, singleDoor } from './PrisonAnnex';
 import { buildExterior } from './RockfortExterior';
 import { placeProp, propInstances } from '../world/Props';
 
@@ -328,10 +328,7 @@ export function buildPrisonLevel(ctx: LevelContext): Level {
       ctx.spawnZombie({ id: 'yard_3', x: 17, z: 12.5, yaw: -1.2, outfit: 'prisoner', fakeDead: true }, G);
 
       // guard-house door (hinged at z = 8, swings inward)
-      const pivot = new THREE.Group(); pivot.position.set(20.3, 0, 8);
-      pivot.add(doorLeaf(true, 2, 2.5, M.rust));
-      G.add(pivot);
-      const dcol = physics.addMinMax(20.15, 8, 20.45, 10, 0, 2.5, 'door', true);
+      const { pivot, col: dcol } = singleDoor(G, physics, { x: 20.3, z: 8, alongZ: true, openW: 2, openH: 2.5, thick: 0.6, leafMat: M.rust, fillMat: M.concrete });
       guardDoor = new Door('guardDoor', new THREE.Vector3(19.4, 0, 9), pivot, dcol, null, '', -Math.PI * 0.55);
       if (flags.has('open:guardDoor')) guardDoor.openNow();
       ctx.addInteractable(guardDoor);
@@ -413,20 +410,16 @@ export function buildPrisonLevel(ctx: LevelContext): Level {
       ctx.spawnZombie({ id: 'guard_1', x: 28.8, z: 12.5, yaw: -Math.PI / 2, outfit: 'guard' }, G);
 
       // cell-block door (keycard)
-      const pivot = new THREE.Group(); pivot.position.set(25, 0, 20);
-      pivot.add(doorLeaf(false, 2, 2.5, M.steel));
+      const { pivot, col: dcol } = singleDoor(G, physics, { x: 25, z: 20, alongZ: false, openW: 2, openH: 2.5, leafMat: M.steel, fillMat: M.plaster });
       const reader = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.22, 0.05), M.dark); reader.position.set(27.35, 1.3, 19.8); b2.addMesh(reader, false);
       const led = new THREE.Mesh(new THREE.SphereGeometry(0.02, 6, 4), M.red); led.position.set(27.35, 1.4, 19.77); b2.addMesh(led, false);
       b2.flush(G);
-      G.add(pivot);
-      const dcol = physics.addMinMax(25, 19.85, 27, 20.15, 0, 2.5, 'door', true);
       cellDoor = new Door('cellDoor', new THREE.Vector3(26, 0, 19.2), pivot, dcol, 'keycard', 'Электронный замок. Нужна ключ-карта охраны.', Math.PI * 0.55);
       if (flags.has('open:cellDoor')) cellDoor.openNow();
       ctx.addInteractable(cellDoor);
 
       // door to the administration wing (east wall, z 4–6)
-      const apv = new THREE.Group(); apv.position.set(32.15, 0, 4); apv.add(doorLeaf(true, 2, 2.5, M.steel)); G.add(apv);
-      const acol = physics.addMinMax(32, 4, 32.3, 6, 0, 2.5, 'door', true);
+      const { pivot: apv, col: acol } = singleDoor(G, physics, { x: 32.15, z: 4, alongZ: true, openW: 2, openH: 2.5, leafMat: M.steel, fillMat: M.plaster });
       annex.doors.admin = new Door('adminDoor', new THREE.Vector3(31.2, 0, 5), apv, acol, null, '', Math.PI * 0.55);
       if (flags.has('open:adminDoor')) annex.doors.admin.openNow();
       ctx.addInteractable(annex.doors.admin);
@@ -513,8 +506,7 @@ export function buildPrisonLevel(ctx: LevelContext): Level {
       note.rotation.x = -Math.PI / 2; note.rotation.z = 0.5; note.position.set(37.5, bedsOk ? 0.585 : 0.71, 42.4); G.add(note);
       ctx.addInteractable(new ScriptedInteractable('notePrisoner', new THREE.Vector3(37.5, 0, 41.2), 1.3, () => 'Прочитать: записка заключённого', (g) => g.readDoc('prisoner_note')));
       // door to the trophy gallery
-      const gpv = new THREE.Group(); gpv.position.set(44.15, 0, 33); gpv.add(doorLeaf(true, 2, 2.5, M.steel)); G.add(gpv);
-      const gcol = physics.addMinMax(44, 33, 44.3, 35, 0, 2.5, 'door', true);
+      const { pivot: gpv, col: gcol } = singleDoor(G, physics, { x: 44.15, z: 33, alongZ: true, openW: 2, openH: 2.5, leafMat: M.steel, fillMat: M.plaster });
       annex.doors.gallery = new Door('galleryDoor', new THREE.Vector3(43.3, 0, 34), gpv, gcol, null, '', Math.PI * 0.55);
       if (flags.has('open:galleryDoor')) annex.doors.gallery.openNow();
       ctx.addInteractable(annex.doors.gallery);

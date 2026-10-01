@@ -113,11 +113,11 @@ def skin_shade(P, Nn):
         xl = x * sx
         t = (xl - 0.011) / 0.050
         zc = E[2] + 0.0165 + 0.0065 * np.sin(np.clip(t, 0, 1) * math.pi * 0.85) - 0.002 * np.clip(t, 0, 1)
-        thick = 0.0052 * (1 - 0.65 * np.clip(t, 0, 1)) + 0.001
-        m = (1 - ss(thick * 0.6, thick, np.abs(z - zc))) * ss(-0.05, 0.02, t) * (1 - ss(0.92, 1.05, t)) * (Nn[:, 1] < -0.2) * (y < E[1] + 0.02)
-        streak = ss(-0.1, 0.5, perlin(np.stack([xl * 900 - z * 300, z * 2500, y * 50], 1)))
-        brows = np.maximum(brows, m * (0.35 + 0.65 * streak))
-    col = mix3(col, np.array([0.055, 0.028, 0.017]), brows * 0.9)
+        thick = 0.0042 * (1 - 0.6 * np.clip(t, 0, 1)) + 0.0009
+        m = (1 - ss(thick * 0.4, thick, np.abs(z - zc))) * ss(-0.06, 0.05, t) * (1 - ss(0.86, 1.02, t)) * (Nn[:, 1] < -0.2) * (y < E[1] + 0.02)
+        streak = ss(-0.2, 0.4, perlin(np.stack([xl * 330 - z * 260, z * 4200 + xl * 900, y * 60], 1)))
+        brows = np.maximum(brows, m * (0.55 + 0.45 * streak))
+    col = mix3(col, np.array([0.035, 0.014, 0.01]), brows * 0.95)
     # lash line / eyeliner
     liner = np.zeros(n, np.float32)
     for E in (EL, ER):
@@ -423,7 +423,7 @@ build_set(eyes, 'claire_eyes', 512, eye_shade, None, ao_size=256, ao_dist=0.01)
 HS = 1024
 rng = np.random.RandomState(5)
 acc = np.zeros((HS, HS, 3), np.float32); alpha = np.zeros((HS, HS), np.float32)
-dark = np.array([0.075, 0.024, 0.011]); light = np.array([0.30, 0.105, 0.045])
+dark = np.array([0.048, 0.013, 0.009]); light = np.array([0.215, 0.058, 0.034])   # CV: dark burgundy-chestnut
 rows = np.arange(HS)
 def strand(x0, r0, r1, amp, freq, ph, width, col_s, alpha_s, wrap=None, taper=True):
     rr = rows[r0:r1]; t = (rr - r0) / max(1, (r1 - r0 - 1))
@@ -431,18 +431,33 @@ def strand(x0, r0, r1, amp, freq, ph, width, col_s, alpha_s, wrap=None, taper=Tr
     for dx in range(-3, 4):
         xi = np.floor(xc).astype(int) + dx
         w = np.exp(-((xi + 0.5 - xc) / (width * 0.6)) ** 2)
-        a = alpha_s * w * ((1 - ss(0.75, 1.0, 1 - t)) if taper else 1)
+        a = alpha_s * w * ((1 - ss(0.88, 1.0, 1 - t)) if taper else 1)
         if wrap: xi = wrap[0] + (xi - wrap[0]) % (wrap[1] - wrap[0])
         ok = (xi >= 0) & (xi < HS)
         ri, xi_, a_ = rr[ok], xi[ok], a[ok]
         cc = col_s[None, :] * (0.7 + 0.6 * (1 - t[ok]))[:, None] if not taper else col_s[None, :] * (0.55 + 0.6 * t[ok])[:, None]
         acc[ri, xi_] = acc[ri, xi_] * (1 - a_[:, None]) + cc * a_[:, None]
         alpha[ri, xi_] = 1 - (1 - alpha[ri, xi_]) * (1 - a_)
+# opaque core under the strands: cards stay solid under mip-mapping/alpha test (sparse strands alone vanish at a
+# distance -> see-through hair); only the card edges and the staggered tips are wispy
+_xf = (np.arange(128) + 0.5) / 128; _rf = (rows + 0.5) / HS
+for vi in range(4):
+    xa = 512 + vi * 128
+    _p1, _p2, _k1, _k2 = rng.uniform(0, 6.28), rng.uniform(0, 6.28), rng.uniform(6, 14), rng.uniform(6, 14)
+    ex = ss(0.02, 0.22, _xf[None, :] + 0.07 * np.sin(_rf[:, None] * _k1 + _p1)) * ss(0.02, 0.22, 1 - _xf[None, :] + 0.07 * np.sin(_rf[:, None] * _k2 + _p2))
+    ey = ss(0.02 + 0.04 * rng.uniform(), 0.13, _rf)
+    _tip = np.convolve(rng.uniform(0.0, 0.16, 132) ** 1.4 * 1.6, np.ones(3) / 3, 'same')[2:130]   # jagged strand ends per column
+    stag = ss(0.0, 0.03, _rf[:, None] - _tip[None, :])
+    a_ = ey[:, None] * ex * stag * 0.98
+    lum = 0.12 + 0.75 * np.convolve(rng.uniform(0, 1, 140), np.ones(2) / 2, 'same')[:128] ** 1.3
+    c_ = (dark[None, None, :] + (light - dark)[None, None, :] * lum[None, :, None]) * (0.6 + 0.5 * _rf)[:, None, None]
+    acc[:, xa:xa + 128] = acc[:, xa:xa + 128] * (1 - a_[..., None]) + c_ * a_[..., None]
+    alpha[:, xa:xa + 128] = 1 - (1 - alpha[:, xa:xa + 128]) * (1 - a_)
 # card strips (u 0.5..1): root at top rows (v=1)
 for vi in range(4):
     xa = 512 + vi * 128
     for k in range(95):
-        L = rng.uniform(0.55, 1.0)
+        L = rng.uniform(0.82, 1.0)
         r1 = HS; r0 = int(HS - L * HS * 0.98)
         col_s = dark + (light - dark) * rng.uniform(0.1, 0.9)
         strand(xa + rng.uniform(6, 122), r0, r1, rng.uniform(0.5, 3.0), rng.uniform(0.004, 0.02), rng.uniform(0, 6.28), rng.uniform(1.0, 2.3), col_s, rng.uniform(0.6, 1.0))
@@ -457,7 +472,7 @@ alpha[r_cap0:, :512] = 1.0
 lr1 = int(0.066 * HS)
 for k in range(260):
     x0 = rng.uniform(4, 508); ln = rng.uniform(0.6, 1.0)
-    strand(x0, max(0, int(lr1 - ln * lr1)), lr1, rng.uniform(0.5, 2.5), rng.uniform(0.05, 0.1), rng.uniform(0, 6.28), 1.3, np.array([0.012, 0.008, 0.007]), 0.95)
+    strand(x0, max(0, int(lr1 - ln * lr1)), lr1, rng.uniform(0.5, 2.5), rng.uniform(0.05, 0.1), rng.uniform(0, 6.28), 1.0, np.array([0.012, 0.008, 0.007]), 0.8) if k % 3 else None
 avg = acc[alpha > 0.5].mean(0)
 acc = np.where(alpha[..., None] > 0.02, acc / np.maximum(alpha[..., None], 1e-3) * np.minimum(alpha[..., None] * 3, 1) + avg * (1 - np.minimum(alpha[..., None] * 3, 1)), avg)
 rgba = np.concatenate([np.clip(acc, 0, 1), alpha[..., None]], -1)

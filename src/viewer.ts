@@ -62,12 +62,14 @@ export async function runViewer(): Promise<void> {
   if (q.get('lighter')) claire.setLighter(true);
   const hide = q.get('hide');
   if (hide) scene.traverse((o) => { if ((o as THREE.Mesh).isMesh && o.name.includes(hide)) o.visible = false; });
+  (window as any).__scene = scene;
   (window as any).__meshes = () => { const out: string[] = []; scene.traverse((o) => { if ((o as THREE.Mesh).isMesh) out.push(o.name + ':' + (o as THREE.Mesh).geometry.attributes.position.count); }); return out; };
   const yaw = (Number(q.get('yaw') || 0) * Math.PI) / 180;
   const cam = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.05, 50);
-  const shots: Record<string, [number, number, number]> = { full: [0.95, 4.2, 0], torso: [1.2, 1.9, 0], face: [1.58, 0.62, 0], feet: [0.2, 1.4, 0], hands: [0.95, 1.4, 0], dog: [0.45, 2.4, 0], doghead: [0.8, 0.95, 0], big: [1.3, 5.6, 0] };
+  const shots: Record<string, [number, number, number]> = { full: [0.95, 4.2, 0], torso: [1.2, 1.9, 0], face: [1.58, 0.62, 0], feet: [0.2, 1.4, 0], hands: [0.95, 1.4, 0], dog: [0.45, 2.4, 0], doghead: [0.8, 0.95, 0], big: [1.3, 5.6, 0], gun: [1.3, 1.0, 0] };
   const [ty, dist] = shots[q.get('shot') || 'full'] ?? shots.full;
-  cam.position.set(Math.sin(yaw) * dist, ty + 0.05, Math.cos(yaw) * dist); cam.lookAt(0, ty, 0);
+  const cx = Number(q.get('cx') || 0), cz = Number(q.get('cz') || 0), cy = Number(q.get('cy') || ty);
+  cam.position.set(cx + Math.sin(yaw) * dist, cy + 0.05, cz + Math.cos(yaw) * dist); cam.lookAt(cx, cy, cz);
   const p: AnimParams = {
     speed: q.get('speed') ? Number(q.get('speed')) : pose === 'run' ? 4 : pose === 'walk' ? 2.2 : 0, localMove: new THREE.Vector2(0, pose === 'run' || pose === 'walk' ? 1 : 0), running: pose === 'run', aim: pose === 'aim',
     aimPitch: 0, aimPoint: new THREE.Vector3(0, 1.4, 10), state: 'normal', stateT: 0, dodgeDir: new THREE.Vector2(),
@@ -78,7 +80,7 @@ export async function runViewer(): Promise<void> {
   let frames = 0;
   const tick = () => {
     const t = (performance.now() - t0) / 1000;
-    if (!zombie && !creature) { if (q.get('phase')) (claire as any).phase = Number(q.get('phase')); claire.animate(1 / 60, t, p); }
+    if (!zombie && !creature) { if (q.get('phase')) (claire as any).phase = Number(q.get('phase')); if (q.get('fireT')) (claire as any).fireT = Number(q.get('fireT')) - 1 / 60; claire.animate(1 / 60, t, p); }
     r.render(scene, cam);
     frames++;
     (window as any).__frames = frames; (window as any).__viewerReady = frames > 4 && (!!ModelLibrary.has(which) || !!ModelLibrary.has('enemy_' + which));
