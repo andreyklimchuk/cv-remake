@@ -21,7 +21,7 @@ export class Input {
 
   constructor(private canvas: HTMLCanvasElement) {
     window.addEventListener('keydown', (e) => {
-      if (e.code === 'Tab' || e.code === 'Space') e.preventDefault();
+      if (e.code === 'Tab' || e.code === 'Space' || e.code === 'F10') e.preventDefault();
       if (!this.keys.has(e.code)) this.pressed.add(e.code);
       this.keys.add(e.code);
       this.usingGamepad = false;
@@ -115,6 +115,8 @@ export class Input {
   flashlight(): boolean { return this.keyPressed('KeyL') || this.btnPressed(13); }
   debugToggle(): boolean { return this.keyPressed('F3'); }
   cheat(): boolean { return this.keyPressed('F9'); }
+  /** admin / debug panel (F10 or ~) */
+  admin(): boolean { return this.keyPressed('F10') || this.keyPressed('Backquote'); }
   raw(code: string): boolean { return this.keyPressed(code); }
 }
 

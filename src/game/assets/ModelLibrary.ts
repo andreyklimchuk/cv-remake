@@ -12,7 +12,8 @@ import steveUrl from '../../assets/models/steve.glb?url';
  * If loading fails the game falls back to the procedural capsule characters.
  */
 import hunkUrl from '../../assets/models/hunk.glb?url';
-const URLS: Record<string, string> = { claire: claireUrl, steve: steveUrl, hunk: hunkUrl };
+import hueyUrl from '../../assets/models/vehicle_huey.glb?url';
+const URLS: Record<string, string> = { claire: claireUrl, steve: steveUrl, hunk: hunkUrl, vehicle_huey: hueyUrl };
 const zombieUrls = import.meta.glob(['../../assets/models/zombie_*.glb', '../../assets/models/enemy_*.glb'], { query: '?url', import: 'default', eager: true }) as Record<string, string>;
 for (const [p, u] of Object.entries(zombieUrls)) URLS[p.split('/').pop()!.replace('.glb', '')] = u;
 const WEAPON_URLS = import.meta.glob('../../assets/models/weapon_*.glb', { query: '?url', import: 'default', eager: true }) as Record<string, string>;
@@ -20,6 +21,10 @@ for (const [p, u] of Object.entries(WEAPON_URLS)) URLS[p.split('/').pop()!.repla
 // detailed pickup items and level props (tools/blender/items.py, props.py)
 const PROP_URLS = import.meta.glob(['../../assets/models/item_*.glb', '../../assets/models/prop_*.glb'], { query: '?url', import: 'default', eager: true }) as Record<string, string>;
 for (const [p, u] of Object.entries(PROP_URLS)) URLS[p.split('/').pop()!.replace('.glb', '')] = u;
+
+// locations (Sketchfab, DPLDS, CC-BY 4.0 — compressed by tools/import/glb_tex.py): cv_prison, cv_yard
+const LEVEL_URLS = import.meta.glob('../../assets/levels/*.glb', { query: '?url', import: 'default', eager: true }) as Record<string, string>;
+for (const [p, u] of Object.entries(LEVEL_URLS)) URLS[p.split('/').pop()!.replace('.glb', '')] = u;
 
 const cache = new Map<string, GLTF>();
 

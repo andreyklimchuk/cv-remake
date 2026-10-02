@@ -19,7 +19,8 @@ import { Creature } from './ai/Creature';
 import { Licker } from './ai/Licker';
 import { Hunter } from './ai/Hunter';
 import { Door, type Interactable, type DoorAgent } from './world/Interactables';
-import { buildPrisonLevel, type Level } from './levels/PrisonLevel';
+import type { Level } from './levels/PrisonLevel';
+import { buildRockfortPrison, SPOTS } from './levels/RockfortPrison';
 import type { SaveData } from './SaveSystem';
 
 /** One play session's simulation state. Recreated on New Game / Load. */
@@ -79,16 +80,9 @@ export class World {
       for (const z of this.zombies) if (z.alive && z.position.distanceToSquared(this.player.pos) < 900) out.push({ pos: z.position, radius: 0.32 });
       return out;
     };
-    this.level = buildPrisonLevel({
+    this.level = buildRockfortPrison({
       scene: s, physics: this.physics, nav: this.nav, streamer: this.streamer, quality: q, flags: this.flags,
-      spawnZombie: (spawn) => {
-        // enemies live in the scene root (not the spawn zone's group): a zombie that follows the player into
-        // another zone must not vanish when its spawn zone is portal-culled. Visibility is resolved per frame.
-        const z: Enemy = spawn.kind === 'licker' ? new Licker(spawn, s, () => this.zctx) : spawn.kind === 'hunter' ? new Hunter(spawn, s, () => this.zctx)
-          : spawn.kind ? new Creature({ ...spawn, kind: spawn.kind }, s, () => this.zctx) : new Zombie(spawn, s, q.textureSize, () => this.zctx);
-        if (this.flags.has('dead:' + spawn.id)) z.forceDead();
-        this.zombies.push(z);
-      },
+      spawnZombie: (spawn) => this.spawnEnemy(spawn),
       addInteractable: (i) => this.interactables.push(i),
     });
     // build every zone up-front (behind the loading screen) — no construction hitches while playing
@@ -150,6 +144,27 @@ export class World {
 
   get character(): 'claire' | 'steve' { return this.player.character; }
 
+  /** enemies live in the scene root (not the spawn zone's group): a zombie that follows the player into
+   *  another zone must not vanish when its spawn zone is portal-culled. Visibility is resolved per frame. */
+  spawnEnemy(spawn: import('./ai/Zombie').ZombieSpawn): Enemy {
+    const s = this.scene, q = this.q;
+    const z: Enemy = spawn.kind === 'licker' ? new Licker(spawn, s, () => this.zctx) : spawn.kind === 'hunter' ? new Hunter(spawn, s, () => this.zctx)
+      : spawn.kind ? new Creature({ ...spawn, kind: spawn.kind }, s, () => this.zctx) : new Zombie(spawn, s, q.textureSize, () => this.zctx);
+    if (this.flags.has('dead:' + spawn.id)) z.forceDead();
+    this.zombies.push(z);
+    return z;
+  }
+
+  /** instant move (door transitions, admin teleports): ground height from the physics floors */
+  teleport(pos: THREE.Vector3, yaw: number): void {
+    const p = this.player;
+    p.pos.set(pos.x, this.physics.groundAt(pos.x, pos.z, pos.y + 0.3), pos.z);
+    p.vel.set(0, 0, 0); p.yaw = yaw;
+    p.model.root.position.copy(p.pos); p.model.root.rotation.y = yaw;
+    this.streamer.update(p.pos, p.pos);
+    this.lights.update(p.pos);
+  }
+
   private stockSteve(): void {
     const inv = this.inventories.steve;
     inv.add('gold_lugers', 1, { mag: 16 });
@@ -175,7 +190,8 @@ export class World {
   /** test / debug start (`play.html?devstart`): no intro, Claire in the yard with the old starting kit */
   devStart(): void {
     this.flags.add('introDone'); this.flags.add('cellOpen');
-    this.player.pos.set(0, 0, 3); this.player.yaw = 0;
+    const s = SPOTS.yardC;
+    this.player.pos.set(s[0], s[1], s[2]); this.player.yaw = s[3];
     this.player.model.root.position.copy(this.player.pos);
     this.inventory.add('m9f', 1, { mag: 15 });
     this.inventory.add('knife');

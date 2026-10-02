@@ -72,7 +72,10 @@ function zombieTemplate(outfit: ZombieOutfit): ZTemplate | null {
     debris.set(name, dg);
   }
   const m0 = src.material as THREE.MeshStandardMaterial;
-  m0.side = THREE.DoubleSide; m0.aoMap = m0.roughnessMap; m0.aoMapIntensity = 0.8;
+  m0.side = THREE.DoubleSide;
+  // Blender zombies pack AO into the ORM red channel; the atlas-baked user zombies carry roughness only
+  if (outfit === 'prisoner' || outfit === 'guard' || outfit === 'civilian') { m0.aoMap = m0.roughnessMap; m0.aoMapIntensity = 0.8; }
+  if (m0.alphaTest > 0) { m0.alphaTest = 0.5; m0.transparent = false; m0.depthWrite = true; }
   for (const t of [m0.map, m0.normalMap, m0.roughnessMap]) if (t) t.anisotropy = 4;
   const mats = [m0, m0.clone(), m0.clone()];
   mats[1].color.setRGB(0.93, 0.97, 0.9); mats[2].color.setRGB(1.05, 0.95, 0.95);
@@ -81,10 +84,13 @@ function zombieTemplate(outfit: ZombieOutfit): ZTemplate | null {
   return tpl;
 }
 
-export type ZombieOutfit = 'prisoner' | 'guard' | 'civilian';
+/** prisoner / guard: Blender zombies; hitman / female: user models (tools/import/zombie_bpy.py, atlas-baked) */
+export type ZombieOutfit = 'prisoner' | 'guard' | 'civilian' | 'hitman' | 'female';
 
 const OUTFIT: Record<ZombieOutfit, { torso: number; legs: number; feet: number }> = {
   prisoner: { torso: 0x9a4a18, legs: 0x9a4a18, feet: 0x222222 },
+  hitman: { torso: 0xa8a49a, legs: 0x3a5a6a, feet: 0x222222 },
+  female: { torso: 0x4a3a30, legs: 0x2a2224, feet: 0x1a1a1a },
   guard: { torso: 0x2c3646, legs: 0x252c38, feet: 0x111111 },
   civilian: { torso: 0x6a6a5a, legs: 0x2a3550, feet: 0x3a2a1a },
 };

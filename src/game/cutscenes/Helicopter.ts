@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { ModelLibrary } from '../assets/ModelLibrary';
 
 /** Umbrella-style decal: red / white octagon "umbrella" segments */
 function logoTexture(): THREE.CanvasTexture {
@@ -20,16 +21,21 @@ function logoTexture(): THREE.CanvasTexture {
  */
 export class Helicopter {
   root = new THREE.Group();
-  private rotor = new THREE.Group();
-  private tailRotor = new THREE.Group();
-  private disc: THREE.Mesh;
-  private door: THREE.Mesh;
-  private beacon: THREE.MeshStandardMaterial;
-  searchlight: THREE.SpotLight;
+  private rotor: THREE.Object3D = new THREE.Group();
+  private tailRotor: THREE.Object3D = new THREE.Group();
+  private disc!: THREE.Mesh;
+  private door!: THREE.Mesh;
+  private beacon!: THREE.MeshStandardMaterial;
+  searchlight!: THREE.SpotLight;
   rotorSpeed = 1;
   doorOpen = 0;
 
+  /** Bell UH-1 "Huey" (Sketchfab, Duane's Mind, CC-BY 4.0) — vehicle_huey.glb; procedural fallback below */
+  private glb = false;
+  private glbDoorX = 1.6;
+
   constructor() {
+    if (this.fromGlb()) return;
     const body = new THREE.MeshStandardMaterial({ color: 0x4d545c, metalness: 0.35, roughness: 0.48 });
     const dark = new THREE.MeshStandardMaterial({ color: 0x15171a, metalness: 0.6, roughness: 0.5 });
     const glass = new THREE.MeshStandardMaterial({ color: 0x0b1418, metalness: 0.95, roughness: 0.06, envMapIntensity: 1.5 });
@@ -98,7 +104,62 @@ export class Helicopter {
     const cabin = new THREE.PointLight(0xffc890, 6, 4.5, 1.8); cabin.position.set(0.3, 1.6, 0.35); cabin.userData.priority = 20; R.add(cabin);
   }
 
+  private fromGlb(): boolean {
+    const g = ModelLibrary.get('vehicle_huey');
+    if (!g) return false;
+    const S = 1.45; // model is ~8.2 m nose-to-tail; a real UH-1 fuselage is ~12 m
+    const m = g.scene.clone(true);
+    m.scale.setScalar(S);
+    let top: THREE.Object3D | null = null, back: THREE.Object3D | null = null;
+    m.traverse((o) => {
+      if (o.name === 'Top_Rotor') top = o;
+      if (o.name === 'Back_Rotor') back = o;
+      const me = o as THREE.Mesh;
+      if (me.isMesh) {
+        me.castShadow = true; me.receiveShadow = true;
+        const mats = Array.isArray(me.material) ? me.material : [me.material];
+        for (const mt of mats as THREE.MeshStandardMaterial[]) {
+          if (/glass/i.test(mt.name)) { mt.transparent = true; mt.opacity = 0.35; mt.depthWrite = false; mt.metalness = 0.9; mt.roughness = 0.05; me.castShadow = false; }
+          else { mt.envMapIntensity = 0.8; }
+        }
+      }
+    });
+    this.root.add(m);
+    if (top) { this.rotor = top; }
+    if (back) { this.tailRotor = back; }
+    this.glb = true;
+    this.glbDoorX = 0.95 * S + 0.45;
+    // motion-blur disc for the main rotor
+    this.disc = new THREE.Mesh(new THREE.CircleGeometry(4.2 * S, 40), new THREE.MeshBasicMaterial({ color: 0x0a0a0a, transparent: true, opacity: 0.18, depthWrite: false, side: THREE.DoubleSide }));
+    this.disc.rotation.x = -Math.PI / 2; this.disc.position.y = 2.6 * S; this.root.add(this.disc);
+    this.door = new THREE.Mesh(); // the Huey flies with its cargo doors open
+    // Umbrella logos on the tail boom
+    for (const s of [-1, 1]) {
+      const logo = new THREE.Mesh(new THREE.CircleGeometry(0.34, 24), new THREE.MeshStandardMaterial({ map: logoTexture(), roughness: 0.5, metalness: 0.2, polygonOffset: true, polygonOffsetFactor: -2 }));
+      logo.position.set(0.36 * s * S, 1.45 * S, -2.6 * S); logo.rotation.y = (Math.PI / 2) * s; this.root.add(logo);
+    }
+    this.beacon = new THREE.MeshStandardMaterial({ color: 0x400000, emissive: 0xff2010, emissiveIntensity: 3 });
+    for (const p of [[0, 2.15, -0.6], [0, 2.9, -5.9], [0, 0.05, -0.4]] as const) {
+      const b = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6), this.beacon); b.position.set(p[0], p[1] * S, p[2] * S); this.root.add(b);
+    }
+    this.searchlight = new THREE.SpotLight(0xf2f5ff, 320, 75, 0.3, 0.45, 1.1);
+    this.searchlight.position.set(0, 0.25 * S, 2.3 * S); this.searchlight.castShadow = true; this.searchlight.userData.priority = 30;
+    this.searchlight.target.position.set(0, -12, 13);
+    this.root.add(this.searchlight, this.searchlight.target);
+    const bellyL = new THREE.PointLight(0xdfe6ff, 7, 12, 1.6); bellyL.position.set(0, 0.3, 0.6); bellyL.userData.priority = 25; this.root.add(bellyL);
+    const cabin = new THREE.PointLight(0xffc890, 6, 4.5, 1.8); cabin.position.set(0.2, 1.3 * S, 0.2); cabin.userData.priority = 20; this.root.add(cabin);
+    return true;
+  }
+
   update(dt: number, t: number): void {
+    if (this.glb) {
+      const rs = this.rotorSpeed;
+      this.rotor.rotation.y += dt * rs * 30;
+      this.tailRotor.rotation.x += dt * rs * 70;
+      (this.disc.material as THREE.MeshBasicMaterial).opacity = 0.2 * Math.min(1, rs * 1.3);
+      this.beacon.emissiveIntensity = (t % 1.1) < 0.12 ? 6 : 0.2;
+      return;
+    }
     const rs = this.rotorSpeed;
     this.rotor.rotation.y += dt * rs * 30;
     this.tailRotor.rotation.x += dt * rs * 70;
@@ -109,7 +170,7 @@ export class Helicopter {
   }
 
   /** world position of the cargo-door sill (where passengers step out) */
-  doorWorld(out = new THREE.Vector3()): THREE.Vector3 { return this.root.localToWorld(out.set(1.6, 0, 0.35)); }
+  doorWorld(out = new THREE.Vector3()): THREE.Vector3 { return this.root.localToWorld(out.set(this.glb ? this.glbDoorX : 1.6, 0, 0.35)); }
 
   dispose(): void {
     this.root.removeFromParent();

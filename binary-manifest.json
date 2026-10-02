@@ -883,7 +883,7 @@
  },
  "src/assets/models/steve.glb": {
   "parts": 8,
-  "sha1": "093a7e02df5fc69901d5c2b60118b3d596693baf",
+  "sha1": "e50edd5acd6a2a76955d492a2eabaa66a94e4031",
   "bytes": 10266544,
   "gzip": true
  },
@@ -909,6 +909,36 @@
   "parts": 3,
   "sha1": "aec74892674fa8564cd3ea682ea5a8a661a493d1",
   "bytes": 3032132,
+  "gzip": true
+ },
+ "src/assets/levels/cv_prison.glb": {
+  "parts": 4,
+  "sha1": "ad7d88763aa564075c19eb52a6d421139d03b251",
+  "bytes": 3580808,
+  "gzip": true
+ },
+ "src/assets/levels/cv_yard.glb": {
+  "parts": 5,
+  "sha1": "d036a9376e84dd46376bb471f1710e9a52625b4c",
+  "bytes": 4773700,
+  "gzip": true
+ },
+ "src/assets/models/vehicle_huey.glb": {
+  "parts": 2,
+  "sha1": "a4559b13a70e91459685cb742e4ef7c4ef965791",
+  "bytes": 1025276,
+  "gzip": true
+ },
+ "src/assets/models/zombie_female.glb": {
+  "parts": 9,
+  "sha1": "55e91e418c7cbca104e2bc48a31bb79324ab725a",
+  "bytes": 7080892,
+  "gzip": true
+ },
+ "src/assets/models/zombie_hitman.glb": {
+  "parts": 6,
+  "sha1": "8507bc57c685c6875c787930ff53c64f9fdcf56c",
+  "bytes": 5407744,
   "gzip": true
  }
 }

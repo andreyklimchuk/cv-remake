@@ -19,9 +19,10 @@ import type { GameAPI } from './world/Interactables';
 import { Cinema } from '../ui/Cinema';
 import type { Cutscene, CutsceneEnv } from './cutscenes/Cutscene';
 import { IntroCutscene } from './cutscenes/Intro';
-import { MeetSteveCutscene } from './cutscenes/MeetSteve';
+import { AdminPanel } from '../ui/AdminPanel';
+import { SPOTS } from './levels/RockfortPrison';
 
-type Mode = 'title' | 'playing' | 'inventory' | 'paused' | 'dialog' | 'dead' | 'end' | 'cutscene';
+type Mode = 'title' | 'playing' | 'inventory' | 'paused' | 'dialog' | 'dead' | 'end' | 'cutscene' | 'travel' | 'admin';
 
 /**
  * Top-level orchestrator ("Web RE-Engine" runtime): owns renderer, input, UI and the current World,
@@ -50,6 +51,12 @@ export class Game {
   cinema: Cinema;
   /** running real-time cutscene (mode 'cutscene') */
   cut: Cutscene | null = null;
+  admin: AdminPanel;
+  /** admin panel: god mode / time scale */
+  god = false;
+  timeScale = 1;
+  private travelFade: HTMLDivElement;
+  private adminN = 0;
 
   constructor(private canvas: HTMLCanvasElement, private ui: HTMLElement) {
     this.input = new Input(canvas);
@@ -86,7 +93,47 @@ export class Game {
       completeLevel: () => this.complete(),
       readDoc: (id) => this.readDoc(id),
       codeLock: (title, digits, check, solved) => this.codeLock(title, digits, check, solved),
+      travel: (pos, yaw, sound) => this.travel(pos, yaw, sound),
     };
+    this.travelFade = document.createElement('div');
+    Object.assign(this.travelFade.style, { position: 'absolute', inset: '0', background: '#000', opacity: '0', pointerEvents: 'none', transition: 'opacity .35s', zIndex: '40' });
+    ui.appendChild(this.travelFade);
+    this.admin = new AdminPanel(ui, {
+      spots: Object.entries(SPOTS).map(([k, v]) => [k, v[4]]),
+      teleport: (id) => { const s = SPOTS[id]; const w = this.world; if (!s || !w) return; w.teleport(new THREE.Vector3(s[0], s[1], s[2]), s[3]); this.rig.yaw = s[3]; },
+      arsenal: () => this.cheat(),
+      ammo: () => {
+        const w = this.world!; for (const [id, q] of [['ammo_hg', 60], ['ammo_sg', 21], ['ammo_smg', 90], ['ammo_mag', 12], ['ammo_bolt', 30]] as [string, number][]) if (w.inventory.add(id, q) > 0) w.itemBox.items.push({ uid: newUid(), defId: id, qty: q, x: 0, y: 0, rot: false });
+      },
+      heal: () => { const p = this.world!.player; p.hp = p.maxHp; p.poisoned = false; },
+      god: () => this.god,
+      setGod: (on) => { this.god = on; },
+      spawn: (kind) => {
+        const w = this.world!; const p = w.player;
+        const x = p.pos.x + Math.sin(p.yaw) * 3.5, z = p.pos.z + Math.cos(p.yaw) * 3.5;
+        const creature = ['cerberus', 'hunter', 'licker', 'bandersnatch'].includes(kind);
+        w.spawnEnemy({ id: `adm_${this.adminN++}_${Date.now() % 100000}`, x, z, y: p.pos.y, yaw: p.yaw + Math.PI, ...(creature ? { kind: kind as never } : { outfit: kind as never }) });
+        w.nav.rebuild();
+      },
+      killAll: () => { const w = this.world!; let n = 0; for (const z of w.zombies) if (z.alive) { z.forceDead(); w.flags.add('dead:' + z.spawn.id); n++; } return n; },
+      switchChar: () => { const w = this.world!; const c = w.switchCharacter(); (this.invUI as any).host.inventory = w.inventory; return c === 'steve' ? 'Стив' : 'Клэр'; },
+      openDoors: () => {
+        const w = this.world!; let n = 0;
+        w.flags.add('cellOpen');
+        for (const i of w.interactables) if (i instanceof Door && !i.open) { w.flags.add('unlocked:' + i.id); i.openNow(w.flags, w.player.pos); n++; }
+        return n;
+      },
+      timeScale: () => this.timeScale,
+      setTimeScale: (k) => { this.timeScale = k; },
+      debug: () => { this.debug = !this.debug; if (!this.debug) this.hud.setDebug(null); },
+      save: () => { this.closeAdmin(); this.saveDialog(); },
+      info: () => {
+        const w = this.world; if (!w) return '';
+        const p = w.player;
+        return `pos ${p.pos.x.toFixed(2)}, ${p.pos.y.toFixed(2)}, ${p.pos.z.toFixed(2)}  yaw ${p.yaw.toFixed(2)}\nzone ${w.streamer.current?.id ?? '-'}  zombies ${w.zombies.filter((z) => z.alive).length}/${w.zombies.length}\nflags: ${[...w.flags].filter((f) => !f.startsWith('dead:') && !f.startsWith('picked:')).join(', ')}`;
+      },
+      close: () => this.closeAdmin(),
+    });
     Door.api = this.api;
     const game = this;
     document.addEventListener('pointerlockchange', () => {
@@ -128,6 +175,7 @@ export class Game {
     setTimeout(async () => {
       this.world?.dispose();
       this.cut = null; this.cinema.show(false);
+      this.admin.close(); this.travelFade.style.opacity = '0'; this.timeScale = 1;
       const w = new World(this.camera, this.backend.preset, save);
       this.world = w;
       (this.invUI as any).host.inventory = w.inventory;
@@ -333,6 +381,32 @@ export class Game {
     this.hud.message(`Использовано: ${d.name}`);
   }
 
+  private closeAdmin(): void {
+    this.admin.close();
+    if (this.mode === 'admin') { this.mode = 'playing'; this.input.lockPointer(); }
+  }
+
+  /** door transition: fade to black, move, fade in (the world is frozen meanwhile) */
+  private travel(pos: THREE.Vector3, yaw: number, sound?: 'metal' | 'wood'): void {
+    const w = this.world;
+    if (!w || this.mode !== 'playing') return;
+    this.mode = 'travel';
+    this.hud.setPrompt(null);
+    w.player.vel.set(0, 0, 0); w.player.aiming = false;
+    audio.clank(w.player.pos.clone().setY(1.2), sound !== 'wood');
+    this.travelFade.style.opacity = '1';
+    setTimeout(() => {
+      if (this.world !== w) return;
+      w.teleport(pos, yaw);
+      this.rig.yaw = yaw; this.rig.pitch = -0.12;
+      this.rig.update(0, w.player.pos, false, 0);
+      setTimeout(() => {
+        this.travelFade.style.opacity = '0';
+        if (this.mode === 'travel' && this.world === w) this.mode = 'playing';
+      }, 300);
+    }, 420);
+  }
+
   private cheat(): void {
     const w = this.world!;
     const inv = w.inventory;
@@ -361,7 +435,8 @@ export class Game {
     // inventory close is handled here (before simulate) so the same key press can't re-open it / trigger pause
     if (w && this.mode === 'inventory' && (this.input.inventory() || this.input.pause())) { this.invUI.close(); this.input.endFrame(); }
     else if (w && this.mode === 'inventory' && !this.invUI.isOpen) this.mode = 'playing';
-    if (w && this.mode === 'playing') this.simulate(dt, w);
+    if (w && this.mode === 'admin' && (this.input.admin() || this.input.pause())) { this.closeAdmin(); this.input.endFrame(); }
+    if (w && this.mode === 'playing') this.simulate(dt * this.timeScale, w);
     else if (w && this.mode === 'cutscene' && this.cut) this.cutsceneStep(dt, w);
     else if (w && this.mode === 'dead') {
       w.time += dt;
@@ -409,6 +484,7 @@ export class Game {
     if (inp.pause()) { this.pause(); return; }
     if (inp.inventory() && w.player.state !== 'grabbed') { this.openInventory(false); return; }
     if (inp.cheat()) this.cheat();
+    if (inp.admin()) { this.mode = 'admin'; this.input.unlockPointer(); this.admin.open(); return; }
 
     // camera look (+ tremble + aim assist)
     if (inp.pointerLocked || inp.usingGamepad) {
@@ -440,11 +516,7 @@ export class Game {
     p.indoor = !(w.streamer.current?.outdoor ?? true);
     p.update(dt, w.time, inp, this.rig, w.physics, w.weapons, w.zombies);
     if (p.state === 'dead' && this.mode === 'playing') { this.mode = 'dead'; this.deadT = 0; return; }
-    // story: past the opened main gate Claire meets Steve (cutscene) — from then on the player is Steve
-    if (!w.flags.has('steveMet') && w.flags.has('gateOpen') && w.character === 'claire' && p.state === 'normal' && p.pos.z > 42.4 && Math.abs(p.pos.x) < 7) {
-      this.startCutscene(new MeetSteveCutscene(this.cutEnv(w), () => { this.hud.message('Стив Бернсайд. Золотые Люгеры, всё снаряжение Клэр — кроме её пистолета.', 4); }));
-      return;
-    }
+    if (this.god) { p.hp = p.maxHp; p.poisoned = false; }
 
     // weapons
     const muzzle = p.model.muzzleWorld(new THREE.Vector3());
@@ -479,7 +551,7 @@ export class Game {
     if (zone && !this.visitedZones.has(zone.id)) {
       this.visitedZones.add(zone.id);
       const names: Record<string, [string, string]> = {
-        yard: ['ТЮРЕМНЫЙ ДВОР', 'ROCKFORT ISLAND'], guard: ['КАРАУЛЬНОЕ ПОМЕЩЕНИЕ', 'PRISON'], cells: ['БЛОК КАМЕР B', 'PRISON'], west: ['ЗАПАДНЫЙ ДВОР', 'PRISON'],
+        yard: ['ТЮРЕМНЫЙ ДВОР', 'ROCKFORT ISLAND'], p_room: ['КАРАУЛЬНОЕ ПОМЕЩЕНИЕ', 'PRISON'], p_corr: ['КОРИДОР И ЛЕСТНИЦА', 'PRISON'], house: ['ДОМ КОМЕНДАНТА', 'ROCKFORT ISLAND'], guard: ['КАРАУЛЬНОЕ ПОМЕЩЕНИЕ', 'PRISON'], cells: ['БЛОК КАМЕР B', 'PRISON'], west: ['ЗАПАДНЫЙ ДВОР', 'PRISON'],
         gate_out: ['ДОРОГА К МОСТУ', 'ROCKFORT ISLAND'], bridge: ['МОСТ', 'ROCKFORT ISLAND'], plaza: ['ЛЕСТНИЦА', 'ROCKFORT ISLAND'],
         tyard: ['ПЛАЦ', 'MILITARY TRAINING FACILITY'], training: ['УЧЕБНЫЙ КОРПУС', 'MILITARY TRAINING FACILITY'],
         passage: ['ПРОХОД', 'ROCKFORT ISLAND'], pyard: ['ДВОРЦОВАЯ ПЛОЩАДЬ', 'ASHFORD PALACE'], hall: ['ГЛАВНЫЙ ЗАЛ', 'ASHFORD PALACE'],

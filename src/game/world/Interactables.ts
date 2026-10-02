@@ -22,6 +22,8 @@ export interface GameAPI {
   readDoc(id: string): void;
   /** RE-style dial lock. `check` returns true when the combination is right. */
   codeLock(title: string, digits: number, check: (code: string) => boolean, onSolved: () => void): void;
+  /** RE-style door transition: fade out, move the player (and camera) to `pos` facing `yaw`, fade in. */
+  travel(pos: THREE.Vector3, yaw: number, sound?: 'metal' | 'wood'): void;
 }
 
 export interface Interactable {
