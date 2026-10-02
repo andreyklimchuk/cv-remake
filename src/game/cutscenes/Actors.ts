@@ -106,8 +106,13 @@ export class GuardActor extends Walker {
     this.model = m;
     const r = m.rig;
     if (m instanceof ClaireModel) {
-      // HUNK (user asset): already wears the gas mask + tactical gear; only the MP5 is added below
-      (m as any).gripL = (m as any).gripR = 1;
+      // HUNK (user asset): already wears the gas mask + tactical gear. Its Bip-style rig has non-identity bone rest
+      // rotations, so the zombie-guard Euler walk below would fold it up — it is animated by ClaireModel.animate
+      // (same gait / rifle hold as the playable characters) with the MP5 as its weapon.
+      m.setWeapon('mp5');
+      this.gun = new THREE.Group();
+      scene.add(m.root);
+      return;
     } else if (m.mesh) {
       const src = m.mesh.material as THREE.MeshStandardMaterial;
       let u = GUARD_UNIFORM.get(src);
@@ -154,11 +159,23 @@ export class GuardActor extends Walker {
     scene.add(m.root);
   }
 
+  private aimPt = new THREE.Vector3();
+
   update(dt: number, t: number): void {
     this.step(dt);
     const m = this.model, r = m.rig;
     m.root.position.copy(this.pos);
     m.root.rotation.y = this.yaw;
+    if (m instanceof ClaireModel) {
+      const aim = this.raise > 0.5 && !!this.aimAt;
+      if (this.aimAt) this.aimPt.copy(this.aimAt);
+      m.animate(dt, t, {
+        speed: this.speed, localMove: new THREE.Vector2(0, 1), running: false, aim, aimPitch: 0,
+        aimPoint: this.aimPt, state: 'normal', stateT: 0, dodgeDir: new THREE.Vector2(), hpRatio: 1, reloading: false,
+        lookTarget: aim ? this.aimPt : null, shots: 0, knifeReady: false,
+      });
+      return;
+    }
     for (const [b, q] of this.rest) b.quaternion.copy(q);
     const amp = Math.min(1, this.speed / 1.2);
     this.phase += dt * (this.speed * 5.2);
@@ -188,7 +205,6 @@ export class GuardActor extends Walker {
     const right = new THREE.Vector3(-Math.cos(this.yaw), 0, Math.sin(this.yaw));
     twoBoneIK(r.rUpperArm, r.rForearm, r.rHand, grip, right.clone().multiplyScalar(1).add(new THREE.Vector3(0, -0.6, -0.2)));
     twoBoneIK(r.lUpperArm, r.lForearm, r.lHand, fore, right.clone().multiplyScalar(-1).add(new THREE.Vector3(0, -0.8, 0)));
-    if (m instanceof ClaireModel) (m as any).curlFingers();
   }
 
   dispose(): void {
