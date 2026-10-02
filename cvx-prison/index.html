@@ -3,20 +3,24 @@
 <script>window.__err=function(m){var d=document.getElementById('boot');if(!d){d=document.createElement('pre');d.id='boot';document.documentElement.appendChild(d)}d.style.cssText='position:fixed;left:2%;top:2%;right:2%;color:#f88;white-space:pre-wrap;z-index:99;font:14px monospace';d.textContent+=m+'\n'};
 window.addEventListener('error',function(e){window.__err('Ошибка: '+(e.message||'')+' '+(e.filename||(e.target&&e.target.src)||'')+(e.lineno?':'+e.lineno:''))},true);
 window.addEventListener('load',function(){setTimeout(function(){var a=document.getElementById('app');if(a&&!a.children.length)window.__err('Игра не запустилась (пустой экран). Браузер: '+navigator.userAgent)},4000)});
-window.addEventListener('unhandledrejection',function(e){window.__err('Ошибка: '+(e.reason&&e.reason.message||e.reason))});</script><script src="data/part00.js"></script>
-<script src="data/part01.js"></script>
-<script src="data/part02.js"></script>
-<script src="data/part03.js"></script>
-<script src="data/part04.js"></script>
-<script src="data/part05.js"></script>
-<script src="data/part06.js"></script>
-<script src="data/part07.js"></script>
-<script src="data/part08.js"></script>
-<script src="data/part09.js"></script>
-<script src="data/part10.js"></script>
-<script src="data/part11.js"></script>
-<script src="data/part12.js"></script>
-<script>if(!window.__P||window.__P.length!==13)window.__err('Не загрузились файлы ресурсов из папки data/ ('+(window.__P?window.__P.length:0)+' из 13). Распакуйте архив целиком и откройте index.html из распакованной папки.');else{window.__ASSETS=JSON.parse(window.__P.join(''));delete window.__P;window.__MOVIES={"mv_000":12};}</script>
+window.addEventListener('unhandledrejection',function(e){window.__err('Ошибка: '+(e.reason&&e.reason.message||e.reason))});</script><script src="data/audio_00.js"></script>
+<script src="data/chars_claire_00.js"></script>
+<script src="data/chars_claire_01.js"></script>
+<script src="data/chars_claire_02.js"></script>
+<script src="data/chars_00.js"></script>
+<script src="data/inv_00.js"></script>
+<script src="data/items_00.js"></script>
+<script src="data/objects_00.js"></script>
+<script src="data/objects_01.js"></script>
+<script src="data/objects_ob_1012_00.js"></script>
+<script src="data/rooms_rm_0000_00.js"></script>
+<script src="data/rooms_rm_0000_01.js"></script>
+<script src="data/rooms_rm_0000_02.js"></script>
+<script src="data/rooms_rm_0000_03.js"></script>
+<script src="data/rooms_rm_0010_00.js"></script>
+<script src="data/rooms_rm_0010_01.js"></script>
+<script src="data/rooms_rm_0010_02.js"></script>
+<script>if(!window.__P||window.__P.length!==17)window.__err('Не загрузились файлы ресурсов из папки data/ ('+(window.__P?window.__P.length:0)+' из 17). Распакуйте архив целиком и откройте index.html из распакованной папки.');else{(function(){var G={},A={};window.__P.forEach(function(p){(G[p[0]]=G[p[0]]||[])[p[1]]=p[2]});for(var g in G){var o=JSON.parse(G[g].join(''));for(var k in o)A[k]=o[k]}window.__ASSETS=A})();delete window.__P;window.__MOVIES={"mv_000":12};}</script>
 <script defer src="game.js" onerror="window.__err('Не найден game.js. Распакуйте архив целиком.')"></script>
 </head>
 <body><div id="app"></div></body></html>
