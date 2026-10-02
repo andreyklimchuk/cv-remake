@@ -50,9 +50,10 @@ src/
   `tools/import/claire_su.py`). Старая Blender-Клэр: `play.html?classic`. Права на модель принадлежат их владельцам
   (Capcom / автор загрузки), проект некоммерческий фанатский.
 * Ассеты из других игр Capcom (прислал пользователь, конвертация скриптами `tools/import/*.py`): **HUNK** (охрана в интро),
-  нож, травы и печатная машинка из *RE0*, **Лизун** (RE6, em3000) — слепой, слышит бег и выстрелы, бьёт языком/когтями,
-  прыгает; **Хантер** (*RE: Revelations*) — бег, прыжок через пропасть, удары когтями. Просмотр:
-  `play.html?viewer=licker&pose=idle|walk|lash|swipe`, `play.html?viewer=hunter&pose=run`.
+  нож, травы и печатная машинка из *RE0*, **Хантер** (*RE: Revelations*) — бег, прыжок через пропасть, удары когтями. Просмотр:
+  `play.html?viewer=hunter&pose=run`.
+* **Стив** — тело из мода RE4R *Steve Burnside Costume* (Mralexmods), голова — прежняя (`tools/import/steve_re4r.py`).
+* Сборка для игры: https://github.com/andreyklimchuk/cv-remake/releases/download/latest/cv-remake-play.zip (автосборка GitHub Actions).
 * Если GLB не загрузился — автоматически используется старая процедурная модель.
 
 ## Тестовый уровень: тюрьма острова Рокфорт

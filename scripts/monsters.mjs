@@ -9,7 +9,7 @@ await page.goto('file:///data/cv-remake/dist/play.html?devstart');
 await page.waitForTimeout(1500);
 await page.click('text=НОВАЯ ИГРА');
 await page.waitForFunction(() => window.__game?.mode === 'playing', null, { timeout: 120000 });
-for (const [kind, dx, dz, yaw] of [['hunter', 0, -7, 0], ['licker', 2.6, 0, -Math.PI / 2]]) {
+for (const [kind, dx, dz, yaw] of [['hunter', 0, -7, 0]]) { // (Licker removed in 6.13)
   const ok = await page.evaluate(([kind, dx, dz, yaw]) => {
     const g = window.__game, w = g.world, p = w.player;
     const m = w.zombies.find((z) => z.kind === kind);

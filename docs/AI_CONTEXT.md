@@ -477,6 +477,37 @@ node scripts/backup.mjs "<сообщение>" all            # всё
   координатами): архив распакован (`tools`: ARC v7 + zlib), но готового парсера MOD для RE5 нет — не сделано,
   нужен отдельный реверс формата (или экспорт пользователем в FBX/GLB через сторонние инструменты).
 
+### 6.13 Итерация «Стив RE4R, фиксы картин/охраны, без Лизуна»
+- **Стив** = тело из мода RE4R *Steve Burnside Costume* (Mralexmods, Стив из Darkside Chronicles, слот Леона
+  `cha000_00.mesh`: одежда `BootsLeather_Mat` + голые руки `Skin_Mat`) + **голова старого Стива** (лицо, глаза, волосы,
+  shape keys blink/pain). Конвертер `tools/import/steve_re4r.py` (python+numpy, без Blender) читает RE Engine
+  `.mesh/.tex` модулями **RE-Mesh-Editor** (NSACloud, GPL; `git clone https://github.com/NSACloud/RE-Mesh-Editor`,
+  путь через `--remesh`; `.tex` → `.dds` через `modules.tex.re_tex_utils.convertTexFileToDDS`, DDS BC7 читает Pillow).
+  Кости RE → игровой риг (Hip/Spine_0/Spine_2/Neck_0/Head, Shoulder→Clav, пальцы Thumb/Index/Middle/Ring/Pinky →
+  `F0..F4{0..2}`, Toe), twist/helper/chain-кости сливаются в ближайшего предка; масштаб 0.9656 (голова RE → голова
+  старого Стива), старая голова от y ≥ 1.455 сдвинута на (0,0,-0.022), шея RE под ней вырезана (стык под воротником).
+  Текстуры: NRMR = DX-нормаль (G инвертирован) + roughness в A, ATOC.B = AO → ORM; кожа рук подкрашена под медиану
+  альбедо старой головы. Исходники мода/старый steve.glb в `/data/assets_in/` (в репо не хранятся). Rar5 распаковывается
+  официальным 7-Zip (`7zz`), p7zip его не умеет. Альтернативный костюм с курткой — `cha003_00.mesh` (не используется).
+- `ClaireModel.buildFingers`: цикл по пяти пальцам (F3/F4 есть у HUNK и нового Стива), сгибаются все.
+- **Охрана в интро (HUNK)** ломалась: Euler-походка `GuardActor` для зомби-охранника перезаписывала rotation.x костей
+  с неединичным rest → модель складывалась, MP5 на позвоночнике «улетал». Теперь HUNK анимируется `ClaireModel.animate`
+  (как HumanActor) с `setWeapon('mp5')`; aim = `raise > 0.5 && aimAt`.
+- Вторая причина — сам **`hunk.glb`**: прошлая Blender-конвертация дала скелет Z-up (hips local (0,0,-1.14)), кисти в
+  нуле, пальцы/перчатки в сантиметрах → голова оказывалась у земли. Модель перезапечена из исходника пользователя
+  (`/data/assets_in/hunk.glb`, сломанная копия — `hunk_orig.glb`) новым универсальным **`tools/import/bake_rig.py
+  in.glb out.glb [map.json]`** (чистый python): bind-поза запекается в мир, Y-up, лицом +Z, суставы только translation,
+  ремонт «сантиметровых» суставов, переименование и слияние весов по карте (`tools/import/hunk_map.json`:
+  "0_01"→hips … пальцы F0..F4), компактизация буфера. Итог: 49 костей, hips 1.14, голова 1.65 м; в катсцене руки у
+  груди, MP5 в руках.
+- **Картины в портретном коридоре** висели внутри тёмной панели (панель |x| = 1.94, картина в 1.98) → рамка торчала над
+  панелью; теперь задник рамки ставится вплотную к панели по bbox. Так же поправлены портрет Алексии над камином
+  (`RockfortExterior.ts`, z = -9.695) и картины галереи в `PrisonAnnex.ts` (x = 55.935).
+- **Лизун убран из игры** (спавн `tr_licker` удалён, `enemy_licker.glb` вынесен в `/data/assets_in/removed/`; код
+  `ai/Licker.ts` и `tools/import/licker.py` остались для возврата). `scripts/monsters.mjs` проверяет только Хантера.
+- Выдача сборки: GitHub Actions `.github/workflows/build.yml` на каждый push в main собирает `play.html` и
+  публикует релиз `latest` (`releases/download/latest/cv-remake-play.zip`) — песочница не всегда может отдать файл.
+
 ## 7. Blender-пайплайн (как перегенерировать ассеты)
 
 Все модели генерируются кодом; запускать **из `/data/assets_src`**, скрипты лежат в `/data/assets_src/tools/`
