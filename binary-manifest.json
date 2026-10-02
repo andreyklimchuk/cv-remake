@@ -882,9 +882,9 @@
   "gzip": true
  },
  "src/assets/models/steve.glb": {
-  "parts": 9,
-  "sha1": "d20f8ce4848f0764a84aa774942dc0618a01ecf7",
-  "bytes": 10705604,
+  "parts": 8,
+  "sha1": "093a7e02df5fc69901d5c2b60118b3d596693baf",
+  "bytes": 10266544,
   "gzip": true
  },
  "src/assets/models/weapon_luger.glb": {
@@ -905,16 +905,10 @@
   "bytes": 2374488,
   "gzip": true
  },
- "src/assets/models/enemy_licker.glb": {
-  "parts": 4,
-  "sha1": "447b1bdb260bface7da5706be568ff572092eb09",
-  "bytes": 4337576,
-  "gzip": true
- },
  "src/assets/models/hunk.glb": {
-  "parts": 1,
-  "sha1": "6135181863053f5199ca42c478fdad3eadcd91b6",
-  "bytes": 1638248,
+  "parts": 3,
+  "sha1": "aec74892674fa8564cd3ea682ea5a8a661a493d1",
+  "bytes": 3032132,
   "gzip": true
  }
 }

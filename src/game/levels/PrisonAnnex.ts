@@ -362,6 +362,8 @@ export function buildAnnex(ctx: LevelContext, H: AnnexHelpers) {
       const frames: Record<string, THREE.Object3D | null> = {};
       for (const [id, , z] of P) {
         frames[id] = placeProp(G, physics, 'painting_' + id, 55.85, 1.0, z, -Math.PI / 2, { collide: false });
+        // back of the frame flush with the wall fabric (face at x = 55.94), never sunk into it
+        const fr = frames[id]; if (fr) { fr.updateMatrixWorld(true); fr.position.x += 55.935 - new THREE.Box3().setFromObject(fr).max.x; }
         const s = new THREE.SpotLight(0xffd8a8, 40, 7, 0.45, 0.6, 1.6); s.position.set(53.5, 4.2, z); s.target.position.set(55.9, 1.6, z); G.add(s, s.target);
       }
       const chand = new THREE.PointLight(0xffc98a, 20, 14, 1.6); chand.position.set(50, 4, 36); chand.castShadow = q.shadowedLights >= 4; G.add(chand);

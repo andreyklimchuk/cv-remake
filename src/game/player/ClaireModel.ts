@@ -273,8 +273,10 @@ export class ClaireModel {
       const lat = wp(`${S}F10`).sub(wp(`${S}F20`)).normalize();          // index -> outer fingers
       const dIdx = wp(`${S}F11`).sub(wp(`${S}F10`)).normalize();
       const palm = new THREE.Vector3().crossVectors(dIdx, lat).normalize().multiplyScalar(S === 'l' ? 1 : -1);
-      for (let a = 0; a < 3; a++) for (let k = 0; k < 3; k++) {
-        const b = bm.get(`${S}F${a}${k}`); if (!b) continue;
+      // 0 = thumb, 1 = index, 2 = middle, 3/4 = ring/pinky (rigs that have them: HUNK, RE4R Steve)
+      for (let a = 0; a < 5; a++) for (let k = 0; k < 3; k++) {
+        if (![0, 1, 2].every((kk) => bm.has(`${S}F${a}${kk}`))) continue;
+        const b = bm.get(`${S}F${a}${k}`)!;
         const nx = bm.get(`${S}F${a}${Math.min(k + 1, 2)}`)!, pv = k === 2 ? bm.get(`${S}F${a}1`)! : b;
         const d = (k === 2 ? wp(`${S}F${a}2`).sub(wp(`${S}F${a}1`)) : nx.getWorldPosition(new THREE.Vector3()).sub(pv.getWorldPosition(new THREE.Vector3()))).normalize();
         // bend so the finger tip moves toward the palm side

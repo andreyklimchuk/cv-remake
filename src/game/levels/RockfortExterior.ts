@@ -338,8 +338,7 @@ export function buildExterior(ctx: LevelContext, H: AnnexHelpers) {
       H.item('x_gpa', 'gp_a', 1, -36.9, U, 128.8, G);
       ctx.spawnZombie({ id: 'tr_1', x: -23, y: U, z: 124.5, yaw: -Math.PI / 2, outfit: 'guard' }, G);
       ctx.spawnZombie({ id: 'tr_2', x: -34.6, y: U, z: 120.4, yaw: 0.6, outfit: 'guard', fakeDead: true }, G);
-      // blind Licker clinging to the lobby floor: sneak (walk) past it or fight
-      ctx.spawnZombie({ id: 'tr_licker', x: -29, y: U, z: 122.5, yaw: Math.PI / 2, kind: 'licker' }, G);
+      // (6.13: the Licker was removed from the game at the user's request — code in ai/Licker.ts, model via tools/import/licker.py)
       // entrance door (hinge x -28)
       const { pivot, col } = singleDoor(G, physics, { x: -28, y: U, z: 118, alongZ: false, openW: 2, openH: 2.6, thick: 0.4, leafMat: M.steel, fillMat: X.milConcrete });
       trainDoor = new Door('trainDoor', new THREE.Vector3(-27, U, 117.2), pivot, col, null, '', Math.PI * 0.55);
@@ -663,7 +662,9 @@ export function buildExterior(ctx: LevelContext, H: AnnexHelpers) {
       const pics = ['painting_eagle', 'painting_wolf', 'painting_snake', 'painting_warden'];
       for (let i = 0; i < 4; i++) {
         const z = 193.2 + i * 3.4, sx = i % 2 ? 1 : -1;
-        placeAt(G, pics[i], sx * 1.98, U + 1.3, z, sx < 0 ? Math.PI / 2 : -Math.PI / 2, 0.9);
+        // hang on the dark-wood wainscot (its face is at |x| = 1.94): back of the frame flush with the panel, not inside it
+        const pic = placeAt(G, pics[i], sx * 1.9, U + 1.3, z, sx < 0 ? Math.PI / 2 : -Math.PI / 2, 0.9);
+        if (pic) { pic.updateMatrixWorld(true); const bb = new THREE.Box3().setFromObject(pic); pic.position.x += sx * (1.935 - (sx > 0 ? bb.max.x : -bb.min.x)); }
         placeAt(G, 'sconce', -sx * 1.98, U + 2.4, z, -sx < 0 ? Math.PI / 2 : -Math.PI / 2);
         if (i % 2 === 0) { const l = new THREE.PointLight(0xffb060, 5, 7, 1.8); l.position.set(-sx * 1.5, U + 3, z); G.add(l); H.flicker(l, 5, undefined, i === 2); }
       }
@@ -722,7 +723,9 @@ export function buildExterior(ctx: LevelContext, H: AnnexHelpers) {
       b.box(-9.85, U + 3.5, 215, 0.3, 3.4, 2.6, X.darkWood, { collide: false, tile: 1 });
       physics.addMinMax(-10, 213.5, -8.9, 216.5, U, U + 1.8, 'prop', true);
       for (const dz of [-0.35, 0, 0.35]) { const log = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.09, 0.9, 7), M.wood); log.rotation.x = Math.PI / 2; log.rotation.y = dz; log.position.set(-9.55 + Math.abs(dz) * 0.3, U + 0.12, 215 + dz); G.add(log); }
-      placeAt(G, 'painting_alexia', -9.66, U + 2.3, 215, Math.PI / 2, 1.0);
+      // flush against the chimney breast (face at x = -9.70), never sunk into it
+      const alexia = placeAt(G, 'painting_alexia', -9.6, U + 2.3, 215, Math.PI / 2, 1.0);
+      if (alexia) { alexia.updateMatrixWorld(true); alexia.position.x += -9.695 - new THREE.Box3().setFromObject(alexia).min.x; }
       // sideboards, candles along walls, chandelier
       placeProp(G, physics, 'cabinet', 9.6, U, 210, -Math.PI / 2); placeProp(G, physics, 'cabinet', 9.6, U, 220, -Math.PI / 2);
       placeAt(G, 'urn', 9.3, U, 223.3, 0, 1, true); placeAt(G, 'urn', -9.3, U, 223.3, 0, 1, true);
