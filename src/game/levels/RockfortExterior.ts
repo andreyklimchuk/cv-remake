@@ -338,6 +338,8 @@ export function buildExterior(ctx: LevelContext, H: AnnexHelpers) {
       H.item('x_gpa', 'gp_a', 1, -36.9, U, 128.8, G);
       ctx.spawnZombie({ id: 'tr_1', x: -23, y: U, z: 124.5, yaw: -Math.PI / 2, outfit: 'guard' }, G);
       ctx.spawnZombie({ id: 'tr_2', x: -34.6, y: U, z: 120.4, yaw: 0.6, outfit: 'guard', fakeDead: true }, G);
+      // blind Licker clinging to the lobby floor: sneak (walk) past it or fight
+      ctx.spawnZombie({ id: 'tr_licker', x: -29, y: U, z: 122.5, yaw: Math.PI / 2, kind: 'licker' }, G);
       // entrance door (hinge x -28)
       const { pivot, col } = singleDoor(G, physics, { x: -28, y: U, z: 118, alongZ: false, openW: 2, openH: 2.6, thick: 0.4, leafMat: M.steel, fillMat: X.milConcrete });
       trainDoor = new Door('trainDoor', new THREE.Vector3(-27, U, 117.2), pivot, col, null, '', Math.PI * 0.55);
@@ -455,6 +457,8 @@ export function buildExterior(ctx: LevelContext, H: AnnexHelpers) {
       torch(-3.95, 126.5); torch(3.95, 133.5);
       H.item('x_bexp', 'bolt_exp', 6, -2.6, U, 128, G);
       ctx.spawnZombie({ id: 'ps_1', x: 1, y: U, z: 132, yaw: Math.PI, outfit: 'civilian' }, G);
+      // Hunter stalking the far end of the canyon: sprints and leaps across the gap at Claire
+      ctx.spawnZombie({ id: 'ps_hunter', x: 0, y: U, z: 139.5, yaw: Math.PI, kind: 'hunter' }, G);
     },
   });
   for (let z = 120; z <= 141; z += 3.5) N(null, 0, z, U);

@@ -37,8 +37,8 @@
  },
  "src/assets/models/weapon_knife.glb": {
   "parts": 1,
-  "sha1": "a99cc6b1fcdc758b6b4fc249bd31362296789e86",
-  "bytes": 78992,
+  "sha1": "e7cb22adcd333efce8e7ed4d19189a41802d9305",
+  "bytes": 779268,
   "gzip": true
  },
  "src/assets/models/weapon_m9f.glb": {
@@ -187,50 +187,50 @@
  },
  "src/assets/icons/herb_b.jpg": {
   "parts": 1,
-  "sha1": "cd0abb0f64649075e0fe52a1e8d1020fdf36990c",
-  "bytes": 13196,
+  "sha1": "b2469b75aaa071f244cbfe675c3c21510ccbb0a4",
+  "bytes": 12211,
   "gzip": true
  },
  "src/assets/icons/herb_g.jpg": {
   "parts": 1,
-  "sha1": "40fc51fbd28a4a358041deb61e604ab2e8504309",
-  "bytes": 12793,
+  "sha1": "5b897766376e81f62e79dbded487d2ca2b743aec",
+  "bytes": 12644,
   "gzip": true
  },
  "src/assets/icons/herb_gb.jpg": {
   "parts": 1,
-  "sha1": "6ff742fbd1dc7d859ce5ea8ffa3d3035596fb6f5",
-  "bytes": 12864,
+  "sha1": "49c5f59f6f0e35f8aaee7db291772a0209b3179f",
+  "bytes": 18836,
   "gzip": true
  },
  "src/assets/icons/herb_gg.jpg": {
   "parts": 1,
-  "sha1": "d8cd64c03791e408cafa390cf5d7997771e1422e",
-  "bytes": 12266,
+  "sha1": "61bbadf88df5d3520c089fd2985ecd8ebc8254a9",
+  "bytes": 20599,
   "gzip": true
  },
  "src/assets/icons/herb_ggg.jpg": {
   "parts": 1,
-  "sha1": "5a378be13ca4f0528b9e37c6416a3141720c47c2",
-  "bytes": 12476,
+  "sha1": "ba970501fef961ac95ccb8bc09fdb19ee94f2bea",
+  "bytes": 21416,
   "gzip": true
  },
  "src/assets/icons/herb_gr.jpg": {
   "parts": 1,
-  "sha1": "30421b90acc89c1fb522565d94687e69b4708787",
-  "bytes": 12007,
+  "sha1": "92a3e391b04c2b0c6acb1904fbce16e05ba2de1d",
+  "bytes": 18459,
   "gzip": true
  },
  "src/assets/icons/herb_grb.jpg": {
   "parts": 1,
-  "sha1": "268dbfb40b1a35d5dc2fd025202f941b5624197e",
-  "bytes": 13152,
+  "sha1": "1696e08367f9ce314d7c68003a1e8b89b71eb3dd",
+  "bytes": 21467,
   "gzip": true
  },
  "src/assets/icons/herb_r.jpg": {
   "parts": 1,
-  "sha1": "0b82bf694efeb8e230f7cc3f06ced2950e10ea91",
-  "bytes": 12929,
+  "sha1": "2d94cf7ad8133e37a2a65b14a7c1e2a1aa13f03a",
+  "bytes": 12817,
   "gzip": true
  },
  "src/assets/icons/keycard.jpg": {
@@ -241,8 +241,8 @@
  },
  "src/assets/icons/knife.jpg": {
   "parts": 1,
-  "sha1": "05a592c6a8ebca5a9f165eddb2688253b621fa14",
-  "bytes": 9578,
+  "sha1": "3eb3b2a979b3f97ac43162379c10bd876d75191d",
+  "bytes": 10542,
   "gzip": true
  },
  "src/assets/icons/lighter.jpg": {
@@ -396,51 +396,51 @@
   "gzip": true
  },
  "src/assets/models/item_herb_b.glb": {
-  "parts": 1,
-  "sha1": "cf379b53283fc53ccbba9a63dcec9310f0d366bb",
-  "bytes": 63176,
+  "parts": 2,
+  "sha1": "0718ed84129f23e04ec4de41d0a1854f182cba75",
+  "bytes": 890276,
   "gzip": true
  },
  "src/assets/models/item_herb_g.glb": {
-  "parts": 1,
-  "sha1": "63f8f1ac106c7ea57245ec9195e4c4ba5cde7d13",
-  "bytes": 63192,
+  "parts": 2,
+  "sha1": "9ea1802d88ee8b87eeb303e8049ead5d64fa6900",
+  "bytes": 842864,
   "gzip": true
  },
  "src/assets/models/item_herb_gb.glb": {
-  "parts": 1,
-  "sha1": "a92006d873a584dbea26d2b3a008923025587e05",
-  "bytes": 79864,
+  "parts": 2,
+  "sha1": "8e1074bfe8efed638f2cc77764bf049169723a5a",
+  "bytes": 1267084,
   "gzip": true
  },
  "src/assets/models/item_herb_gg.glb": {
-  "parts": 1,
-  "sha1": "8f448846dc5382c6e86ba5cd0a2596d478bd84b4",
-  "bytes": 78940,
+  "parts": 2,
+  "sha1": "906f14c97def50ca552b09e7f295cf80daddb138",
+  "bytes": 892652,
   "gzip": true
  },
  "src/assets/models/item_herb_ggg.glb": {
-  "parts": 1,
-  "sha1": "ee6cc5941a63cc84ce26375aa4e15d18c019f886",
-  "bytes": 90752,
+  "parts": 2,
+  "sha1": "38d8a4a309cd5ac39f230d46f8ba488ae4c38ebd",
+  "bytes": 942432,
   "gzip": true
  },
  "src/assets/models/item_herb_gr.glb": {
-  "parts": 1,
-  "sha1": "f311ce7a07cca4cc12912bfab0a7ff4ba9c5adb6",
-  "bytes": 79884,
+  "parts": 2,
+  "sha1": "da3975c15af2b2c0eddf54461d6352b009235752",
+  "bytes": 1267060,
   "gzip": true
  },
  "src/assets/models/item_herb_grb.glb": {
-  "parts": 1,
-  "sha1": "67ea79354b33c69b12d92fc7f08a1289010c4145",
-  "bytes": 92616,
+  "parts": 3,
+  "sha1": "dc41891c7701a1558ebd0e68ac4e46a867b54354",
+  "bytes": 1691276,
   "gzip": true
  },
  "src/assets/models/item_herb_r.glb": {
-  "parts": 1,
-  "sha1": "971a4de3e48eeb6bea720ea5f6140d6c23acf567",
-  "bytes": 63196,
+  "parts": 2,
+  "sha1": "40a941e87f12d0f7e4f74a5e3bf8888f5f65aabd",
+  "bytes": 890256,
   "gzip": true
  },
  "src/assets/models/item_keycard.glb": {
@@ -636,9 +636,9 @@
   "gzip": true
  },
  "src/assets/models/prop_typewriter.glb": {
-  "parts": 1,
-  "sha1": "5349f1039d93c5cc2e66a659ae42dec6361d3909",
-  "bytes": 186216,
+  "parts": 7,
+  "sha1": "4157f92ef5886eda9cd139e8de96e6a4a7f356ad",
+  "bytes": 6146460,
   "gzip": true
  },
  "src/assets/models/prop_valve_pipe.glb": {
@@ -893,16 +893,28 @@
   "bytes": 717436,
   "gzip": true
  },
- "cv-remake-play.zip": {
-  "parts": 51,
-  "sha1": "9a98935fc31e411f79535a0188db22599e3dfd69",
-  "bytes": 38615453,
-  "gzip": true
- },
  "src/assets/models/claire_su.glb": {
   "parts": 3,
   "sha1": "f47f1561e5f8cf9b45f159ce4a4452c630c8aa12",
   "bytes": 1952852,
+  "gzip": true
+ },
+ "src/assets/models/enemy_hunter.glb": {
+  "parts": 2,
+  "sha1": "267425eaa33d42c5d256148e89286f479d26b353",
+  "bytes": 2374488,
+  "gzip": true
+ },
+ "src/assets/models/enemy_licker.glb": {
+  "parts": 4,
+  "sha1": "447b1bdb260bface7da5706be568ff572092eb09",
+  "bytes": 4337576,
+  "gzip": true
+ },
+ "src/assets/models/hunk.glb": {
+  "parts": 1,
+  "sha1": "6135181863053f5199ca42c478fdad3eadcd91b6",
+  "bytes": 1638248,
   "gzip": true
  }
 }

@@ -4,6 +4,8 @@ import { ModelLibrary } from './game/assets/ModelLibrary';
 import { ClaireModel, type AnimParams } from './game/player/ClaireModel';
 import { ZombieModel, type ZombieOutfit } from './game/ai/ZombieModel';
 import { CreatureModel } from './game/ai/Creature';
+import { Licker } from './game/ai/Licker';
+import { HunterModel } from './game/ai/Hunter';
 
 /** Model viewer: play.html?viewer=claire&pose=idle|aim|run|pain&yaw=0&shot=full|face|torso|feet */
 export async function runViewer(): Promise<void> {
@@ -31,10 +33,24 @@ export async function runViewer(): Promise<void> {
   await ModelLibrary.preload();
   const which = q.get('viewer') || 'claire';
   const pose = q.get('pose') || 'idle';
-  const claire = new ClaireModel(2048, which === 'steve' ? 'steve' : 'claire');
+  const claire = new ClaireModel(2048, which === 'steve' ? 'steve' : which === 'hunk' ? 'hunk' : 'claire');
   let zombie: ZombieModel | null = null;
   let creature: CreatureModel | null = null;
-  if (which === 'cerberus' || which === 'bandersnatch') {
+  let posedEnemy = false;
+  if (which === 'licker') {
+    // pose=idle|walk|lash|swipe|pounce|down|dead, t=<state time>, speed=<m/s>
+    const L = new Licker({ id: 'v', x: 0, z: 0, yaw: 0 }, scene, () => ({}) as any) as any;
+    L.state = pose; const T = Number(q.get('t') || 0.5); const sp = Number(q.get('speed') || (pose === 'walk' ? 2.6 : 0));
+    for (let i = 0; i < (q.get('raw') ? 0 : 40); i++) { L.stateT = Math.max(0, T - (40 - i) * 0.02); if (pose === 'lash') L.tongue = Number(q.get('tongue') || 0.5); L.anim(0.02, sp); }
+    if (q.get('raw') === '2') { L.model.stretch('tongue', 1); L.model.offset('hips', 0, 0, 0); }
+    (window as any).__lk = L;
+    posedEnemy = true;
+  } else if (which === 'hunter') {
+    // pose=<clip name>, t=<clip time>
+    const H = new HunterModel(); scene.add(H.root);
+    H.play(pose === 'idle' ? 'idle' : pose, 0, true); H.mixer.setTime(Number(q.get('t') || 0));
+    posedEnemy = true;
+  } else if (which === 'cerberus' || which === 'bandersnatch') {
     creature = new CreatureModel(which);
     scene.add(creature.root);
     const c = creature;
@@ -57,7 +73,7 @@ export async function runViewer(): Promise<void> {
     } else { r.lUpperArm.rotation.z = 0.08; r.rUpperArm.rotation.z = -0.08; r.spine.rotation.x = 0.12; r.neck.rotation.z = 0.25; }
     r.hips.position.y = zombie.hipRest - 0.02;
     if (q.get('sever')) { const piece = zombie.sever(q.get('sever') as any); if (piece) { piece.position.set(0.5, 0.1, 0.3); piece.rotation.z = 1.4; scene.add(piece); } }
-  } else if (!creature) scene.add(claire.root);
+  } else if (!creature && !posedEnemy) scene.add(claire.root);
   if (pose === 'aim' || pose === 'gun' || pose === 'knife' || pose === 'stab' || q.get('weapon')) claire.setWeapon(q.get('weapon') || 'm9f');
   // holster=<t>: freeze the Lugers holster animation at t seconds (put → weapon=knife) / draw=<t>
   if (q.get('holster') || q.get('draw')) {

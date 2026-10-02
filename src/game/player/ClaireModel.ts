@@ -86,7 +86,7 @@ export class ClaireModel {
   expressionPain = 0;
   /** true when the Blender-authored GLB character is used */
   readonly detailed: boolean;
-  private hipRest = 0.95;
+  hipRest = 0.95;
   private ponyRest: THREE.Quaternion[] = [];
   private morphMeshes: THREE.Mesh[] = [];
   private eyeBones: THREE.Bone[] = [];
@@ -286,7 +286,7 @@ export class ClaireModel {
     }
   }
 
-  private curlFingers(): void {
+  curlFingers(): void {
     const q = new THREE.Quaternion();
     for (const f of this.fingers) {
       const w = f.side === 'l' ? this.gripL : this.gripR;
