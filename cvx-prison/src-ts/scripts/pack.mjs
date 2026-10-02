@@ -2,7 +2,7 @@
 import fs from 'node:fs'; import path from 'node:path';
 const dist = path.resolve('dist');
 let html = fs.readFileSync(path.join(dist, 'index.html'), 'utf8');
-const mime = { glb: 'model/gltf-binary', json: 'application/json', ogg: 'audio/ogg', png: 'image/png' };
+const mime = { glb: 'model/gltf-binary', json: 'application/json', ogg: 'audio/ogg', png: 'image/png', jpg: 'image/jpeg' };
 const assets = {};
 const walk = (d, rel = '') => { for (const f of fs.readdirSync(d)) { const p = path.join(d, f), r = rel ? rel + '/' + f : f; if (fs.statSync(p).isDirectory()) walk(p, r); else { const ext = f.split('.').pop(); assets[r] = `data:${mime[ext] ?? 'application/octet-stream'};base64,` + fs.readFileSync(p).toString('base64'); } } };
 walk(path.join(dist, 'assets'));

@@ -5,7 +5,11 @@ import type { Room } from './room';
 
 // Original motion clips (pl00 motion bank): 0 walk, 4 run, 11 walk back (Fine), 35 idle (Fine), 46/47 turns.
 const CLIPS: Record<string, string> = { idle: 'm35', walk: 'm00', run: 'm04', back: 'm11', turnL: 'm46', turnR: 'm47' };
-const WALK = 1.05, RUN = 2.6, TURN = 2.6, RADIUS = 0.2, SLASH = 0.42;
+const WALK = 1.05, RUN = 2.6, TURN = 2.6, RADIUS = 0.2;
+// Original knife motions (pl00w02 motion bank, 30 fps): k00 ready the knife; per direction (forward / up / down)
+// k01/k04/k07 slash (24 frames, blade reaches out on frame 8) and k03/k06/k09 the held stance.
+const K_DRAW = 'k00', K_SLASH = ['k01', 'k04', 'k07'], K_STANCE = ['k03', 'k06', 'k09'];
+const K_DRAW_T = 9 / 30, K_SLASH_T = 24 / 30, K_HIT_T = 8 / 30;
 
 export class Player {
   root = new THREE.Group();
@@ -29,7 +33,9 @@ export class Player {
   private zippoParts: THREE.Object3D[] = [];
   knifeOn = false;
   /** knife: aiming (ready stance) and slash timer */
-  aiming = false; slashT = -1; private readyBlend = 0;
+  aiming = false; slashT = -1;
+  /** knife state machine driven by the original clips */
+  private kState: 'none' | 'draw' | 'stance' | 'slash' = 'none'; private kT = 0; private kDir = 0; private kQueued = false;
   onSlash: ((p: THREE.Vector3, dir: THREE.Vector3) => void) | null = null;
   private flame!: THREE.Mesh; flameLight!: THREE.PointLight;
   private flameT = 0; private armBlend = 0;
@@ -77,11 +83,12 @@ export class Player {
     for (const h of this.skinHandR) h.visible = !zippo && !knife;
   }
 
-  play(name: string, fade = 0.18, speed = 1) {
-    const id = CLIPS[name]; const a = this.actions.get(id); if (!a) return;
+  play(name: string, fade = 0.18, speed = 1) { this.playId(CLIPS[name], fade, true, speed); }
+  private playId(id: string, fade: number, loop: boolean, speed = 1) {
+    const a = this.actions.get(id); if (!a) return;
     a.timeScale = speed; if (this.cur === id) return;
     const prev = this.actions.get(this.cur);
-    a.reset().setLoop(THREE.LoopRepeat, Infinity).play();
+    a.reset(); a.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, Infinity); a.clampWhenFinished = !loop; a.play();
     if (prev && fade > 0) a.crossFadeFrom(prev, fade, false); else if (prev) prev.stop();
     this.cur = id;
   }
@@ -95,9 +102,8 @@ export class Player {
     let speed = 0, turn = 0;
     // knife: hold the aim button to ready the knife, attack button to slash (like the original R1 + X)
     const canAim = this.knifeOn && !this.lighterOn && !this.frozen;
-    this.aiming = canAim && (inp.aim || this.slashT >= 0);
-    if (this.aiming && this.slashT < 0 && inp.attack) { this.slashT = 0; this.slashHit = false; }
-    if (this.slashT >= 0) { this.slashT += dt; if (this.slashT > SLASH) this.slashT = -1; }
+    this.aiming = canAim && (inp.aim || this.kState === 'slash');
+    if (!this.aiming) this.kState = 'none';
     if (!this.frozen && camYaw !== null) {
       // over-the-shoulder camera: movement relative to the camera, Claire turns towards the direction of travel
       const mx = (inp.strafeR ? 1 : 0) - (inp.strafeL ? 1 : 0), mz = (inp.fwd ? 1 : 0) - (inp.back ? 1 : 0);
@@ -121,7 +127,8 @@ export class Player {
     }
     this.heading += turn * TURN * dt * (speed > WALK ? 0.8 : 1) * (camYaw !== null ? 0 : 1);
     this.root.rotation.y = this.heading;
-    if (speed > 0) { this.state = speed > WALK ? 'run' : 'walk'; this.play(this.state); }
+    if (this.aiming) this.updateKnife(dt, inp);
+    else if (speed > 0) { this.state = speed > WALK ? 'run' : 'walk'; this.play(this.state); }
     else if (speed < 0) { this.state = 'back'; this.play('back'); }
     else if (turn !== 0) { this.state = 'turn'; this.play('walk', 0.15, 0.7); }
     else { this.state = 'idle'; this.play('idle', 0.25); }
@@ -134,33 +141,34 @@ export class Player {
       const y = room.floorAt(this.root.position.x, this.root.position.z, this.root.position.y);
       if (y !== null) this.root.position.y = y;
     }
-    if (this.aiming) { this.state = this.slashT >= 0 ? 'slash' : 'aim'; this.play('idle', 0.2); }
     this.mixer.update(dt);
     this.updateTail(dt);
     this.updateLighter(dt);
-    this.updateKnife(dt);
     this.updateHands();
   }
   private slashHit = false;
-  /** knife ready stance + slash, procedurally on top of the idle clip (two-bone IK of the right arm) */
-  private updateKnife(dt: number) {
-    const want = this.aiming && this.armBlend < 0.05 ? 1 : 0;
-    this.readyBlend += (want - this.readyBlend) * Math.min(1, dt * 10);
-    if (this.readyBlend < 0.02) return;
-    const S = this.bones.b07; if (!S) return;
-    this.root.updateMatrixWorld(true);
-    const s = S.getWorldPosition(new THREE.Vector3());
-    const f = this.forward(), up = new THREE.Vector3(0, 1, 0), right = new THREE.Vector3().crossVectors(f, up).normalize();
-    // ready: hand low in front, blade pointing forward; slash: wide arc from the right shoulder down to the left hip
-    let T = s.clone().addScaledVector(f, 0.36).addScaledVector(right, 0.02).addScaledVector(up, -0.2);
-    if (this.slashT >= 0) {
-      const k = this.slashT / SLASH;
-      const ph = k < 0.25 ? -(k / 0.25) : k < 0.6 ? -1 + 2 * ((k - 0.25) / 0.35) : 1 - (k - 0.6) / 0.4; // wind up, strike, recover
-      const a = THREE.MathUtils.smoothstep(ph, -1, 1) * 2 - 1;
-      T = s.clone().addScaledVector(f, 0.3 + 0.18 * (1 - Math.abs(a))).addScaledVector(right, 0.22 * -a + 0.02).addScaledVector(up, 0.05 * -a - 0.16);
-      if (!this.slashHit && k > 0.42) { this.slashHit = true; const tip = T.clone().addScaledVector(f, 0.35); this.onSlash?.(tip, f.clone()); }
+  /** knife: ready (k00) -> stance (k03/k06/k09); attack plays the slash of the current direction.
+   *  W/↑ while holding the knife aims up, S/↓ aims down (as in the original). */
+  private updateKnife(dt: number, inp: Input) {
+    const dir = inp.fwd ? 1 : inp.back ? 2 : 0;
+    this.kT += dt;
+    if (this.kState === 'none') { this.kState = 'draw'; this.kT = 0; this.kQueued = false; this.playId(K_DRAW, 0.12, false); }
+    if (inp.attack && this.kState !== 'stance') this.kQueued = true;
+    if (this.kState === 'draw' && this.kT >= K_DRAW_T) { this.kState = 'stance'; this.kT = 0; }
+    if (this.kState === 'slash') {
+      if (!this.slashHit && this.kT >= K_HIT_T) {
+        this.slashHit = true; this.root.updateMatrixWorld(true);
+        const f = this.forward(), w = this.bones.b09 ? this.bones.b09.getWorldPosition(new THREE.Vector3()) : this.headPos();
+        this.onSlash?.(w.addScaledVector(f, 0.25), f);
+      }
+      if (this.kT >= K_SLASH_T) { this.kState = 'stance'; this.kT = 0; }
     }
-    this.solveArm(T, this.readyBlend, up.clone().multiplyScalar(-1).addScaledVector(right, 0.5));
+    if (this.kState === 'stance') {
+      if (inp.attack || this.kQueued) { this.kQueued = false; this.kState = 'slash'; this.kT = 0; this.kDir = dir; this.slashHit = false; this.playId(K_SLASH[dir], 0.06, false); }
+      else { this.kDir = dir; this.playId(K_STANCE[dir], 0.15, true); }
+    }
+    this.slashT = this.kState === 'slash' ? this.kT : -1;
+    this.state = this.kState === 'slash' ? 'slash' : 'aim';
   }
   /** two-bone IK of the right arm towards world target T */
   private solveArm(T: THREE.Vector3, w: number, poleDir: THREE.Vector3) {
@@ -186,10 +194,17 @@ export class Player {
     target.x += Math.sin(this.mixer.time * 9) * 0.03 * Math.min(1, Math.abs(fv));
     this.swayV.addScaledVector(target.clone().sub(this.sway), 60 * dt).multiplyScalar(Math.exp(-7 * dt));
     this.sway.addScaledVector(this.swayV, dt);
+    // the ponytail (pt0..pt3, physics driven in the game) hangs down behind the head under gravity
+    const p0 = this.tail[0]; this.root.updateMatrixWorld(true);
+    const side = new THREE.Vector3(-f.z, 0, f.x);
+    const D = new THREE.Vector3(0, -1, 0).addScaledVector(f, -0.32 - this.sway.x * 1.1).addScaledVector(side, this.sway.y * 0.9).normalize();
+    const X = side.clone().addScaledVector(D, -side.dot(D)).normalize(), Y = new THREE.Vector3().crossVectors(D, X);
+    const qw = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(X, Y, D));
+    const pq = p0.parent!.getWorldQuaternion(new THREE.Quaternion());
+    p0.quaternion.copy(pq.invert().multiply(qw));
     const q = new THREE.Quaternion();
-    for (let i = 0; i < this.tail.length; i++) {
-      const k = i === 0 ? 0.6 : 0.35;
-      q.setFromEuler(new THREE.Euler(-this.sway.x * k, 0, this.sway.y * k));
+    for (let i = 1; i < this.tail.length; i++) {
+      q.setFromEuler(new THREE.Euler(-this.sway.x * 0.3, this.sway.y * 0.3, 0));
       this.tail[i].quaternion.copy(this.tailRest[i]).multiply(q);
     }
   }

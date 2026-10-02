@@ -3,7 +3,7 @@
 // Layout is authored in a 930x650 design space and scaled to the stage.
 import * as THREE from 'three';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
-import { loadGLTF, toLambert } from './assets';
+import { assetUrl, loadGLTF, toLambert } from './assets';
 import { itemName, LANG } from './text';
 import { escapeHtml } from './ui';
 import type { Inventory, InvItem } from './inventory';
@@ -264,28 +264,13 @@ export class InventoryScreen {
     const r = this.renderer(); r.setSize(192, 128, false); r.setClearColor(0, 0); r.render(scene, cam);
     const url = r.domElement.toDataURL(); this.icons.set(id, url); return url;
   }
-  /** Claire's face rendered from her in-game model (idle pose) for the portrait window */
+  /** status portrait: Claire's CG portrait (as in the original item screen) */
   private async renderPortrait() {
-    if (this.portrait || !this.player?.model) return;
-    const src = this.player.model;
-    const clone = SkeletonUtils.clone(src);
-    const scene = new THREE.Scene(); scene.add(clone);
-    scene.add(new THREE.AmbientLight(0xffffff, 0.9)); const dl = new THREE.DirectionalLight(0xfff0e0, 2.6); dl.position.set(-1.2, 1.5, -2.5); scene.add(dl);
-    const dl2 = new THREE.DirectionalLight(0x8080ff, 0.9); dl2.position.set(2, 0.5, 1); scene.add(dl2);
-    // copy the current idle pose
-    const sb: Record<string, THREE.Object3D> = {}; src.traverse((o) => (sb[o.name] = o));
-    clone.traverse((o) => { const s = sb[o.name]; if (s && o !== clone) { o.position.copy(s.position); o.quaternion.copy(s.quaternion); o.scale.copy(s.scale); } });
-    clone.position.set(0, 0, 0); clone.rotation.set(0, 0, 0); clone.updateMatrixWorld(true);
-    let head = new THREE.Vector3(0, 1.55, 0); clone.traverse((o) => { if (o.name === 'b05') { head = o.getWorldPosition(new THREE.Vector3()); } });
-    const tgt = head.clone().add(new THREE.Vector3(0, 0.07, 0));
-    const cam = new THREE.PerspectiveCamera(24, 126 / 120, 0.02, 10);
-    cam.position.copy(tgt).add(new THREE.Vector3(-0.22, 0.02, -0.5)); cam.lookAt(tgt);
-    const r = this.renderer(); r.setSize(126, 120, false); r.setClearColor(0, 0); r.render(scene, cam);
-    this.portrait = r.domElement.toDataURL();
+    if (this.portrait) return;
+    this.portrait = assetUrl('inv/portrait.jpg');
     const img = new Image(); img.src = this.portrait; await img.decode().catch(() => {});
-    const pc = this.q<HTMLCanvasElement>('.portrait'), g = pc.getContext('2d')!;
-    const gr = g.createLinearGradient(0, 0, 0, 120); gr.addColorStop(0, '#2a2a7a'); gr.addColorStop(1, '#0a0a30'); g.fillStyle = gr; g.fillRect(0, 0, 126, 120);
-    g.drawImage(img, 0, 0);
+    const pc = this.q<HTMLCanvasElement>('.portrait'); pc.width = 252; pc.height = 240;
+    pc.getContext('2d')!.drawImage(img, 0, 0, 252, 240);
   }
   // ---------- state ----------
   async show(open: boolean) {
