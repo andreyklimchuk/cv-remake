@@ -456,6 +456,27 @@ node scripts/backup.mjs "<сообщение>" all            # всё
   костей пальцев по `gripL/gripR` (ось = поперёк костяшек, знак проверен рендером). Моргания/мимики нет.
 - Стив пока старая Blender-модель (разный стиль); тесты start/cutscene/knife/func/doors пройдены.
 
+### 6.12 Итерация «ассеты пользователя: HUNK, RE0-пропсы, Лизун, Хантер»
+- **Сбой песочницы**: локальная копия откатилась до 6.10; файлы 6.11 восстановлены клонированием GitHub
+  (`git clone`, бинарники склеены из `binary/*.b64.NNN` по `binary-manifest.json`) и слиты с правками 6.12.
+  Урок: после reset сначала сверять локальную копию с GitHub.
+- Конвертеры (python, без Blender) в `tools/import/`: `knife.py` → `weapon_knife.glb`, `herbs.py` → `item_herb_*.glb`,
+  `herb_icons.py` → иконки смесей, `typewriter.py` → `prop_typewriter.glb` (RE0), `licker.py`, `hunter.py`.
+- **HUNK** (`hunk.glb`): `GuardActor` (cutscenes/Actors.ts) использует `ClaireModel(tex,'hunk')`, если модель есть
+  (иначе старый зомби-охранник); хват MP5 через `curlFingers()` (сделан public), `hipRest` тоже public.
+- **Лизун** (`enemy_licker.glb`, RE6 em3000 со Sketchfab): скин сокращён до 26 костей, spec-gloss→metal-rough,
+  масштаб 0.022. Анимация процедурная в `CreatureModel` (kind 'licker'). AI `src/game/ai/Licker.ts`: слепой, слышит
+  бег/выстрелы (ходьбой можно пройти), атаки: язык 2–4.2 м, когти <1.7 м, прыжок 3.6–6 м. Спавн `tr_licker` (учебный корпус).
+- **Хантер** (`enemy_hunter.glb`, RE:Revelations): 17 клипов из исходника переименованы (idle/walk/run/leap/swipe/
+  slash/hurt/die…), горизонтальный root motion обнулён. `src/game/ai/Hunter.ts` (AnimationMixer): бег 5.4 м/с,
+  удар <1.9 м, прыжок 3.4–9 м. Спавн `ps_hunter` («Проход»). Общая база — `src/game/ai/Monster.ts`.
+- `ModelLibrary.reskin`: если bind-трансформ не единичный (Sketchfab), поза покоя запекается по-вершинно.
+- Сборка: `vite.config.ts assetsInlineLimit: 0` (иначе OOM на 4 ГБ), `scripts/inline.mjs` сам вставляет ассеты как data: URI.
+- Тест `scripts/monsters.mjs` — смоук лизуна/хантера (погоня → урон).
+- **Стив из RE5** (`uPl00ChrisNormal.arc`, MT Framework, MOD v0x19C, 130 костей, вершины stride 32 со сжатыми
+  координатами): архив распакован (`tools`: ARC v7 + zlib), но готового парсера MOD для RE5 нет — не сделано,
+  нужен отдельный реверс формата (или экспорт пользователем в FBX/GLB через сторонние инструменты).
+
 ## 7. Blender-пайплайн (как перегенерировать ассеты)
 
 Все модели генерируются кодом; запускать **из `/data/assets_src`**, скрипты лежат в `/data/assets_src/tools/`
