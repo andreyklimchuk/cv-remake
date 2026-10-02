@@ -44,7 +44,7 @@ export const UI = {
   saved: () => (ru() ? 'Игра сохранена.' : 'Game saved.'),
   locked: () => (ru() ? 'Дальше — улица острова Рокфорт.\nЭта часть пока не перенесена.' : 'Beyond this door lies Rockfort Island.\nThis area is not ported yet.'),
   camFixed: () => (ru() ? 'Камера: фиксированная' : 'Camera: fixed'),
-  camBehind: () => (ru() ? 'Камера: от третьего лица' : 'Camera: third person'),
+  camBehind: () => (ru() ? 'Камера: от плеча (мышь — обзор)' : 'Camera: over the shoulder (mouse to look)'),
   // lighter-lit variants of the dark-area messages
   litOutside: () => (ru() ? 'При свете зажигалки видно:\nза решёткой лишь пустой\nтёмный коридор...' : 'By the lighter\'s flame I can see\nonly an empty, dark\ncorridor outside...'),
   litDark: () => (ru() ? 'Зажигалка освещает угол.\nЗдесь ничего нет.' : 'The lighter lights up the corner.\nThere is nothing here.'),

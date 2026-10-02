@@ -15,7 +15,7 @@ const ROOM_ITEMS: Record<string, number[]> = { rm_0000: [0, 4, 6, 7], rm_0010: [
 /** extra "check" messages attached to items (prisoner list on the board clip) */
 const ITEM_MSG: Record<string, Record<number, number>> = { rm_0000: { 7: 48 } };
 const ROOM_BY_NUM: Record<number, string> = { 0: 'rm_0000', 1: 'rm_0010' };
-const LIGHTER = 55;
+const LIGHTER = 55, KNIFE = 8;
 
 export class Game {
   renderer: THREE.WebGLRenderer;
@@ -45,12 +45,13 @@ export class Game {
     this.ui.stage.prepend(this.renderer.domElement);
     this.msg = new MessageBox(this.ui.msg);
     this.invScreen = new InventoryScreen(this.ui.inv, this.inv, this.input, this.audio, this.player);
-    this.invScreen.onEquipChange = () => this.player.setLighter(this.invScreen.standard === LIGHTER);
+    this.invScreen.onEquipChange = () => { this.player.setLighter(this.invScreen.standard === LIGHTER); this.player.setKnife(this.invScreen.equipped === KNIFE); };
     this.scene.background = new THREE.Color(0);
     this.scene.add(this.ambient, this.hemi, this.player.root);
     addEventListener('resize', () => this.resize());
     this.resize();
     const cm = localStorage.getItem('cvx.cam'); if (cm === 'behind') this.cam.mode = 'behind';
+    this.player.onSlash = (p) => this.onSlash(p);
     (window as any).__game = this;
   }
   resize() { const { w, h } = this.ui.fit(ASPECT); this.renderer.setSize(w, h, false); this.renderer.domElement.style.width = w + 'px'; this.renderer.domElement.style.height = h + 'px'; }
@@ -69,7 +70,8 @@ export class Game {
       this.inv.add(LIGHTER, 'Lighter');
       await this.enterRoom('rm_0000', 0, undefined, false);
     }
-    this.player.setLighter(this.invScreen.standard === LIGHTER);
+    this.player.setLighter(this.invScreen.standard === LIGHTER); this.player.setKnife(this.invScreen.equipped === KNIFE);
+    this.renderer.domElement.addEventListener('mousedown', () => { if (this.cam.mode === 'behind' && !this.invOpen && !this.msg.active) this.input.requestLock(this.renderer.domElement); });
     this.loop();
     onReady?.();
     await this.ui.fade(false, 900);
@@ -202,10 +204,17 @@ export class Game {
   toggleCamera() {
     this.cam.mode = this.cam.mode === 'fixed' ? 'behind' : 'fixed';
     localStorage.setItem('cvx.cam', this.cam.mode);
+    if (this.cam.mode === 'behind') this.cam.resetYaw(this.player.heading); else this.input.releaseLock();
     this.ui.toast(this.cam.mode === 'fixed' ? UI.camFixed() : UI.camBehind());
     this.cam.update(this.player.pos, this.player.headPos(), this.player.heading, true);
   }
 
+  /** knife hit: enemies within reach of the blade */
+  onSlash(p: THREE.Vector3) {
+    this.audio.se('knife');
+    for (const n of this.npcs) if (n.hittable && n.root.position.distanceTo(p.clone().setY(n.root.position.y)) < 0.6) n.hit?.();
+  }
+  npcs: { root: THREE.Object3D; hittable?: boolean; hit?: () => void }[] = [];
   /** Test hook: advance the simulation synchronously with the given keys held. */
   sim(sec: number, codes: string[] = []) {
     for (const c of codes) { this.input.down.add(c); this.input.pressed.add(c); }
@@ -235,10 +244,17 @@ export class Game {
       this.player.frozen = false;
       if (inp.inventory) this.toggleInv(true);
       else if (inp.camToggle) this.toggleCamera();
-      else if (inp.action) { const t = this.findTrigger(); if (t) { this.player.frozen = true; this.interact(t); } }
+      else if (inp.action && !this.player.aiming) { const t = this.findTrigger(); if (t) { this.player.frozen = true; this.interact(t); } }
     }
     if (this.room) {
-      this.player.update(dt, inp, this.room);
+      const sh = this.cam.mode === 'behind';
+      if (sh && !this.player.frozen) {
+        // mouse (pointer lock) or ←/→ turn the over-the-shoulder camera; the fixed cameras cannot be moved
+        const sens = 0.0024 * (this.player.aiming ? 0.6 : 1);
+        this.cam.look(inp.mdx * sens + ((inp.camR ? 1 : 0) - (inp.camL ? 1 : 0)) * 2.2 * dt, inp.mdy * sens);
+      }
+      this.cam.zoom += ((sh && this.player.aiming ? 1 : 0) - this.cam.zoom) * Math.min(1, dt * 10);
+      this.player.update(dt, inp, this.room, sh ? this.cam.yaw : null);
       this.cam.update(this.player.pos, this.player.headPos(), this.player.heading, false, dt);
       this.audio.footsteps(this.player.state, dt);
     }

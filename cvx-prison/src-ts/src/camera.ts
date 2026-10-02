@@ -88,7 +88,7 @@ export class CameraRig {
   }
   update(p: THREE.Vector3, head: THREE.Vector3, heading: number, snap = false, dt = 1 / 60): boolean {
     const prevIdx = this.index, prevOv = this.override;
-    if (this.mode === 'behind') { this.applyCut(null); this.updateFollow(p, head, heading, snap, dt); return false; }
+    if (this.mode === 'behind') { this.applyCut(null); this.updateShoulder(p, head, snap, dt); return false; }
     let idx = this.zoneCam(p);
     this.index = idx;
     // visibility check a few times per second
@@ -126,7 +126,40 @@ export class CameraRig {
     this.follow.init = false;
     return changed;
   }
-  /** third-person camera behind Claire's back, pulled in front of walls */
+  /** over-the-shoulder camera (RE2 remake style): yaw/pitch controlled by the player */
+  yaw = 0; pitch = 0.08; zoom = 0;
+  look(dx: number, dy: number) {
+    this.yaw -= dx; this.pitch = THREE.MathUtils.clamp(this.pitch + dy, -0.65, 0.75);
+  }
+  resetYaw(h: number) { this.yaw = h; this.pitch = 0.08; }
+  private updateShoulder(p: THREE.Vector3, head: THREE.Vector3, snap: boolean, dt: number) {
+    const cy = Math.cos(this.yaw), sy = Math.sin(this.yaw);
+    const f = new THREE.Vector3(-sy, 0, -cy), r = new THREE.Vector3(cy, 0, -sy);
+    const z = this.zoom; // 0 = normal, 1 = aiming (closer)
+    const pivot = new THREE.Vector3(p.x, Math.max(head.y - 0.02, p.y + 1.15), p.z);
+    // look direction with pitch
+    const cp = Math.cos(this.pitch), sp = Math.sin(this.pitch);
+    const dir = new THREE.Vector3(f.x * cp, -sp, f.z * cp);
+    const side = 0.36 - 0.04 * z, back = 1.15 - 0.45 * z, up = 0.06;
+    const shoulder = pivot.clone().addScaledVector(r, side);
+    // keep the shoulder point inside the room
+    if (this.room) { const L = pivot.distanceTo(shoulder); const free = this.room.clearDistance(pivot, shoulder); if (free < L) shoulder.copy(pivot).add(shoulder.clone().sub(pivot).setLength(Math.max(0.05, free - 0.12))); }
+    let want = shoulder.clone().addScaledVector(dir, -back).add(new THREE.Vector3(0, up, 0));
+    if (this.room) {
+      const L = shoulder.distanceTo(want); const free = this.room.clearDistance(shoulder, want);
+      if (free < L) want = shoulder.clone().add(want.clone().sub(shoulder).setLength(Math.max(0.12, free - 0.15)));
+    }
+    const look = want.clone().addScaledVector(dir, 6);
+    const F = this.follow;
+    if (!F.init || snap) { F.pos.copy(want); F.look.copy(look); F.init = true; }
+    else {
+      F.pos.lerp(want, 1 - Math.exp(-18 * dt)); F.look.copy(look);
+      if (this.room) { const L = shoulder.distanceTo(F.pos); const free = this.room.clearDistance(shoulder, F.pos); if (free < L) F.pos.copy(shoulder).add(F.pos.clone().sub(shoulder).setLength(Math.max(0.12, free - 0.15))); }
+    }
+    this.cam.fov = 58 - 10 * z; this.cam.near = 0.05; this.cam.updateProjectionMatrix();
+    this.cam.position.copy(F.pos); this.cam.lookAt(F.look); this.cam.updateMatrixWorld(true);
+  }
+  /** third-person fallback camera behind Claire's back (fixed mode, when no original camera sees her), pulled in front of walls */
   private updateFollow(p: THREE.Vector3, head: THREE.Vector3, heading: number, snap: boolean, dt: number) {
     const f = new THREE.Vector3(-Math.sin(heading), 0, -Math.cos(heading));
     const pivot = new THREE.Vector3(p.x, Math.max(head.y, p.y + 1.2) + 0.12, p.z);

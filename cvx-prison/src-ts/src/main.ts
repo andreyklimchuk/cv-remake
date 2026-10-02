@@ -22,8 +22,8 @@ function title() {
     el.innerHTML = `<h1>RESIDENT EVIL<br>CODE: Veronica X</h1><h3>${LANG === 'ru' ? 'ТЮРЬМА · ОСТРОВ РОКФОРТ' : 'PRISON · ROCKFORT ISLAND'}</h3>
 <div class="menu">${items().map((it, i) => `<div data-i="${i}" class="${i === sel ? 'sel' : ''}">${it.t}</div>`).join('')}</div>
 <div class="help">${LANG === 'ru'
-      ? 'W/S или ↑/↓ — вперёд/назад · A/D или ←/→ — поворот · Shift — бег · C — камера (фиксированная / из-за спины)<br>E / Пробел / Enter — действие · Tab — предметы · Esc — отмена · F1 — отладка'
-      : 'W/S or ↑/↓ — forward/back · A/D or ←/→ — turn · Shift — run · C — camera (fixed / behind)<br>E / Space / Enter — action · Tab — items · Esc — cancel · F1 — debug'}<br>
+      ? 'W/S или ↑/↓ — вперёд/назад · A/D или ←/→ — поворот · Shift — бег · C — камера (фиксированная / от плеча: мышь или ←/→ — обзор, A/D — шаг вбок)<br>F / ПКМ — приготовить нож · E / Пробел / Enter / ЛКМ — действие, удар · Tab — предметы · Esc — отмена · F1 — отладка'
+      : 'W/S or ↑/↓ — forward/back · A/D or ←/→ — turn · Shift — run · C — camera (fixed / over-the-shoulder: mouse or ←/→ look, A/D strafe)<br>F / RMB — ready knife · E / Space / Enter / LMB — action, attack · Tab — items · Esc — cancel · F1 — debug'}<br>
 ${LANG === 'ru' ? 'Фанатский порт на основе ресурсов PS3-версии. Не для распространения.' : 'Fan port built from the PS3 version assets. Not for distribution.'}</div>`;
   };
   const choose = async (k: string) => {
