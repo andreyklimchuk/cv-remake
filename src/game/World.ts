@@ -16,6 +16,8 @@ import { WeaponSystem } from './combat/WeaponSystem';
 import type { CombatContext } from './combat/CombatContext';
 import { Zombie, type ZombieContext, type Enemy } from './ai/Zombie';
 import { Creature } from './ai/Creature';
+import { Licker } from './ai/Licker';
+import { Hunter } from './ai/Hunter';
 import { Door, type Interactable, type DoorAgent } from './world/Interactables';
 import { buildPrisonLevel, type Level } from './levels/PrisonLevel';
 import type { SaveData } from './SaveSystem';
@@ -82,7 +84,8 @@ export class World {
       spawnZombie: (spawn) => {
         // enemies live in the scene root (not the spawn zone's group): a zombie that follows the player into
         // another zone must not vanish when its spawn zone is portal-culled. Visibility is resolved per frame.
-        const z: Enemy = spawn.kind ? new Creature({ ...spawn, kind: spawn.kind }, s, () => this.zctx) : new Zombie(spawn, s, q.textureSize, () => this.zctx);
+        const z: Enemy = spawn.kind === 'licker' ? new Licker(spawn, s, () => this.zctx) : spawn.kind === 'hunter' ? new Hunter(spawn, s, () => this.zctx)
+          : spawn.kind ? new Creature({ ...spawn, kind: spawn.kind }, s, () => this.zctx) : new Zombie(spawn, s, q.textureSize, () => this.zctx);
         if (this.flags.has('dead:' + spawn.id)) z.forceDead();
         this.zombies.push(z);
       },

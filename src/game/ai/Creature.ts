@@ -7,7 +7,7 @@ import { audio } from '../../engine/AudioEngine';
 import { bus } from '../../engine/Events';
 import { damp } from '../Rig';
 
-export type CreatureKind = 'cerberus' | 'bandersnatch';
+export type CreatureKind = 'cerberus' | 'bandersnatch' | 'licker' | 'hunter';
 const UP = new THREE.Vector3(0, 1, 0);
 
 /** Limbs whose local −Y is aimed at the child joint (so swings are clean local-X rotations and the arm can stretch along Y). */
@@ -20,6 +20,11 @@ const AIM: Record<CreatureKind, Record<string, string>> = {
     rUpperArm: 'rForearm', rForearm: 'rHand', rHand: 'rHandTip',
     lThigh: 'lShin', lShin: 'lFoot', rThigh: 'rShin', rShin: 'rFoot',
   },
+  licker: {
+    lUpperArm: 'lForearm', lForearm: 'lHand', rUpperArm: 'rForearm', rForearm: 'rHand',
+    lThigh: 'lShin', lShin: 'lFoot', lFoot: 'lToe', rThigh: 'rShin', rShin: 'rFoot', rFoot: 'rToe', tongue: 'tongueTip',
+  },
+  hunter: {},
 };
 function zoneOfBone(kind: CreatureKind, n: string): HitZone {
   if (n === 'head' || n === 'jaw' || n === 'neck') return 'head';
@@ -29,6 +34,8 @@ function zoneOfBone(kind: CreatureKind, n: string): HitZone {
     return 'torso';
   }
   if (n.startsWith('rUpper') || n.startsWith('rFore') || n.startsWith('rHand')) return 'rArm';
+  if (n.startsWith('lUpper') || n.startsWith('lFore') || n.startsWith('lHand') || n === 'lClav') return 'lArm';
+  if (n === 'rClav') return 'rArm';
   if (n.startsWith('lStump')) return 'lArm';
   if (n.startsWith('lThigh') || n.startsWith('lShin') || n.startsWith('lFoot')) return 'lLeg';
   if (n.startsWith('rThigh') || n.startsWith('rShin') || n.startsWith('rFoot')) return 'rLeg';
@@ -39,6 +46,8 @@ function zoneOfBone(kind: CreatureKind, n: string): HitZone {
 export class CreatureModel {
   root = new THREE.Group();
   mesh: THREE.SkinnedMesh;
+  /** every skinned part (the Licker ships body + exposed-brain meshes) */
+  meshes: THREE.SkinnedMesh[] = [];
   bones = new Map<string, THREE.Bone>();
   private rest = new Map<THREE.Bone, THREE.Quaternion>();
   private restPos = new Map<THREE.Bone, THREE.Vector3>();
@@ -60,7 +69,7 @@ export class CreatureModel {
       if (kind === 'cerberus') m.geometry.rotateX(Math.PI / 2).translate(0, 0.45, 0); else m.geometry.translate(0, 1.2, 0);
       this.root.add(m); this.root.updateMatrixWorld(true); m.bind(new THREE.Skeleton([b]));
       m.userData.boneZones = ['torso'];
-      this.mesh = m;
+      this.mesh = m; this.meshes = [m];
       return;
     }
     this.ok = true;
@@ -69,7 +78,8 @@ export class CreatureModel {
     const bones = [...bm.values()];
     this.bones = bm;
     for (const b of bones) { this.rest.set(b, b.quaternion.clone()); this.restPos.set(b, b.position.clone()); }
-    const src = skinnedMeshesOf(g)[0];
+    const srcs = skinnedMeshesOf(g);
+    const src = srcs[0];
     const m0 = src.material as THREE.MeshStandardMaterial;
     m0.aoMap = m0.roughnessMap; m0.aoMapIntensity = 0.75; m0.envMapIntensity = 0.6;
     for (const t of [m0.map, m0.normalMap, m0.roughnessMap]) if (t) t.anisotropy = 8;
@@ -80,12 +90,24 @@ export class CreatureModel {
         aoMap: m0.roughnessMap, aoMapIntensity: 0.75, roughness: 1, metalness: 1, sheen: 0.3, sheenRoughness: 0.5, clearcoat: 0.55, clearcoatRoughness: 0.3 });
       mat = p;
     }
-    if (src.geometry.attributes.uv1) src.geometry.deleteAttribute('uv1');
-    this.mesh = reskin(src, bones, mat);
-    this.mesh.frustumCulled = false;
-    this.mesh.userData.boneZones = bones.map((b) => zoneOfBone(kind, b.name));
-    this.root.add(this.mesh);
-    this.mesh.bind(new THREE.Skeleton(bones));
+    const zones = bones.map((b) => zoneOfBone(kind, b.name));
+    const skel = new THREE.Skeleton(bones);
+    for (const sm of kind === 'licker' ? srcs : [src]) {
+      if (sm.geometry.attributes.uv1) sm.geometry.deleteAttribute('uv1');
+      let mm: THREE.Material = sm === src ? mat : sm.material as THREE.Material;
+      if (kind === 'licker') {
+        // raw, wet exposed muscle: clearcoat + sheen
+        const s0 = sm.material as THREE.MeshStandardMaterial;
+        mm = new THREE.MeshPhysicalMaterial({ map: s0.map, normalMap: s0.normalMap, roughness: 0.5, metalness: 0, clearcoat: 0.7, clearcoatRoughness: 0.25, sheen: 0.25, sheenRoughness: 0.4, sheenColor: new THREE.Color(0xff8a80) });
+      }
+      const out = reskin(sm, bones, mm);
+      out.frustumCulled = false;
+      out.userData.boneZones = zones;
+      this.root.add(out);
+      out.bind(skel);
+      this.meshes.push(out);
+    }
+    this.mesh = this.meshes[0];
   }
 
   B(n: string): THREE.Bone | undefined { return this.bones.get(n); }

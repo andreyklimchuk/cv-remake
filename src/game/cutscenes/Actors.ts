@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { ZombieModel } from '../ai/ZombieModel';
 import { makeWeaponModel } from '../player/WeaponModels';
-import { twoBoneIK, type ClaireModel } from '../player/ClaireModel';
+import { twoBoneIK, ClaireModel } from '../player/ClaireModel';
+import { ModelLibrary } from '../assets/ModelLibrary';
 import { damp } from '../Rig';
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -90,7 +91,7 @@ function cleanUniform(src: THREE.Texture | null): THREE.Texture | null {
  * tactical vest and an MP5 carried at the low ready (hands IK'd onto the gun), procedural walk cycle.
  */
 export class GuardActor extends Walker {
-  model: ZombieModel;
+  model: ZombieModel | ClaireModel;
   gun: THREE.Group;
   private phase = Math.random() * 6;
   private rest = new Map<THREE.Object3D, THREE.Quaternion>();
@@ -100,10 +101,14 @@ export class GuardActor extends Walker {
 
   constructor(scene: THREE.Object3D, texSize: number, seed: number) {
     super();
-    const m = new ZombieModel('guard', texSize, seed);
+    const hunk = ModelLibrary.has('hunk');
+    const m = hunk ? new ClaireModel(texSize, 'hunk') : new ZombieModel('guard', texSize, seed);
     this.model = m;
     const r = m.rig;
-    if (m.mesh) {
+    if (m instanceof ClaireModel) {
+      // HUNK (user asset): already wears the gas mask + tactical gear; only the MP5 is added below
+      (m as any).gripL = (m as any).gripR = 1;
+    } else if (m.mesh) {
       const src = m.mesh.material as THREE.MeshStandardMaterial;
       let u = GUARD_UNIFORM.get(src);
       if (!u) {
@@ -115,7 +120,7 @@ export class GuardActor extends Walker {
       }
       m.mesh.material = u;
     } else m.root.traverse((o) => { const mm = o as THREE.Mesh; if (mm.isMesh) mm.material = new THREE.MeshStandardMaterial({ color: 0x23272d, roughness: 0.85 }); });
-    m.root.scale.setScalar(0.94);
+    if (!hunk) m.root.scale.setScalar(0.94);
     m.root.updateMatrixWorld(true);
     const gear = new THREE.MeshStandardMaterial({ color: 0x1b1e22, roughness: 0.85, metalness: 0 });
     const rubber = new THREE.MeshStandardMaterial({ color: 0x101112, roughness: 0.55, metalness: 0 });
@@ -125,6 +130,8 @@ export class GuardActor extends Walker {
     const attach = (bone: THREE.Object3D, mesh: THREE.Object3D, world: THREE.Vector3) => { mesh.position.copy(world); m.root.add(mesh); mesh.updateMatrixWorld(true); bone.attach(mesh); mesh.traverse((o) => { o.castShadow = true; }); };
     // head reference: centre of the skull ~ 9 cm above the head joint
     const hc = hp.clone().add(new THREE.Vector3(0, 0.1, 0.01));
+    const chest = neckP.clone().add(new THREE.Vector3(0, -0.24, 0.015));
+    if (!hunk) {
     const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.135, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.55), gear);
     helmet.scale.set(1.02, 0.95, 1.12); attach(head, helmet, hc.clone().add(new THREE.Vector3(0, 0.02, -0.005)));
     const mask = new THREE.Group();
@@ -134,9 +141,9 @@ export class GuardActor extends Walker {
     const can = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.04, 0.07, 12), gear); can.rotation.x = Math.PI / 2 - 0.5; can.position.set(0, -0.06, 0.12); mask.add(can);
     attach(head, mask, hc.clone().add(new THREE.Vector3(0, -0.01, 0.0)));
     // vest on the chest
-    const chest = neckP.clone().add(new THREE.Vector3(0, -0.24, 0.015));
     const vest = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.34, 0.25), gear); attach(r.spine, vest, chest);
     for (const s of [-1, 0, 1]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.11, 0.05), rubber); attach(r.spine, p, chest.clone().add(new THREE.Vector3(0.11 * s, -0.1, 0.15))); }
+    }
     // MP5 at the low ready across the chest (rides on the spine)
     this.gun = makeWeaponModel('mp5');
     const g0 = chest.clone().add(new THREE.Vector3(0.06, -0.12, 0.3));
@@ -181,6 +188,7 @@ export class GuardActor extends Walker {
     const right = new THREE.Vector3(-Math.cos(this.yaw), 0, Math.sin(this.yaw));
     twoBoneIK(r.rUpperArm, r.rForearm, r.rHand, grip, right.clone().multiplyScalar(1).add(new THREE.Vector3(0, -0.6, -0.2)));
     twoBoneIK(r.lUpperArm, r.lForearm, r.lHand, fore, right.clone().multiplyScalar(-1).add(new THREE.Vector3(0, -0.8, 0)));
+    if (m instanceof ClaireModel) (m as any).curlFingers();
   }
 
   dispose(): void {

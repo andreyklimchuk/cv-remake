@@ -189,6 +189,49 @@ export class AudioEngine {
     o.start(t); lfo.start(t); o.stop(t + dur); lfo.stop(t + dur);
   }
 
+  /** Licker: 'click' (tongue clicking while it listens), 'hiss', 'shriek' (attack / hurt), 'lash' (tongue whip) */
+  licker(pos: THREE.Vector3, kind: 'click' | 'hiss' | 'shriek' | 'lash'): void {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t = ctx.currentTime, d = this.out(pos);
+    if (kind === 'click') {
+      const n = 3 + Math.floor(Math.random() * 4);
+      for (let i = 0; i < n; i++) this.noiseBurst(d, t + i * (0.07 + Math.random() * 0.05), 0.03, 'bandpass', 2600 + Math.random() * 900, 6, 0.32);
+      return;
+    }
+    if (kind === 'lash') { this.noiseBurst(d, t, 0.22, 'bandpass', 1800, 1.2, 0.45, 600); this.noiseBurst(d, t + 0.05, 0.12, 'lowpass', 700, 1, 0.3); return; }
+    if (kind === 'hiss') { this.noiseBurst(d, t, 0.9, 'highpass', 3000, 0.8, 0.22, 1800); return; }
+    const dur = 0.55 + Math.random() * 0.2;
+    const o = ctx.createOscillator(); o.type = 'sawtooth';
+    const base = 520 + Math.random() * 120;
+    o.frequency.setValueAtTime(base, t); o.frequency.linearRampToValueAtTime(base * 1.5, t + dur * 0.3); o.frequency.exponentialRampToValueAtTime(base * 0.6, t + dur);
+    const lfo = ctx.createOscillator(); lfo.frequency.value = 33; const lg = ctx.createGain(); lg.gain.value = base * 0.12; lfo.connect(lg).connect(o.frequency);
+    const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1700; f.Q.value = 2;
+    const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.4, t + 0.03); g.gain.linearRampToValueAtTime(0.0001, t + dur);
+    o.connect(f).connect(g); g.connect(d);
+    this.noiseBurst(d, t, dur, 'bandpass', 3200, 1.5, 0.2);
+    o.start(t); lfo.start(t); o.stop(t + dur); lfo.stop(t + dur);
+  }
+
+  /** Hunter: 'croak' (frog-like throat rattle), 'screech' (attack), 'die' */
+  hunter(pos: THREE.Vector3, kind: 'croak' | 'screech' | 'die'): void {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t = ctx.currentTime, d = this.out(pos);
+    const dur = kind === 'croak' ? 0.7 + Math.random() * 0.4 : kind === 'screech' ? 0.45 : 1.3;
+    const o = ctx.createOscillator(); o.type = 'sawtooth';
+    const base = kind === 'croak' ? 95 + Math.random() * 25 : kind === 'screech' ? 380 + Math.random() * 80 : 220;
+    o.frequency.setValueAtTime(base, t);
+    if (kind === 'screech') o.frequency.linearRampToValueAtTime(base * 1.8, t + 0.08), o.frequency.exponentialRampToValueAtTime(base * 0.7, t + dur);
+    if (kind === 'die') o.frequency.exponentialRampToValueAtTime(60, t + dur);
+    const lfo = ctx.createOscillator(); lfo.frequency.value = kind === 'croak' ? 14 + Math.random() * 6 : 28;
+    const lg = ctx.createGain(); lg.gain.value = base * (kind === 'croak' ? 0.45 : 0.15); lfo.connect(lg).connect(o.frequency);
+    const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = kind === 'croak' ? 520 : 1300; f.Q.value = 3;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(kind === 'croak' ? 0.34 : 0.5, t + 0.03); g.gain.linearRampToValueAtTime(0.0001, t + dur);
+    o.connect(f).connect(g); g.connect(d);
+    this.noiseBurst(d, t, dur, 'bandpass', kind === 'croak' ? 700 : 2400, 1.4, 0.16);
+    o.start(t); lfo.start(t); o.stop(t + dur); lfo.stop(t + dur);
+  }
+
   /** Bandersnatch: deep wet roar / grunt */
   roar(pos: THREE.Vector3, long = true): void {
     this.groan(pos, 0.42, long);

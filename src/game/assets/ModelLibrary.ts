@@ -11,7 +11,8 @@ import steveUrl from '../../assets/models/steve.glb?url';
  * /assets/blender). Everything is inlined into the build, so this also works from file://.
  * If loading fails the game falls back to the procedural capsule characters.
  */
-const URLS: Record<string, string> = { claire: claireUrl, steve: steveUrl };
+import hunkUrl from '../../assets/models/hunk.glb?url';
+const URLS: Record<string, string> = { claire: claireUrl, steve: steveUrl, hunk: hunkUrl };
 const zombieUrls = import.meta.glob(['../../assets/models/zombie_*.glb', '../../assets/models/enemy_*.glb'], { query: '?url', import: 'default', eager: true }) as Record<string, string>;
 for (const [p, u] of Object.entries(zombieUrls)) URLS[p.split('/').pop()!.replace('.glb', '')] = u;
 const WEAPON_URLS = import.meta.glob('../../assets/models/weapon_*.glb', { query: '?url', import: 'default', eager: true }) as Record<string, string>;
@@ -101,8 +102,27 @@ export function reskin(src: THREE.SkinnedMesh, bones: THREE.Bone[], material?: T
   const idx = srcBones.map((b) => Math.max(0, bones.findIndex((x) => x.name === b.name)));
   const si = geo.attributes.skinIndex;
   for (let i = 0; i < si.count; i++) for (let c = 0; c < 4; c++) si.setComponent(i, c, idx[si.getComponent(i, c)]);
-  src.updateMatrixWorld(true);
-  geo.applyMatrix4(src.matrixWorld);
+  let top: THREE.Object3D = src; while (top.parent) top = top.parent;
+  top.updateMatrixWorld(true);
+  // rest-pose skin transform (identity when the mesh node already sits in the skeleton's frame; Sketchfab exports
+  // put the skeleton under a different axis-fix node, so the bind space has to be taken from a joint)
+  const b0 = srcBones[0];
+  const G = src.bindMatrixInverse.clone().multiply(b0.matrixWorld).multiply(src.skeleton.boneInverses[0]).multiply(src.bindMatrix);
+  if (G.equals(new THREE.Matrix4()) || G.elements.every((e, i) => Math.abs(e - new THREE.Matrix4().elements[i]) < 1e-4)) geo.applyMatrix4(src.matrixWorld);
+  else {
+    // bake the rest-pose skinning exactly like the renderer does (bind matrix → bones → bind inverse → world)
+    const pos = geo.attributes.position, nor = geo.attributes.normal, v = new THREE.Vector3(), w = new THREE.Vector3(), nn = new THREE.Vector3();
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(src.geometry.attributes.position, i);
+      if (nor) { nn.fromBufferAttribute(src.geometry.attributes.normal, i); w.copy(v).addScaledVector(nn, 0.01); src.applyBoneTransform(i, w).applyMatrix4(src.matrixWorld); }
+      src.applyBoneTransform(i, v).applyMatrix4(src.matrixWorld);
+      pos.setXYZ(i, v.x, v.y, v.z);
+      if (nor) { nn.copy(w).sub(v).normalize(); nor.setXYZ(i, nn.x, nn.y, nn.z); }
+    }
+    pos.needsUpdate = true; if (nor) nor.needsUpdate = true;
+    if (geo.attributes.tangent) geo.deleteAttribute('tangent');
+    geo.computeBoundingBox(); geo.computeBoundingSphere();
+  }
   const m = new THREE.SkinnedMesh(geo, material ?? src.material);
   m.name = src.name;
   m.castShadow = true; m.receiveShadow = true;

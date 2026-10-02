@@ -9,9 +9,11 @@ import { audio } from '../../engine/AudioEngine';
 import { bus } from '../../engine/Events';
 import { damp } from '../Rig';
 import type { Creature, CreatureKind } from './Creature';
+import type { Licker } from './Licker';
+import type { Hunter } from './Hunter';
 
 /** everything that lives in World.zombies (zombies + B.O.W. creatures) */
-export type Enemy = Zombie | Creature;
+export type Enemy = Zombie | Creature | Licker | Hunter;
 
 export type ZState =
   | 'idle' | 'wander' | 'investigate' | 'chase' | 'lunge' | 'grab' | 'bite'
