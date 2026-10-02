@@ -12,7 +12,8 @@ await page.waitForFunction(() => window.__game?.mode === 'playing', null, { time
 for (const [kind, dx, dz, yaw] of [['hunter', 0, -7, 0]]) { // (Licker removed in 6.13)
   const ok = await page.evaluate(([kind, dx, dz, yaw]) => {
     const g = window.__game, w = g.world, p = w.player;
-    const m = w.zombies.find((z) => z.kind === kind);
+    let m = w.zombies.find((z) => z.kind === kind && z.alive);
+    if (!m) { m = w.spawnEnemy({ id: 'test_' + kind, x: p.pos.x, z: p.pos.z + 7, yaw: Math.PI, kind }); w.nav.rebuild(); }
     if (!m) return false;
     p.pos.set(m.position.x + dx, m.position.y, m.position.z + dz); p.yaw = yaw; g.rig.yaw = yaw + Math.PI; p.hp = 100;
     window.__mon = m; return true;

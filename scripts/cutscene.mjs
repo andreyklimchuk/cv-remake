@@ -21,37 +21,23 @@ async function at(T, name) {
   await page.evaluate(() => new Promise((r) => { let n = 0; const f = () => (++n > 3 ? r() : requestAnimationFrame(f)); requestAnimationFrame(f); }));
   if (shots) await page.screenshot({ path: `shots/${name}.png` });
 }
-const introT = (process.env.INTRO ?? '3,10,15.2,17.4,21,24,29,32.4,38.6,41.5,45.4').split(',').map(Number);
+const introT = (process.env.INTRO ?? '3,10,15.2,17.4,21,25,29,33.4,39,42,46').split(',').map(Number);
 for (const [i, T] of introT.entries()) await at(T, `cut_intro_${i}`);
-await at(48, 'cut_intro_end');
+await at(50, 'cut_intro_end');
 out.afterIntro = await until(() => window.__game.mode === 'playing');
 await page.evaluate(() => new Promise((r) => setTimeout(r, 1500)));
 await page.screenshot({ path: 'shots/cut_cell_play.png' });
 out.cell = await page.evaluate(() => {
   const w = window.__game.world, p = w.player;
-  return { char: w.character, x: +p.pos.x.toFixed(2), z: +p.pos.z.toFixed(2), items: w.inventory.items.map((i) => i.defId), weapon: w.weapons.current?.defId ?? null,
-    flags: ['introDone', 'cellOpen'].filter((f) => w.flags.has(f)), heli: !!w.scene.children.find((o) => o.children.length > 30 && o.position.y > 0 && false) };
+  return { char: w.character, x: +p.pos.x.toFixed(2), z: +p.pos.z.toFixed(2), zone: w.streamer.current?.id, items: w.inventory.items.map((i) => i.defId), weapon: w.weapons.current?.defId ?? null,
+    flags: ['introDone', 'cellOpen', 'alarm'].filter((f) => w.flags.has(f)), heliGate: w.flags.has('heliGate'), heliGone: !w.scene.getObjectByName('Top_Rotor') };
 });
-// --- meet Steve: give Claire a kit, open the gate and walk her past it
-await page.evaluate(() => {
-  const w = window.__game.world, inv = w.inventory;
-  inv.add('m9f', 1, { mag: 12 }); inv.add('knife'); inv.add('ammo_hg', 20); inv.add('bowgun', 1, { mag: 10 }); inv.add('herb_g'); inv.add('lighter');
-  w.equip(inv.firstOf('m9f'));
-  w.flags.add('gateOpen'); w.player.pos.set(0, 0, 43);
-});
-out.meetStarted = await until(() => window.__game.mode === 'cutscene');
-const meetT = (process.env.MEET ?? '1.2,2.6,5,9,14,21,23.5,27,32').split(',').map(Number);
-for (const [i, T] of meetT.entries()) await at(T, `cut_meet_${i}`);
-await at(38, 'cut_meet_end');
-out.afterMeet = await until(() => window.__game.mode === 'playing');
-await page.evaluate(() => new Promise((r) => setTimeout(r, 1500)));
-await page.screenshot({ path: 'shots/cut_steve_play.png' });
-out.steve = await page.evaluate(() => {
-  const w = window.__game.world;
-  return { char: w.character, weapon: w.weapons.current?.defId ?? null, items: w.inventory.items.map((i) => i.defId + (i.qty > 1 ? '×' + i.qty : '')), claire: w.inventories.claire.items.map((i) => i.defId), steveMet: w.flags.has('steveMet'), go1: w.flags.has('dead:go_1') };
-});
+// the second cutscene (meeting Steve) is gone: Claire stays the player character everywhere
+await page.evaluate(() => { const w = window.__game.world; w.player.pos.set(0, 0, 43); });
+await page.evaluate(() => new Promise((r) => setTimeout(r, 1200)));
+out.noMeet = await page.evaluate(() => window.__game.mode === 'playing' && window.__game.world.character === 'claire');
 console.log(JSON.stringify(out));
-const ok = out.introStarted && out.afterIntro && out.cell.char === 'claire' && out.cell.items.length === 0 && out.cell.weapon === null && out.cell.z > 37 && out.cell.flags.length === 2 &&
-  out.meetStarted && out.afterMeet && out.steve.char === 'steve' && out.steve.weapon === 'gold_lugers' && !out.steve.items.some((i) => i.startsWith('m9f')) && out.steve.items.some((i) => i.startsWith('bowgun')) && out.steve.items.includes('lighter') && out.steve.claire.includes('m9f');
+const ok = out.introStarted && out.afterIntro && out.cell.char === 'claire' && out.cell.items.length === 0 && out.cell.weapon === null && out.cell.zone === 'p_room' && out.cell.x > 3.3 && out.cell.flags.length === 3 &&
+  !out.cell.heliGate && out.cell.heliGone && out.noMeet;
 console.log(ok ? 'CUTSCENES OK' : 'CUTSCENES FAIL', errors.filter((e) => !e.includes('Pointer Lock')));
 await browser.close(); process.exit(ok ? 0 : 1);

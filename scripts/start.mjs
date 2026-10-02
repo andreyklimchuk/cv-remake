@@ -1,5 +1,5 @@
-// New-game start: intro skip → Claire unarmed in her open cell; lighter on the bunk; cell-block door unlocked;
-// knife + M9F by the dead guard in the yard (first gun auto-equipped with a full magazine); no free character switch.
+// New-game start (6.14 prison GLB): intro skip → Claire unarmed in her open cell; lighter on the bunk;
+// knife + M9F by the dead guard in the guard room (first gun auto-equipped with a full magazine); no free character switch.
 import { chromium } from 'playwright';
 const browser = await chromium.launch({ executablePath: '/usr/local/bin/chromium', args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width: 640, height: 360 } });
@@ -14,16 +14,16 @@ out.cutscene = await until(() => window.__game?.mode === 'cutscene' && window.__
 await page.keyboard.press('Enter');
 out.skipped = await until(() => window.__game.mode === 'playing');
 // the barred door rolls open (~1.1 s game time) → wait until the doorway is passable
-out.exitOpen = await until(() => { const w = window.__game.world, V = w.player.pos.constructor; return w.physics.walkable(new V(34, 0, 38.6), new V(34, 0, 34.4), 0.3); });
+out.exitOpen = await until(() => { const w = window.__game.world, V = w.player.pos.constructor; return w.physics.walkable(new V(3.8, 0, 2.1), new V(2.0, 0, 2.1), 0.3); });
 out.cell = await page.evaluate(() => {
   const g = window.__game, w = g.world, p = w.player, V = p.pos.constructor;
-  const lighter = w.interactables.find((i) => i.id === 'c_lighter');
-  const cd = w.interactables.find((i) => i.id === 'cellDoor');
+  const lighter = w.interactables.find((i) => i.id === 'cell_lighter');
+  const cd = w.interactables.find((i) => i.id === 'corrGate');
   return {
     pos: [p.pos.x, p.pos.z], items: w.inventory.items.length, weapon: w.weapons.current?.defId ?? null,
     hud: document.querySelector('.hud-ammo .wname')?.textContent,
-    lighter: !!lighter?.enabled && lighter.pos.x > 32 && lighter.pos.x < 36 && lighter.pos.z > 36,
-    exit: w.physics.walkable(new V(34, 0, 38.6), new V(34, 0, 34.4), 0.3),
+    lighter: !!lighter?.enabled && lighter.pos.x > 3 && lighter.pos.x < 5.4 && lighter.pos.z > 5,
+    exit: w.physics.walkable(new V(3.8, 0, 2.1), new V(2.0, 0, 2.1), 0.3),
     cellDoorLocked: cd?.locked ?? null,
     zombiesHidden: w.zombies.filter((z) => z.alive).some((z) => z.model.root.visible),
   };
@@ -36,18 +36,18 @@ out.afterC = await page.evaluate(() => window.__game.world.character);
 await page.keyboard.press('KeyF');
 await page.waitForTimeout(400);
 out.fState = await page.evaluate(() => window.__game.world.player.state);
-// to the dead guard in the yard: pick up the M9F with E
+// to the dead guard in the guard room: pick up the M9F with E
 await page.evaluate(() => {
   const w = window.__game.world;
   for (const z of w.zombies) if (z.alive) z.forceDead();
-  w.player.pos.set(14.5, 0, 11.3); w.player.yaw = Math.PI;
+  w.player.pos.set(-2.1, 0, 4.1); w.player.yaw = Math.PI;
 });
 await page.waitForTimeout(800);
 await page.keyboard.press('KeyE');
 out.gun = await until(() => !!window.__game.world.weapons.current);
 out.yard = await page.evaluate(() => {
   const w = window.__game.world;
-  return { weapon: w.weapons.current?.defId, mag: w.weapons.current?.mag, knifeOnGround: !!w.interactables.find((i) => i.id === 'y_knife')?.enabled, ammo: !!w.interactables.find((i) => i.id === 'y_ammo0') };
+  return { weapon: w.weapons.current?.defId, mag: w.weapons.current?.mag, knifeOnGround: !!w.interactables.find((i) => i.id === 'p_knife')?.enabled, ammo: !!w.interactables.find((i) => i.id === 'p_ammo') };
 });
 console.log(JSON.stringify(out));
 const c = out.cell;
