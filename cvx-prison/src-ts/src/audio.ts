@@ -188,6 +188,33 @@ export class Audio {
     if (fadeOut > 0) v.gain.gain.linearRampToValueAtTime(0, t);
     v.src.stop(fadeOut > 0 ? t : 0);
   }
+  /** cutscene voice (PlayVoice on ADX slot 1, sound/voice/disc1p.stq request = VoiceNo); mode 1 = centre, volume 0 */
+  private voiceIdx: Promise<Record<string, string>> | null = null;
+  private voiceV: { src: AudioBufferSourceNode; gain: GainNode; no: number } | null = null;
+  private voiceNo = -1;
+  async voice(no: number, fadeIn = 0) {
+    const c = this.ctx; if (!c) return;
+    this.voiceOff(); this.voiceNo = no;
+    this.voiceIdx ??= fetch(assetUrl('audio/voice.json')).then((r) => r.json()).catch(() => ({}));
+    const nm = (await this.voiceIdx)[no]; if (!nm || this.voiceNo !== no) return;
+    const buf = await this.buf(`audio/voice/${nm}.ogg`); if (!buf || this.voiceNo !== no) return;
+    const src = c.createBufferSource(); src.buffer = buf;
+    const gain = c.createGain(); src.connect(gain).connect(this.sfx);
+    if (fadeIn) { gain.gain.setValueAtTime(0, c.currentTime); gain.gain.linearRampToValueAtTime(1, c.currentTime + fadeIn / 100); }
+    src.start(); this.voiceV = { src, gain, no };
+    src.onended = () => { if (this.voiceV?.src === src) this.voiceV = null; };
+  }
+  /** preload the voices of a room's scripts */
+  preloadVoices(nos: number[]) {
+    if (!this.ctx) return;
+    this.voiceIdx ??= fetch(assetUrl('audio/voice.json')).then((r) => r.json()).catch(() => ({}));
+    this.voiceIdx.then((ix) => { for (const n of nos) if (ix[n]) this.buf(`audio/voice/${ix[n]}.ogg`); });
+  }
+  voiceOff(fadeOut = 0) {
+    const c = this.ctx, v = this.voiceV; this.voiceNo = -1; this.voiceV = null; if (!c || !v) return;
+    if (fadeOut > 0) { v.gain.gain.setValueAtTime(v.gain.gain.value, c.currentTime); v.gain.gain.linearRampToValueAtTime(0, c.currentTime + fadeOut / 100); v.src.stop(c.currentTime + fadeOut / 100); }
+    else try { v.src.stop(); } catch { /* */ }
+  }
   /** keep the 3D volume / pan of looping positional sounds up to date */
   update() {
     for (const [k, v] of this.slots) if (v.pos && k.startsWith('obj')) {
