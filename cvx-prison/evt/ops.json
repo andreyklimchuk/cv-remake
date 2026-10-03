@@ -1,0 +1,1222 @@
+{
+"00": [
+2,
+"bhEnd"
+],
+"01": [
+2,
+"bhIfelCk"
+],
+"02": [
+2,
+"bhElseCk"
+],
+"03": [
+2,
+"bhEndif"
+],
+"04": [
+6,
+"bhCk"
+],
+"05": [
+6,
+"bhSet"
+],
+"06": [
+4,
+"bhCmpB"
+],
+"07": [
+6,
+"bhCmpW"
+],
+"08": [
+4,
+"bhSv"
+],
+"09": [
+4,
+"bhSvW"
+],
+"0a": [
+4,
+"bhWalAtariSet"
+],
+"0b": [
+4,
+"bhEtcAtariSet"
+],
+"0c": [
+4,
+"bhFlrAtariSet"
+],
+"0d": [
+4,
+"bhDieCk"
+],
+"0e": [
+6,
+"bhItmCk"
+],
+"0f": [
+2,
+"bhUseItemClear"
+],
+"10": [
+2,
+"bhUseItemCheck"
+],
+"11": [
+2,
+"bhPlItemCheck"
+],
+"12": [
+2,
+"bhCineSet"
+],
+"13": [
+4,
+"bhCamSet"
+],
+"14": [
+4,
+"bhEvtOn"
+],
+"15": [
+4,
+"bhBgmOn"
+],
+"16": [
+2,
+"bhBgmOff"
+],
+"17": [
+8,
+"bhSeOn"
+],
+"18": [
+2,
+"bhSeOff"
+],
+"19": [
+8,
+"bhVoiceOn"
+],
+"1a": [
+2,
+"bhVoiceOff"
+],
+"1b": [
+6,
+"bhAdxCk"
+],
+"1c": [
+6,
+"bhBGSeOn"
+],
+"1d": [
+4,
+"bhBGSeOff"
+],
+"1e": [
+6,
+"bhAdxTimeCk"
+],
+"1f": [
+4,
+"bhMessageSet"
+],
+"20": [
+4,
+"bhSetDispObj"
+],
+"21": [
+6,
+"bhDieEventCk"
+],
+"22": [
+4,
+"bhEneSetCk"
+],
+"23": [
+6,
+"bhItmSetCk"
+],
+"24": [
+4,
+"bhInitModelSet"
+],
+"25": [
+10,
+"bhEtcAtariSet2"
+],
+"26": [
+2,
+"bhArmsItemCheck"
+],
+"27": [
+2,
+"bhArmsItemChange"
+],
+"28": [
+2,
+"bhSubStatus"
+],
+"29": [
+2,
+"bhCamPauseSet"
+],
+"2a": [
+4,
+"bhCamSet2"
+],
+"2b": [
+2,
+"bhMotionPauseSet"
+],
+"2c": [
+4,
+"bhEffectSet"
+],
+"2d": [
+2,
+"bhInitMotionPause"
+],
+"2e": [
+2,
+"bhMotionPauseSetPly"
+],
+"2f": [
+4,
+"bhInitSetKage"
+],
+"30": [
+4,
+"bhInitMotionPauseEx"
+],
+"31": [
+2,
+"bhPlItemLost"
+],
+"32": [
+12,
+"bhObjLinkSet"
+],
+"33": [
+8,
+"bhSetDoorCall"
+],
+"34": [
+12,
+"bhObjLinkSetPly"
+],
+"35": [
+4,
+"bhLightSet"
+],
+"36": [
+6,
+"bhFadeSet"
+],
+"37": [
+2,
+"bhRoomCaseNo"
+],
+"38": [
+6,
+"bhFrameCheck"
+],
+"39": [
+4,
+"bhCamInfoSet"
+],
+"3a": [
+2,
+"bhMutekiSetPl"
+],
+"3b": [
+6,
+"bhDefModelSet"
+],
+"3c": [
+4,
+"bhMaskSet"
+],
+"3d": [
+4,
+"bhLipSet"
+],
+"3e": [
+4,
+"bhMaskStart"
+],
+"3f": [
+4,
+"bhLipStart"
+],
+"40": [
+8,
+"bhLookGsetPlStart"
+],
+"41": [
+2,
+"bhLookGsetPlStop"
+],
+"42": [
+4,
+"bhItmAspdSet"
+],
+"43": [
+4,
+"bhEffDispSet"
+],
+"44": [
+6,
+"bhEffAmbSet"
+],
+"45": [
+2,
+"bhDelObjSe"
+],
+"46": [
+8,
+"bhSetNextRoomBgm"
+],
+"47": [
+10,
+"bhSetNextRoomBgSe"
+],
+"48": [
+6,
+"bhFootSeCall"
+],
+"49": [
+10,
+"bhWeaponSeCall"
+],
+"4a": [
+8,
+"bhYakkyouSet"
+],
+"4b": [
+4,
+"bhLightTypeSet"
+],
+"4c": [
+6,
+"bhFogColorSet"
+],
+"4d": [
+4,
+"bhPlItemBlockCk"
+],
+"4e": [
+14,
+"bhEffBloodSet"
+],
+"4f": [
+6,
+"bhCyoutenHenkeiSet"
+],
+"50": [
+2,
+"bhSetObjMotion"
+],
+"51": [
+12,
+"bhObjLinkSetObjEne"
+],
+"52": [
+12,
+"bhObjLinkSetObjItem"
+],
+"53": [
+12,
+"bhObjLinkSetEneItem"
+],
+"54": [
+12,
+"bhObjLinkSetEneEne"
+],
+"55": [
+2,
+"bhCyoutenHenkeiStart"
+],
+"56": [
+6,
+"bhEffBloodPoolSet"
+],
+"57": [
+2,
+"bhFixEventCamPly"
+],
+"58": [
+14,
+"bhEffBloodPoolSet2"
+],
+"59": [
+12,
+"bhObjLinkSetObjObj"
+],
+"5a": [
+4,
+"bhCamYureSet"
+],
+"5b": [
+2,
+"bhInitCamSet"
+],
+"5c": [
+2,
+"bhMesDispEndSet"
+],
+"5d": [
+6,
+"bhPadCheck"
+],
+"5e": [
+4,
+"bhMovieStart"
+],
+"5f": [
+2,
+"bhMovieStop"
+],
+"60": [
+6,
+"bhTFrameCheck"
+],
+"61": [
+2,
+"bhEventTimerClr"
+],
+"62": [
+6,
+"bhCamCheck"
+],
+"63": [
+2,
+"bhRandamSet"
+],
+"64": [
+2,
+"bhPlCtr"
+],
+"6400": [
+2,
+"Player_controll"
+],
+"6407": [
+8,
+"Player_controll"
+],
+"640c": [
+6,
+"Player_controll"
+],
+"640d": [
+6,
+"Player_controll"
+],
+"6434": [
+2,
+"Player_controll"
+],
+"6480": [
+2,
+"Player_controll"
+],
+"6481": [
+6,
+"Player_controll"
+],
+"6482": [
+2,
+"Player_controll"
+],
+"6483": [
+4,
+"Player_controll"
+],
+"6484": [
+6,
+"Player_controll"
+],
+"6489": [
+4,
+"Player_controll"
+],
+"648b": [
+2,
+"Player_controll"
+],
+"648c": [
+8,
+"Player_controll"
+],
+"648d": [
+6,
+"Player_controll"
+],
+"648e": [
+2,
+"Player_controll"
+],
+"648f": [
+4,
+"Player_controll"
+],
+"6491": [
+6,
+"Player_controll"
+],
+"6496": [
+4,
+"Player_controll"
+],
+"65": [
+4,
+"bhLoadWork"
+],
+"66": [
+2,
+"bhObjCtr"
+],
+"6601": [
+2,
+"Obj_controll"
+],
+"6614": [
+4,
+"Obj_controll"
+],
+"67": [
+2,
+"bhSubCtr"
+],
+"6700": [
+2,
+"Sub_controll"
+],
+"6780": [
+2,
+"Sub_controll"
+],
+"678b": [
+2,
+"Sub_controll"
+],
+"678f": [
+6,
+"Sub_controll"
+],
+"6790": [
+2,
+"Sub_controll"
+],
+"6792": [
+8,
+"Sub_controll"
+],
+"6793": [
+8,
+"Sub_controll"
+],
+"6794": [
+4,
+"Sub_controll"
+],
+"6795": [
+4,
+"Sub_controll"
+],
+"68": [
+6,
+"bhLoadWork2"
+],
+"69": [
+2,
+"bhCommonCtr"
+],
+"6900": [
+2,
+"Common_controll"
+],
+"6902": [
+4,
+"Common_controll"
+],
+"6903": [
+4,
+"Common_controll"
+],
+"6904": [
+4,
+"Common_controll"
+],
+"6905": [
+6,
+"Common_controll"
+],
+"6906": [
+6,
+"Common_controll"
+],
+"6907": [
+8,
+"Common_controll"
+],
+"6908": [
+8,
+"Common_controll"
+],
+"6909": [
+6,
+"Common_controll"
+],
+"690a": [
+6,
+"Common_controll"
+],
+"690b": [
+6,
+"Common_controll"
+],
+"690c": [
+6,
+"Common_controll"
+],
+"690d": [
+6,
+"Common_controll"
+],
+"690e": [
+4,
+"Common_controll"
+],
+"690f": [
+6,
+"Common_controll"
+],
+"6910": [
+6,
+"Common_controll"
+],
+"6911": [
+4,
+"Common_controll"
+],
+"6912": [
+4,
+"Common_controll"
+],
+"6913": [
+4,
+"Common_controll"
+],
+"6915": [
+4,
+"Common_controll"
+],
+"6916": [
+6,
+"Common_controll"
+],
+"6917": [
+4,
+"Common_controll"
+],
+"6918": [
+8,
+"Common_controll"
+],
+"6919": [
+8,
+"Common_controll"
+],
+"691a": [
+10,
+"Common_controll"
+],
+"691b": [
+8,
+"Common_controll"
+],
+"691c": [
+4,
+"Common_controll"
+],
+"691d": [
+4,
+"Common_controll"
+],
+"691e": [
+4,
+"Common_controll"
+],
+"691f": [
+4,
+"Common_controll"
+],
+"6920": [
+4,
+"Common_controll"
+],
+"6921": [
+4,
+"Common_controll"
+],
+"6922": [
+10,
+"Common_controll"
+],
+"6923": [
+10,
+"Common_controll"
+],
+"6924": [
+2,
+"Common_controll"
+],
+"6926": [
+10,
+"Common_controll"
+],
+"6928": [
+4,
+"Common_controll"
+],
+"6929": [
+4,
+"Common_controll"
+],
+"692a": [
+4,
+"Common_controll"
+],
+"692b": [
+6,
+"Common_controll"
+],
+"692c": [
+6,
+"Common_controll"
+],
+"692d": [
+6,
+"Common_controll"
+],
+"692e": [
+4,
+"Common_controll"
+],
+"692f": [
+2,
+"Common_controll"
+],
+"6930": [
+4,
+"Common_controll"
+],
+"6931": [
+4,
+"Common_controll"
+],
+"6932": [
+4,
+"Common_controll"
+],
+"6933": [
+6,
+"Common_controll"
+],
+"6934": [
+4,
+"Common_controll"
+],
+"6935": [
+4,
+"Common_controll"
+],
+"6984": [
+6,
+"Common_controll"
+],
+"698c": [
+8,
+"Common_controll"
+],
+"698d": [
+6,
+"Common_controll"
+],
+"6a": [
+2,
+"bhEventSkipSet"
+],
+"6b": [
+2,
+"bhDelYakkyou"
+],
+"6c": [
+8,
+"bhObjAlphaSet"
+],
+"6d": [
+22,
+"bhCyodanSet"
+],
+"6e": [
+22,
+"bhHEffectSet"
+],
+"6f": [
+12,
+"bhObjLinkSetObjPly"
+],
+"70": [
+2,
+"bhEffPush"
+],
+"71": [
+2,
+"bhEffPop"
+],
+"72": [
+14,
+"bhAreaSearchObj"
+],
+"73": [
+22,
+"bhLightParameterCSet"
+],
+"74": [
+4,
+"bhLightParameterStart"
+],
+"75": [
+4,
+"bhInitMidiSlotSet"
+],
+"76": [
+4,
+"bh3dSoundFlagSet"
+],
+"77": [
+6,
+"bhSoundVolumeSet"
+],
+"78": [
+14,
+"bhLightParameterSet"
+],
+"79": [
+6,
+"bhEneSeOn"
+],
+"7a": [
+2,
+"bhEneSeOff"
+],
+"7b": [
+10,
+"bhWalAtariSet2"
+],
+"7c": [
+10,
+"bhFlrAtariSet2"
+],
+"7d": [
+4,
+"bhMotionPosSetEnePly"
+],
+"7e": [
+4,
+"bhKageSwSet"
+],
+"7f": [
+6,
+"bhSoundPanSet"
+],
+"80": [
+4,
+"bhInitPonySet"
+],
+"81": [
+2,
+"bhSubMapBusyCk"
+],
+"82": [
+4,
+"bhSetDebugLoopEx"
+],
+"83": [
+2,
+"bhSoundFadeOut"
+],
+"84": [
+8,
+"bhCyoutenHenkeiSetEX"
+],
+"85": [
+4,
+"bhCyoutenHenkeiStartEX"
+],
+"86": [
+16,
+"bhEasySESet"
+],
+"87": [
+2,
+"bhSoundFlagReSet"
+],
+"88": [
+10,
+"bhEffUVSet"
+],
+"89": [
+2,
+"bhPlayerChangeSet"
+],
+"8a": [
+2,
+"bhPlayerPoisonCk"
+],
+"8b": [
+12,
+"bhAddObjSe"
+],
+"8c": [
+6,
+"bhRandTest"
+],
+"8d": [
+2,
+"bhEvtComSet"
+],
+"8e": [
+4,
+"bhZombieUpDieCk"
+],
+"8f": [
+4,
+"bhFacePauseSet"
+],
+"90": [
+2,
+"bhFaceReSet"
+],
+"91": [
+4,
+"bhEffModeSet"
+],
+"92": [
+2,
+"bhBGSeOff2"
+],
+"93": [
+2,
+"bhBgmOff2"
+],
+"94": [
+4,
+"bhBGSeOn2"
+],
+"95": [
+4,
+"bhBgmOn2"
+],
+"96": [
+2,
+"bhEffectSensyaSet"
+],
+"97": [
+8,
+"bhEffectKokuenSet"
+],
+"98": [
+12,
+"bhEffectSandSet"
+],
+"99": [
+4,
+"bhEnemyHpUp"
+],
+"9a": [
+4,
+"bhFaceRep"
+],
+"9b": [
+6,
+"bhMovieCk"
+],
+"9c": [
+2,
+"bhSetItmMotion"
+],
+"9d": [
+4,
+"bhObjAspdSet"
+],
+"9e": [
+2,
+"bhPuruPuruFlagSet"
+],
+"9f": [
+2,
+"bhPuruPuruStart"
+],
+"a0": [
+6,
+"bhMapSystemOn"
+],
+"a1": [
+2,
+"bhTrapDamageSet"
+],
+"a2": [
+4,
+"bhEvtLighterFireSet"
+],
+"a3": [
+12,
+"bhObjLinkSetPlyItem"
+],
+"a4": [
+4,
+"bhPlayerKaidanMotion"
+],
+"a5": [
+4,
+"bhEneRenderSet"
+],
+"a6": [
+4,
+"bhBgmOnEx"
+],
+"a7": [
+4,
+"bhBgmOn2Ex"
+],
+"a8": [
+10,
+"bhFogParameterCSet"
+],
+"a9": [
+2,
+"bhFogParameterStart"
+],
+"aa": [
+10,
+"bhEffUVSet2"
+],
+"ab": [
+6,
+"bhBGColorSet"
+],
+"ac": [
+6,
+"bhMovieTimeCk"
+],
+"ad": [
+4,
+"bhEffTypeSet"
+],
+"ae": [
+2,
+"bhPlayerPoison2Cr"
+],
+"af": [
+4,
+"bhPlyHandChange"
+],
+"b0": [
+22,
+"bhHEffectSet2"
+],
+"b1": [
+6,
+"bhObjDposCk"
+],
+"b2": [
+4,
+"bhItemGetGet"
+],
+"b3": [
+8,
+"bhEtcAtariEnePosSet"
+],
+"b4": [
+4,
+"bhEtcAtariEvtPosSet"
+],
+"b5": [
+4,
+"bhLoadWorkEx"
+],
+"b6": [
+2,
+"bhRoomSoundCase"
+],
+"b7": [
+2,
+"bhItemPlToSBox"
+],
+"b8": [
+2,
+"bhItemSBoxToIBox"
+],
+"b9": [
+10,
+"bhGrdPosSet"
+],
+"ba": [
+16,
+"bhGrdPosMoveCSet"
+],
+"bb": [
+2,
+"bhGrdPosMoveStart"
+],
+"bc": [
+2,
+"bhEvtKill"
+],
+"bd": [
+2,
+"bhReTryPointSet"
+],
+"be": [
+6,
+"bhPlyDposCk"
+],
+"bf": [
+4,
+"bhPlItemLostEx"
+],
+"c0": [
+28,
+"bhCyodanSetEx"
+],
+"c1": [
+2,
+"bhArmsItemSet"
+],
+"c2": [
+6,
+"bhItemGetGetEx"
+],
+"c3": [
+4,
+"bhEffectSandSetMatsumoto"
+],
+"c4": [
+8,
+"bhVoiceWait"
+],
+"c5": [
+2,
+"bhVoiceStart"
+],
+"c6": [
+2,
+"bhGameOverSet"
+],
+"c7": [
+4,
+"bhPlItemChangeM"
+],
+"c8": [
+8,
+"bhEffBakuDrmSet"
+],
+"c9": [
+4,
+"bhPlItemTamaSet"
+],
+"ca": [
+2,
+"bhEffClearEvt"
+],
+"cb": [
+2,
+"bhEvtTimerSet"
+],
+"cc": [
+4,
+"bhEneLookFlgSet"
+],
+"cd": [
+2,
+"bhReturnTitleEvt"
+],
+"ce": [
+2,
+"bhSyukanModeSet"
+],
+"cf": [
+2,
+"bhExGameItemInit"
+],
+"d0": [
+4,
+"bhEneLifeSetM"
+],
+"d1": [
+10,
+"bhEffSSizeSet"
+],
+"d2": [
+10,
+"bhEffLinkOffsetSet"
+],
+"d3": [
+2,
+"bhRankingCall"
+],
+"d4": [
+4,
+"bhCallSysSe"
+],
+"f3": [
+1,
+"bhEwhile2"
+],
+"f4": [
+1,
+"bhComNext"
+],
+"f8": [
+4,
+"bhSleep"
+],
+"f9": [
+3,
+"bhSleeping"
+],
+"fa": [
+4,
+"bhFor"
+],
+"fb": [
+2,
+"bhNext"
+],
+"fc": [
+2,
+"bhWhile"
+],
+"fd": [
+1,
+"bhEwhile"
+],
+"fe": [
+1,
+"bhEvtNext"
+],
+"ff": [
+2,
+"bhEvtEnd"
+]
+}

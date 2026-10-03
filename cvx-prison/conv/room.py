@@ -27,7 +27,7 @@ def ents(d):
         if o+36>len(d): break
         fl=struct.unpack_from('>I',d,o)[0]; idn=struct.unpack_from('>H',d,o+4)[0]
         x,y,z=struct.unpack_from('>3f',d,o+12); rx,ry,rz,r3=struct.unpack_from('>hhhh',d,o+24)
-        out.append(dict(flags='%08x'%fl,id=idn,pos=[x*.1,y*.1,z*.1],rot=[rx*A,ry*A,rz*A],r3=r3))
+        out.append(dict(flags='%08x'%fl,id=idn,pos=[x*.1,y*.1,z*.1],rot=[rx*A,ry*A,rz*A],r3=r3,ex=d[o+6:o+12].hex()))
     return out
 def cams(d):
     n=struct.unpack_from('<I',d,8)[0]; out=[]

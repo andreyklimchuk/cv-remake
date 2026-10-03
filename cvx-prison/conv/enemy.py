@@ -75,7 +75,7 @@ def texpngs(texdir,n):
 def mat2quat(R):
     from ninja import mat2quat as mq
     return mq(R)
-def build(mdlfile,texdir,motfile,dst,name,skin_at=0,S=0.1,lower_n=8):
+def build(mdlfile,texdir,motfile,dst,name,skin_at=0,S=0.1,lower_n=8,rmtfile=None):
     d=open(mdlfile,'rb').read()
     rec,m=skin_mdl(d,skin_at); ns=m.walk()
     Lb=[node_local(n) for n in ns]; Wb=world(ns,Lb)
@@ -175,6 +175,23 @@ def build(mdlfile,texdir,motfile,dst,name,skin_at=0,S=0.1,lower_n=8):
         for k,r in enumerate(ex):
             ti=put(np.arange(r[0],dtype=np.float32)/30,5126,'SCALAR',mm=True); s,c=chans(r,nbl,ti)
             anims.append({'name':'u%02d'%k,'samplers':s,'channels':[{'sampler':i,'target':{'node':n_,'path':p_}} for i,(n_,p_) in enumerate(c)]})
+    for rmtfile in (rmtfile.split(',') if rmtfile else []):
+        # room motions (rmt): blocks are numbered in file order ('MTN ' full-body blocks of other characters included);
+        # a clip of this model = lower-body block k followed by the upper-body block k+1 -> 'rNN' (NN = k)
+        rd=open(rmtfile,'rb').read(); blocks=[]; i=-1
+        while True:
+            i=rd.find(b'MTN',i+1)
+            if i<0: break
+            if rd[i+3] in (0x20,0x80) and i>=4: blocks.append(i)
+        nbl=lower_n; nbu=len(ns)-lower_n
+        for k,o in enumerate(blocks):
+            if rd[o+3]!=0x80 or k+1>=len(blocks) or rd[blocks[k+1]+3]!=0x80: continue
+            r1=track_table(rd,o); r2=track_table(rd,blocks[k+1])
+            if not r1 or not r2 or r1[1]!=nbl or r2[1]!=nbu: continue
+            ti=put(np.arange(r1[0],dtype=np.float32)/30,5126,'SCALAR',mm=True); s1,c1=chans(r1,0,ti)
+            ti2=ti if r2[0]==r1[0] else put(np.arange(r2[0],dtype=np.float32)/30,5126,'SCALAR',mm=True); s2,c2=chans(r2,nbl,ti2)
+            anims.append({'name':os.path.basename(rmtfile).split('.')[0]+'/r%02d'%k,'samplers':s1+s2,'channels':[{'sampler':i_,'target':{'node':n_,'path':p_}} for i_,(n_,p_) in enumerate(c1+c2)]})
+            print('room motion r%02d frames %d/%d'%(k,r1[0],r2[0]), 'root', None if r1[2] is None else (r1[2][0]*S).round(2).tolist())
     for im in images:
         b=im.pop('_png')
         while len(B)%4: B.append(0)
@@ -190,4 +207,4 @@ def build(mdlfile,texdir,motfile,dst,name,skin_at=0,S=0.1,lower_n=8):
     return len(anims)
 if __name__=='__main__':
     a=sys.argv[1:]
-    print(build(a[0],a[1],a[2] if a[2]!='-' else None,a[3],a[4],int(a[5],0) if len(a)>5 else 0,lower_n=int(a[6]) if len(a)>6 else 8))
+    print(build(a[0],a[1],a[2] if a[2]!='-' else None,a[3],a[4],int(a[5],0) if len(a)>5 else 0,lower_n=int(a[6]) if len(a)>6 else 8,rmtfile=a[7] if len(a)>7 else None))
