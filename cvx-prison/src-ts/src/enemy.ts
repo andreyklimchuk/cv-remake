@@ -108,3 +108,75 @@ export class Zombie extends EnemyModel {
     else if (this.state !== 'bite') this.set('flinch');
   }
 }
+
+/**
+ * Zombie dog (en04) driven by the original en04ms motion bank:
+ * m00 trot, m01 gallop, m04 leap, m07 recoil after a bite, m10 knocked back, m11 collapse.
+ * Claire's matching reactions are in the same bank (d00 bitten from the front, d05 from behind,
+ * d03/d04 fatal bite).
+ */
+export type DState = 'idle' | 'trot' | 'run' | 'leap' | 'recoil' | 'flinch' | 'die' | 'dead';
+export const D_CLIP: Record<string, string> = { idle: 'm00', trot: 'm00', run: 'm01', leap: 'm04', recoil: 'm07', flinch: 'm10', die: 'm11' };
+export class Dog extends EnemyModel {
+  state: DState = 'idle';
+  t = 0; hp = 6; heading = 0; cool = 0;
+  /** seconds left of bursting out of the kennel (its walls are ignored) */
+  private burst = 0;
+  private b00: THREE.Object3D | null = null; private rootRest = new THREE.Vector3();
+  constructor(public index: number) { super(); }
+  async init(file: string, x: number, y: number, z: number, h: number) {
+    await this.load(file);
+    this.model.traverse((o) => { if (o.name === 'b00' && !this.b00) this.b00 = o; });
+    if (this.b00) this.rootRest.copy(this.b00.position);
+    this.root.position.set(x, y, z); this.heading = h; this.root.rotation.y = h;
+    this.set('idle'); this.update(0);
+    return this;
+  }
+  get hittable() { return this.state !== 'die' && this.state !== 'dead'; }
+  get alive() { return this.hittable; }
+  set(s: DState) {
+    this.state = s; this.t = 0;
+    const loop = s === 'idle' || s === 'trot' || s === 'run';
+    this.cur = ''; this.play(D_CLIP[s], 0.15, loop, 1);
+  }
+  get clipLen() { return this.action ? this.action.getClip().duration : 0; }
+  forward(v = new THREE.Vector3()) { return v.set(-Math.sin(this.heading), 0, -Math.cos(this.heading)); }
+  /** returns true when the leap reaches Claire this frame */
+  tick(dt: number, target: THREE.Vector3, targetFree: boolean, room: { resolve: (p: THREE.Vector3, r: number) => void; floorAt: (x: number, z: number, y: number) => number | null }) {
+    this.t += dt; this.cool = Math.max(0, this.cool - dt); this.burst = Math.max(0, this.burst - dt);
+    const dx = target.x - this.root.position.x, dz = target.z - this.root.position.z, dist = Math.hypot(dx, dz);
+    let d = Math.atan2(-dx, -dz) - this.heading; d = Math.atan2(Math.sin(d), Math.cos(d));
+    let bite = false;
+    const turn = (rate: number) => { this.heading += THREE.MathUtils.clamp(d, -rate * dt, rate * dt); };
+    const move = (sp: number) => {
+      const np = this.root.position.clone().addScaledVector(this.forward(), sp * dt); if (this.burst <= 0) room.resolve(np, 0.25);
+      const y = room.floorAt(np.x, np.z, this.root.position.y); if (y !== null && Math.abs(y - this.root.position.y) < 0.5) np.y = y; else np.y = this.root.position.y;
+      this.root.position.copy(np);
+    };
+    switch (this.state) {
+      case 'idle': if (dist < 6.5) { this.burst = 1.2; this.set('run'); } break;
+      case 'trot': turn(2.5); move(1.0); if (this.cool <= 0) this.set('run'); break;
+      case 'run':
+        turn(3.2); move(3.4);
+        if (dist < 1.9 && Math.abs(d) < 0.35 && this.cool <= 0 && targetFree) this.set('leap');
+        break;
+      case 'leap':
+        if (this.t < 0.45) move(3.6);
+        if (this.t > 0.15 && this.t < 0.5 && dist < 0.75 && targetFree) { bite = true; break; }
+        if (this.t >= this.clipLen) { this.cool = 0.6; this.set('trot'); }
+        break;
+      case 'recoil': if (this.t < 0.4) move(-1.2); if (this.t >= this.clipLen) { this.cool = 1.5; this.set('trot'); } break;
+      case 'flinch': if (this.t < 0.3) move(-1.5); if (this.t >= this.clipLen) { this.cool = 0.8; this.set('trot'); } break;
+      case 'die': if (this.t >= this.clipLen) this.state = 'dead'; break;
+    }
+    this.root.rotation.y = this.heading;
+    this.update(dt);
+    if (this.b00 && this.state !== 'die' && this.state !== 'dead') { this.b00.position.x = this.rootRest.x; this.b00.position.z = this.rootRest.z; }
+    return bite;
+  }
+  hit(dmg: number) {
+    if (!this.hittable) return;
+    this.hp -= dmg;
+    this.set(this.hp <= 0 ? 'die' : 'flinch');
+  }
+}

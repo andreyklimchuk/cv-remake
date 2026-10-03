@@ -8,21 +8,34 @@ import { Inventory } from './inventory';
 import { InventoryScreen } from './invscreen';
 import { Audio } from './audio';
 import { LANG, UI, itemName, pages } from './text';
-import { Zombie } from './enemy';
+import { Zombie, Dog } from './enemy';
 
 export interface SaveData { hp?: number; killed?: Record<string, number[]>; room: string; x: number; y: number; z: number; h: number; inv: any[]; eq?: number | null; std?: number | null; lit?: boolean; taken: Record<string, number[]>; t: number }
 /** items that are present in the PS3 data but belong to later story states */
-const ROOM_ITEMS: Record<string, number[]> = { rm_0000: [0, 4, 6, 7], rm_0010: [0, 1], rm_0020: [], rm_0030: [0] };
+const ROOM_ITEMS: Record<string, number[]> = { rm_0000: [0, 4, 6, 7], rm_0010: [0, 1], rm_0020: [], rm_0030: [0], rm_0050: [0], rm_0060: [0, 1, 2], rm_0080: [0] };
 /** items without an item trigger in the PS3 data (picked up next to where they lie) */
-const ITEM_TRIG: Record<string, number[]> = { rm_0030: [0] };
+const ITEM_TRIG: Record<string, number[]> = { rm_0030: [0], rm_0060: [0] };
 /** zombies (enemy id 1) of the first visit; the graveyard ones climb out of the ground */
-const ROOM_ZOMBIES: Record<string, { files: string[]; lying: boolean }> = { rm_0020: { files: ['enemies/en01a32.glb', 'enemies/en01a09.glb'], lying: true } };
+const ROOM_ZOMBIES: Record<string, { files: string[]; lying: boolean }> = {
+  rm_0020: { files: ['enemies/en01a32.glb', 'enemies/en01a09.glb'], lying: true },
+  rm_0050: { files: ['enemies/en01a01.glb'], lying: false },
+  rm_0060: { files: ['enemies/en01a00.glb', 'enemies/en01a01.glb', 'enemies/en01a33.glb'], lying: false },
+  rm_0080: { files: ['enemies/en01a00.glb', 'enemies/en01a01.glb'], lying: false },
+};
+/** zombie dogs (enemy id 4) */
+const ROOM_DOGS: Record<string, string> = { rm_0050: 'enemies/en04a00.glb' };
+/** triggers that the event scripts turn into doors (the way back from rm_0050 to the prison gate) */
+const DOOR_FIX: Record<string, Record<number, { room: number; spawn: number }>> = { rm_0050: { 0: { room: 3, spawn: 1 } } };
+/** padlocked doors (trigger kind 1): message index in the trigger data */
+const LOCK_MSG: Record<string, boolean> = { rm_0050: true };
+/** yes/no questions in the room messages and what "yes" does */
+const CHOICE: Record<string, Record<number, { take?: number; item?: number; then?: number }>> = { rm_0060: { 5: { take: 1, then: 6 } } };
 /** door number 5 leads out of the prison (rm_0050, outside the walls) */
-const EXIT_ROOM = 5;
+const EXIT_ROOM = -1;
 /** extra "check" messages attached to items (prisoner list on the board clip) */
 const ITEM_MSG: Record<string, Record<number, number>> = { rm_0000: { 7: 48 } };
-const ROOM_BY_NUM: Record<number, string> = { 0: 'rm_0000', 1: 'rm_0010', 2: 'rm_0020', 3: 'rm_0030' };
-const LIGHTER = 55, KNIFE = 8, HANDGUN = 9, BULLETS = 12, MAG = 15;
+const ROOM_BY_NUM: Record<number, string> = { 0: 'rm_0000', 1: 'rm_0010', 2: 'rm_0020', 3: 'rm_0030', 5: 'rm_0050', 6: 'rm_0060', 8: 'rm_0080' };
+const MAP = 74, LIGHTER = 55, KNIFE = 8, HANDGUN = 9, BULLETS = 12, MAG = 15;
 /** handgun damage against zombies (8 hit points) */
 const GUN_DMG = 1.5;
 
@@ -117,9 +130,11 @@ export class Game {
       const it = r.data.items[k]; if (!r.itemMeshes.has(k)) continue;
       r.triggers.push({ kind: 'item', x0: it.pos[0] - 0.35, z0: it.pos[2] - 0.35, x1: it.pos[0] + 0.35, z1: it.pos[2] + 0.35, arg: k, flags: 0, raw: null });
     }
+    for (const [k, d] of Object.entries(DOOR_FIX[id] ?? {})) Object.assign(r.triggers[+k], { kind: 'door', room: d.room, spawn: d.spawn, flags: 1 });
+    if (LOCK_MSG[id]) for (const t of r.triggers) if (t.kind === 'other' && (t.raw?.type ?? '').endsWith('101')) { t.kind = 'message'; t.arg = (t.arg >> 8) & 0xff; }
     if (id === 'rm_0000') this.openCellDoor(r);
-    for (const z of this.zombies) this.scene.remove(z.root);
-    this.zombies = []; this.npcs = []; this.grab = null;
+    for (const z of [...this.zombies, ...this.dogs]) this.scene.remove(z.root);
+    this.zombies = []; this.dogs = []; this.npcs = []; this.grab = null; this.dogBite = null;
     const zs = ROOM_ZOMBIES[id];
     if (zs) {
       const ene = ((r.data as any).enemies ?? []) as { id: number; pos: number[]; rot: number[] }[];
@@ -128,8 +143,19 @@ export class Game {
       for (let i = 0; i < ene.length; i++) {
         const e = ene[i]; if (e.id !== 1 || dead.has(i)) continue;
         const z = new Zombie(i);
-        await z.init(zs.files[n++ % zs.files.length], e.pos[0], e.pos[1], e.pos[2], e.rot[1] ?? 0, zs.lying);
+        await z.init(zs.files[n++ % zs.files.length], e.pos[0], e.pos[1], e.pos[2], zs.lying ? (e.rot[1] ?? 0) : (e.rot[2] ?? 0), zs.lying);
         this.zombies.push(z); this.scene.add(z.root);
+        this.npcs.push({ root: z.root, get hittable() { return z.hittable; }, hit: () => this.hitZombie(z, 1) });
+      }
+    }
+    if (ROOM_DOGS[id]) {
+      const ene = ((r.data as any).enemies ?? []) as { id: number; pos: number[]; rot: number[] }[];
+      const dead = new Set(this.killed[id] ?? []);
+      for (let i = 0; i < ene.length; i++) {
+        const e = ene[i]; if (e.id !== 4 || dead.has(i)) continue;
+        const z = new Dog(i);
+        await z.init(ROOM_DOGS[id], e.pos[0], e.pos[1], e.pos[2], e.rot[2] ?? 0);
+        this.dogs.push(z); this.scene.add(z.root);
         this.npcs.push({ root: z.root, get hittable() { return z.hittable; }, hit: () => this.hitZombie(z, 1) });
       }
     }
@@ -176,6 +202,7 @@ export class Game {
     if (t.kind === 'door') return true;
     if (t.kind === 'item') return r.itemMeshes.has(t.arg);
     if (t.kind === 'message') {
+      const ch = CHOICE[this.roomId]?.[t.arg]; if (ch?.take !== undefined && !r.itemMeshes.has(ch.take)) return false;
       // 47 "too dark" overlaps the window message 4 in the PS3 data; 4 needs the lighter
       if (this.roomId === 'rm_0000' && t.arg === 47) return false;
       const m = r.data.messages[t.arg];
@@ -221,6 +248,20 @@ export class Game {
       }
       if (t.kind === 'message') {
         if (this.roomId === 'rm_0010' && t.arg === 0) return await this.typewriter();
+        const ch = CHOICE[this.roomId]?.[t.arg];
+        if (ch) {
+          const pg = this.messageFor(t.arg);
+          const c = await this.msg.raw(pg, [UI.yes(), UI.no()]);
+          if (c !== 0) return;
+          if (ch.take !== undefined) {
+            const it = r.data.items[ch.take];
+            // the prison map goes to the map screen, not to the item slots
+            if (it.id !== MAP && !this.inv.add(it.id, it.name ?? '', 1)) { await this.msg.show([UI.full()]); return; }
+            this.audio.se('pickup'); r.removeItem(ch.take); (this.taken[this.roomId] ??= []).push(ch.take);
+          }
+          if (ch.then !== undefined) await this.msg.raw(this.messageFor(ch.then));
+          return;
+        }
         await this.msg.raw(this.messageFor(t.arg));
       }
     } finally { this.busy = false; }
@@ -258,8 +299,8 @@ export class Game {
   onFire(p: THREE.Vector3, d: THREE.Vector3, aim: number) {
     const g = this.inv.slots.find((s) => s?.id === HANDGUN); if (!g || g.count <= 0) return false;
     g.count--; this.audio.se('shot');
-    const f = new THREE.Vector2(d.x, d.z).normalize(); let best: Zombie | null = null, bd = 12;
-    for (const z of this.zombies) {
+    const f = new THREE.Vector2(d.x, d.z).normalize(); let best: Zombie | Dog | null = null, bd = 12;
+    for (const z of [...this.zombies, ...this.dogs]) {
       if (!z.hittable) continue;
       const v = new THREE.Vector2(z.root.position.x - p.x, z.root.position.z - p.z), dist = v.length();
       if (dist > bd || dist < 0.05) continue;
@@ -271,10 +312,13 @@ export class Game {
   }
   npcs: { root: THREE.Object3D; hittable?: boolean; hit?: () => void }[] = [];
   zombies: Zombie[] = [];
+  dogs: Dog[] = [];
+  /** dog bite in progress (Claire d00/d05, fatal d03/d04) */
+  dogBite: { z: Dog; t: number; front: boolean; dead: boolean } | null = null;
   killed: Record<string, number[]> = {};
   /** zombie bite in progress (Claire z00/z01 + zombie m00, then z02/z03 push-off) */
   grab: { z: Zombie; t: number; front: boolean; phase: 'bite' | 'push' | 'dead'; hurt: boolean } | null = null;
-  hitZombie(z: Zombie, dmg: number) {
+  hitZombie(z: Zombie | Dog, dmg: number) {
     z.hit(dmg);
     if (!z.alive) (this.killed[this.roomId] ??= []).push(z.index);
   }
@@ -288,6 +332,22 @@ export class Game {
     P.place(np.x, np.y, np.z, front ? z.heading + Math.PI : z.heading);
     P.playSync(front ? 'z00' : 'z01');
     this.grab = { z, t: 0, front, phase: 'bite', hurt: false };
+  }
+  private startDogBite(z: Dog) {
+    const P = this.player, p = P.root.position, zp = z.root.position;
+    const front = P.forward().dot(new THREE.Vector3(zp.x - p.x, 0, zp.z - p.z)) >= 0;
+    P.heading = front ? Math.atan2(-(zp.x - p.x), -(zp.z - p.z)) : Math.atan2(-(p.x - zp.x), -(p.z - zp.z));
+    P.root.rotation.y = P.heading;
+    this.player.hp -= 30; this.audio.se('bite');
+    const dead = this.player.hp <= 0;
+    P.playSync(dead ? (front ? 'd03' : 'd04') : (front ? 'd00' : 'd05'));
+    z.set(dead ? 'idle' : 'recoil');
+    this.dogBite = { z, t: 0, front, dead };
+  }
+  private updateDogBite(dt: number) {
+    const b = this.dogBite!; b.t += dt;
+    if (!b.dead && b.t >= 1.0) { this.player.playSync(null); this.dogBite = null; }
+    else if (b.dead && b.t >= 2.6) { this.dogBite = null; this.gameOver(); }
   }
   private updateGrab(dt: number) {
     const g = this.grab!; g.t += dt;
@@ -362,11 +422,13 @@ export class Game {
       this.player.update(dt, inp, this.room, sh ? this.cam.yaw : null);
       if (!this.msg.active && !this.invOpen && !(this.busy && !this.grab)) {
         if (this.grab) this.updateGrab(dt);
-        const free = !this.grab && !this.player.sync && this.player.hp > 0;
+        if (this.dogBite) this.updateDogBite(dt);
+        const free = !this.grab && !this.dogBite && !this.player.sync && this.player.hp > 0;
         for (const z of this.zombies) {
           if (z.state === 'bite' && this.grab?.z !== z) z.set('walk');
           if (z.tick(dt, this.player.root.position, free, this.room) && !this.grab && free) this.startGrab(z);
         }
+        for (const z of this.dogs) if (z.tick(dt, this.player.root.position, free && !this.grab && !this.dogBite, this.room) && !this.grab && !this.dogBite && free) this.startDogBite(z);
       }
       this.cam.update(this.player.pos, this.player.headPos(), this.player.heading, false, dt);
       this.audio.footsteps(this.player.state, dt);
