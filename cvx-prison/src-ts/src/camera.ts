@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { CamDef, Room } from './room';
+import { EventCam, type LockFn } from './evcam';
 
 export const ASPECT = 4 / 3;
 const FOV = 46;
@@ -15,6 +16,11 @@ export class CameraRig {
   index = -1;
   /** camera chosen by the event scripts (CAMSET) while a cinematic runs; null = automatic */
   forced: number | null = null;
+  /** event camera (CAMSET kind 0) */
+  lockFn: LockFn | null = null;
+  ev = new EventCam((f, n, o, l) => this.lockFn?.(f, n, o, l) ?? null);
+  /** fraction of the current 30 fps event frame, for smooth event cameras */
+  evSub = 0;
   mode: CamMode = 'fixed';
   usingFallback = false;
   private cams: CamDef[] = [];
@@ -45,7 +51,7 @@ export class CameraRig {
     if (this.cutOn) for (const o of this.cutOn) o.visible = true;
     this.cutOn = s; if (s) for (const o of s) o.visible = false;
   }
-  setRoom(room: Room) { this.cutOn = null; this.room = room; this.cams = room.data.cameras; this.computeCuts(); this.cams = room.data.cameras; this.index = -1; this.override = -2; this.follow.init = false; this.trackYaw = null; }
+  setRoom(room: Room) { this.cutOn = null; this.room = room; this.ev.stop(); this.forced = null; this.cams = room.data.cameras; this.computeCuts(); this.cams = room.data.cameras; this.index = -1; this.override = -2; this.follow.init = false; this.trackYaw = null; }
   private inside(c: CamDef, x: number, z: number, m = 0) {
     const [x0, z0, x1, z1] = c.zone;
     return x >= Math.min(x0, x1) - m && x <= Math.max(x0, x1) + m && z >= Math.min(z0, z1) - m && z <= Math.max(z0, z1) + m;
@@ -90,6 +96,7 @@ export class CameraRig {
   }
   update(p: THREE.Vector3, head: THREE.Vector3, heading: number, snap = false, dt = 1 / 60): boolean {
     const prevIdx = this.index, prevOv = this.override;
+    if (this.ev.active) { this.applyCut(null); this.ev.apply(this.cam, this.evSub); this.follow.init = false; this.index = -1; return false; }
     if (this.mode === 'behind') { this.applyCut(null); this.updateShoulder(p, head, snap, dt); return false; }
     const forced = this.forced !== null && this.cams[this.forced] ? this.forced : null;
     let idx = forced ?? this.zoneCam(p);

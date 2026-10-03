@@ -8,7 +8,8 @@ import { Inventory } from './inventory';
 import { InventoryScreen } from './invscreen';
 import { Audio } from './audio';
 import { LANG, UI, pages, hasChoice } from './text';
-import { Zombie, Dog } from './enemy';
+import { Zombie, Dog, EnemyModel } from './enemy';
+import type { Evc } from './evcam';
 import { EvtVM, atrFrom, newFlags, type EvtFlags, type EvtHost, type Atr } from './evt';
 import { loadJSON } from './assets';
 import { ITEM_NAMES, SYSMES } from './sysmes';
@@ -18,6 +19,7 @@ export interface SaveData { hp?: number; room: string; pos?: number; x: number; 
 /** rooms converted from the PS3 data (room file = rm_<stage><room><case>) */
 const ROOMS = new Set(['rm_0000', 'rm_0010', 'rm_0020', 'rm_0021', 'rm_0030', 'rm_0031', 'rm_0040', 'rm_0050', 'rm_0060', 'rm_0080']);
 /** converted zombie models en01aNN (NN = model variant byte of the enemy record) */
+const NPC_MODELS = new Set(['en91a00', 'en93a00', 'en98a00']);
 const ZOMBIE_VARIANTS = new Set([0, 1, 2, 9, 10, 32, 33]);
 const LIGHTER = 55, KNIFE = 8, HANDGUN = 9, BULLETS = 12, MAG = 15;
 /** WeaponSet numbers used by the scripts (ArmsItemCheck / WeaponSet) */
@@ -116,11 +118,13 @@ export class Game implements EvtHost {
     const t0 = performance.now();
     if (fade) await this.ui.fade(true, 350);
     if (this.room) { this.scene.remove(this.room.group); this.vm.roomChange(); }
-    const [r, ev] = await Promise.all([Room.load(id), loadJSON<{ scripts: string[] }>(`evt/${id}.json`).catch(() => ({ scripts: [] as string[] }))]);
+    const [r, ev] = await Promise.all([Room.load(id), loadJSON<{ scripts: string[]; evc?: Evc[] }>(`evt/${id}.json`).catch(() => ({ scripts: [] as string[] }))]);
     await r.placeItems();
     this.room = r; this.roomId = id;
     for (const z of [...this.zombies, ...this.dogs]) this.scene.remove(z.root);
     for (const n of this.actors) this.scene.remove(n);
+    for (const c of this.chars) this.scene.remove(c.m.root);
+    this.chars = [];
     this.zombies = []; this.dogs = []; this.npcs = []; this.actors = []; this.grab = null; this.dogBite = null;
     // player position first (the scripts read it)
     if (at) this.player.place(at.x, at.y, at.z, at.h);
@@ -136,7 +140,7 @@ export class Game implements EvtHost {
     await this.spawnEnemies(r);
     this.applyWorks();
     this.scene.add(r.group);
-    this.cam.setRoom(r);
+    this.cam.setRoom(r); this.cam.ev.setRoom((ev as { evc?: Evc[] }).evc ?? []); this.cam.lockFn = (f, n, _o, l) => this.lockPos(f, n, l);
     this.player.root.updateMatrixWorld(true);
     this.cam.update(this.player.pos, this.player.headPos(), this.player.heading, true);
     this.audio.room(id);
@@ -150,7 +154,6 @@ export class Game implements EvtHost {
     const ene = r.data.enemies ?? [];
     for (let i = 0; i < ene.length; i++) {
       const e = ene[i]; const w = this.vm.works.get('1:' + i);
-      if (w?.gone) continue;
       const ex = e.ex ?? '000000000000', type = parseInt(ex.slice(0, 4), 16), variant = parseInt(ex.slice(6, 8), 16);
       if (e.id === 1) {
         if (!ZOMBIE_VARIANTS.has(variant)) { console.info(`${this.roomId}: zombie ${i} model en01a${pad(variant, 2)} not converted`); continue; }
@@ -160,16 +163,24 @@ export class Game implements EvtHost {
         await z.init(`enemies/en01a${pad(variant, 2)}.glb`, e.pos[0], e.pos[1], e.pos[2], lying ? (e.rot[1] ?? 0) : (e.rot[2] ?? 0), lying);
         this.zombies.push(z); this.scene.add(z.root);
         const vm = this.vm;
-        this.npcs.push({ root: z.root, get hittable() { return z.hittable && !vm.works.get('1:' + i)?.scripted; }, hit: () => this.hitZombie(z, 1) });
+        this.npcs.push({ root: z.root, get hittable() { return z.root.visible && z.hittable && !vm.works.get('1:' + i)?.scripted; }, hit: () => this.hitZombie(z, 1) });
       } else if (e.id === 4) {
         const z = new Dog(i);
         await z.init('enemies/en04a00.glb', e.pos[0], e.pos[1], e.pos[2], e.rot[2] ?? 0);
         this.dogs.push(z); this.scene.add(z.root);
-        this.npcs.push({ root: z.root, get hittable() { return z.hittable; }, hit: () => this.hitZombie(z, 1) });
+        this.npcs.push({ root: z.root, get hittable() { return z.root.visible && z.hittable; }, hit: () => this.hitZombie(z, 1) });
+      } else if (NPC_MODELS.has(`en${pad(e.id, 2)}a${pad(variant, 2)}`)) {
+        // cutscene characters (Rodrigo, Steve, ...): original model, driven by the room motions of the scripts
+        const m = new EnemyModel(); await m.load(`npc/en${pad(e.id, 2)}a${pad(variant, 2)}.glb`);
+        m.root.position.set(e.pos[0], e.pos[1], e.pos[2]); m.root.rotation.y = e.rot[1] ?? 0;
+        { const w = this.vm.works.get('1:' + i); m.root.visible = !(w && (w.gone || w.hidden)); }
+        this.chars.push({ index: i, m }); this.scene.add(m.root);
       } else console.info(`${this.roomId}: character en${pad(e.id, 2)} (enemy ${i}) not converted`);
     }
   }
   actors: THREE.Object3D[] = [];
+  /** cutscene characters of the room record (index = enemy record index) */
+  chars: { index: number; m: EnemyModel }[] = [];
 
   // ---------------------------------------------------------------- event system glue
   private syncPlayerWork() {
@@ -198,6 +209,13 @@ export class Game implements EvtHost {
       if (w.posSet) { o.position.set(w.px, w.py, w.pz); w.posSet = false; }
       if (w.angSet) { o.rotation.set(w.ax, w.ay, w.az, 'ZYX'); w.angSet = false; }
     }
+    for (const c of this.chars) {
+      const w = vm.works.get('1:' + c.index), m = c.m; if (!w) continue;
+      m.root.visible = !w.gone && !w.hidden;
+      if (w.posSet) { m.root.position.set(w.px, w.py, w.pz); w.posSet = false; }
+      if (w.angSet) { m.root.rotation.set(w.ax, w.ay, w.az, 'ZYX'); w.angSet = false; }
+      if (w.mtnKind === 1 && w.mtn >= 0) this.roomMotion(m, w);
+    }
     for (const z of [...this.zombies, ...this.dogs]) {
       const w = vm.works.get('1:' + z.index); if (!w) continue;
       z.root.visible = !w.gone && !w.hidden;
@@ -206,7 +224,8 @@ export class Game implements EvtHost {
       // room motion (rmt, MOTION kind 1): the clip carries the world placement of the root
       if (w.mtnKind === 1 && w.mtn >= 0) {
         const c = `${this.roomId}/r${pad(w.mtn, 2)}`;
-        if (z.cur !== c && z.clips.has(c)) { z.play(c, 0, false); z.root.position.set(w.px, w.py, w.pz); z.heading = w.ay; z.root.rotation.y = w.ay; z.update(0); }
+        if (z.cur !== c && z.clips.has(c)) { z.root.position.set(w.px, w.py, w.pz); z.heading = w.ay; z.root.rotation.y = w.ay; }
+        this.roomMotion(z, w);
       }
     }
     const sig = vm.wal.map((a) => a.flg & 1).join('');
@@ -284,16 +303,35 @@ export class Game implements EvtHost {
       await this.msg.show(pages(SYSMES[158], id));
     } finally { this.dialog = false; }
   }
+  /** bhGetEvtCamLockPosition: point of a character / object (local offset l) the event camera looks at */
+  private lockPos(f: number, n: number, l: [number, number, number]): THREE.Vector3 | null {
+    const r = this.room!; let o: THREE.Object3D | undefined;
+    if (f === 6) { const s = r.data.spawns[n] ?? r.data.spawns[0]; return s ? new THREE.Vector3(s.pos[0] + l[0], s.pos[1] + l[1], s.pos[2] + l[2]) : null; }
+    if (f === 1) o = this.player.root;
+    else if (f === 2) o = this.chars.find((c) => c.index === n)?.m.root ?? [...this.zombies, ...this.dogs].find((z) => z.index === n)?.root;
+    else if (f === 3) o = r.objMeshes.get(n);
+    else if (f === 4) o = r.itemMeshes.get(n);
+    if (!o) return null;
+    o.updateMatrixWorld(true); return o.localToWorld(new THREE.Vector3(l[0], l[1], l[2]));
+  }
+  /** room motion (rmt) of a scripted character: clip time = the work's frame counter (frm_no, 16.16) */
+  private roomMotion(m: EnemyModel, w: { mtn: number; frm: number }) {
+    const c = `${this.roomId}/r${pad(w.mtn, 2)}`;
+    if (!m.clips.has(c)) return;
+    if (m.cur !== c) { const a = m.play(c, 0, false); if (a) a.paused = true; }
+    const a = m.action; if (!a) return;
+    a.time = Math.min(w.frm / 65536 / 30, a.getClip().duration); m.mixer.update(0);
+  }
   /** one 30 Hz frame of the event system */
   private evtFrame() {
     const vm = this.vm;
     this.syncPlayerWork();
     this.floorCheck();
     vm.tick();
+    this.cam.ev.step();
     this.applyWorks();
     if (vm.cb & 0x10 && !this.dialog) this.itemScreen();
     if (vm.cb & 0x200000) { vm.cb &= ~0x200000; this.saveScreen(); }
-    if (!(vm.st & 4)) this.cam.forced = null;
   }
   private get inCine() { const w0 = this.vm.works.get('0:0'); return !!(this.vm.st & 4) || !!w0?.scripted || !!w0?.gone; }
 
@@ -312,7 +350,10 @@ export class Game implements EvtHost {
   fade(argb: number, speed: number) { this.ui.fade((argb >>> 24) >= 0x80, Math.max(1, speed) * 1000 / 30); }
   cine(mode: number) { if (mode === 1 || mode === 2 || mode === 4) this.cam.forced = null; }
   /** CAMSET kind 0 = event camera (evc data, not converted yet): the room's own cameras stay active; kind 1 = back to the room cameras */
-  camSet(_kind: number, _a: number) { this.cam.forced = null; }
+  camSet(kind: number, a: number, b: number) { if (kind === 0) this.cam.ev.start(a, b); else this.cam.ev.stop(); }
+  camFix(kind: number, a: number) { this.cam.forced = kind === 0 ? a : null; }
+  camPause(on: boolean) { this.cam.ev.paused = on; }
+  camInit() { this.cam.ev.stop(); this.cam.forced = null; }
   door(_attr: number, stg: number, room: number, pos: number) { this.pendingDoor = { stg, room, pos }; }
   movie(no: number) {
     this.movieOn = true;
@@ -490,6 +531,7 @@ export class Game implements EvtHost {
       if (!this.invOpen && !this.busy) {
         this.evtAcc = Math.min(this.evtAcc + dt, 0.25);
         while (this.evtAcc >= 1 / 30 && !this.busy) { this.evtAcc -= 1 / 30; this.evtFrame(); }
+        this.cam.evSub = this.evtAcc * 30;
       }
       if (this.pendingDoor && !this.busy) { const d = this.pendingDoor; this.pendingDoor = null; this.goDoor(d); }
       const sh = this.cam.mode === 'behind';
@@ -505,12 +547,16 @@ export class Game implements EvtHost {
         if (this.dogBite) this.updateDogBite(dt);
         const free = !this.grab && !this.dogBite && !this.player.sync && this.player.hp > 0;
         for (const z of this.zombies) {
-          if (this.vm.works.get('1:' + z.index)?.scripted) { z.update(dt); continue; }
+          const zw = this.vm.works.get('1:' + z.index);
+          if (zw?.gone || zw?.hidden) continue;
+          if (zw?.scripted) { z.update(dt); continue; }
           if (z.state === 'bite' && this.grab?.z !== z) z.set('walk');
           if (z.tick(dt, this.player.root.position, free, this.room) && !this.grab && free) this.startGrab(z);
         }
         for (const z of this.dogs) {
-          if (this.vm.works.get('1:' + z.index)?.scripted) { z.update(dt); continue; }
+          const zw = this.vm.works.get('1:' + z.index);
+          if (zw?.gone || zw?.hidden) continue;
+          if (zw?.scripted) { z.update(dt); continue; }
           if (z.tick(dt, this.player.root.position, free && !this.grab && !this.dogBite, this.room) && !this.grab && !this.dogBite && free) this.startDogBite(z);
         }
       }

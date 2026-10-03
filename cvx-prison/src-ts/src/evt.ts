@@ -12,6 +12,8 @@ export class Work {
   posSet = false; angSet = false;
   /** motion frame counter (16.16 like frm_no) and step per tick (mtn_add) */
   frm = 0; add = 0x10000; mtn = -1; mtnKind = -1;
+  /** mode3 == 4 (bhMotionPauseSet / bhInitMotionPause): motion frame frozen */
+  paused = false;
   /** stflg 0x1000000: not present; mdflg 0x1: not drawn */
   gone = false; hidden = false;
   /** script took control (LoadWork) / released to normal control (Sub/Player_controll 0x80) */
@@ -30,6 +32,12 @@ export interface EvtHost {
   fade(argb: number, speed: number): void;
   cine(mode: number): void;
   camSet(kind: number, a: number, b: number): void;
+  /** bhCamSet2: 0 = fixed room camera a, 1 = automatic */
+  camFix?(kind: number, a: number): void;
+  /** bhCamPauseSet: event camera paused / resumed */
+  camPause?(on: boolean): void;
+  /** bhInitCamSet: back to the room cameras */
+  camInit?(): void;
   door(attr: number, stg: number, room: number, pos: number, type: number): void;
   movie(no: number): void;
   moviePlaying(): boolean;
@@ -73,7 +81,7 @@ export class EvtVM {
     if (!this.s.length) return;
     this.check(1);
     this.scheduler();
-    for (const w of this.works.values()) w.frm += w.add;
+    for (const w of this.works.values()) if (!w.paused) w.frm += w.add;
   }
   /** room change (system.c): per-room flags reset */
   roomChange() { this.st = 0; this.rm = 0; this.cb &= 0xaf8000bb; this.f.gm &= 0x9b8c00cb; this.works.clear(); }
@@ -199,6 +207,13 @@ export class EvtVM {
         this.host.cine(v); return adv(1);
       }
       case 0x13: this.host.camSet(b(1), b(2), b(3)); return adv(1);
+      case 0x29: this.host.camPause?.(b(1) === 0); return adv(1);
+      case 0x2a: this.host.camFix?.(b(1), b(2)); return adv(1);
+      case 0x5b: this.host.camInit?.(); return adv(1);
+      // bhMotionPauseSet (mode3 = 4 / 1), bhInitMotionPause, bhInitMotionPauseEx (room motion v1 at frame 0)
+      case 0x2b: if (t.work) t.work.paused = b(1) === 0; return adv(1);
+      case 0x2d: this.work(1, b(1)).paused = true; return adv(1);
+      case 0x30: { const w = this.work(1, b(1)); w.paused = true; w.frm = 0; w.mtn = b(2); w.mtnKind = 1; return adv(1); }
       case 0x14: this.evtOn(b(2), b(3)); return adv(1);
       case 0x1f: {
         if (b(1) === 0) { if (b(3) === 0) this.sp &= ~7; this.openMessage(b(2)); } else this.sp |= 7;
@@ -232,8 +247,20 @@ export class EvtVM {
         if (k === 0) { t.work!.mtn = 42; t.work!.frm = 0; }
         return adv(1);
       }
-      case 0x64: if ((b(1) === 0x80 || b(1) === 0x8b) && t.work) t.work.scripted = false; return adv(1);
-      case 0x67: if ((b(1) === 0x80 || b(1) === 0x8f || b(1) === 0x8b) && t.work) t.work.scripted = false; return adv(1);
+      case 0x64: {
+        // Player_controll: 07 position, 0c/0d sign flags (shared with bhCommonCtr), 80/8b hand control back
+        const sub = b(1), w = t.work;
+        if ((sub === 0x80 || sub === 0x8b) && w) w.scripted = false;
+        else if (sub === 0x07 || sub === 0x0c || sub === 0x0d) this.common(t);
+        return adv(1);
+      }
+      case 0x67: {
+        const v = b(1), w = t.work;
+        if ((v === 0x80 || v === 0x8f || v === 0x8b) && w) w.scripted = false;
+        // Sub_controll: mode3 reset (0x8f -> 0, 0x90 -> 3, 0x92/0x93 from the script)
+        if (w) { if (v === 0x8f || v === 0x90) w.paused = false; else if (v === 0x92) w.paused = b(6) === 4; else if (v === 0x93) w.paused = b(5) === 4; }
+        return adv(1);
+      }
       case 0x69: this.common(t); return adv(1);
       case 0x81: { const busy = !!(this.st & 0x40000) || !!(this.st & 8); return adv(busy ? (b(1) ? 0 : 1) : (b(1) ? 1 : 0)); }
       case 0x9b: return adv(this.host.moviePlaying() ? 0 : 1);
@@ -293,7 +320,7 @@ export class EvtVM {
       case 0x12: { const q = part(); const a = q.ang ?? [0, 0, 0]; q.ang = [a[0] + sgn(t.adda[0], t.ba[0]), a[1] + sgn(t.adda[1], t.ba[1]), a[2] + sgn(t.adda[2], t.ba[2])]; break; }
       case 0x18: case 0x22: case 0x19: case 0x23: {
         w.add = MTN_ADD[b(2)] ?? 0x10000;
-        if (sub === 0x18 || sub === 0x22) { w.mtnKind = b(3); w.mtn = b(4); w.frm = 0; if (sub === 0x22 && b(3) >= 2) w.frm = u16(8) << 16; }
+        if (sub === 0x18 || sub === 0x22) { w.paused = false; w.mtnKind = b(3); w.mtn = b(4); w.frm = 0; if (sub === 0x22) w.frm = u16(8) << 16; }
         break;
       }
       case 0x1a: t.ips[b(2)] = [sgn(u16(4) / 1000, b(3) & 1), sgn(u16(6) / 1000, b(3) & 2), sgn(u16(8) / 1000, b(3) & 4)]; break;

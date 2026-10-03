@@ -141,18 +141,25 @@ def build(mdlfile,texdir,motfile,dst,name,skin_at=0,S=0.1,lower_n=8,rmtfile=None
     nodes.append({'name':name+'_mesh','mesh':0,'skin':0}); nodes.append({'name':name,'children':[0,len(nodes)-1]})
     # animations: lower-body (bones 0..lower_n-1) and upper-body (lower_n..) tracks are stored separately in the bank
     anims=[]
+    def chans(r,first,ti,nmap=None):
+        N,nb,Tr,R,has=r; S_=[];C=[]
+        for k in range(nb):
+            if not has[k] or first+k>=len(ns): continue
+            if nmap is not None:
+                if k>=len(nmap): continue
+                q=np.array([quat(R[k,f]) for f in range(N)],np.float32)
+                S_.append({'input':ti,'output':put(q,5126,'VEC4'),'interpolation':'LINEAR'}); C.append((nmap[k],'rotation'))
+                if k==0 and Tr is not None:
+                    S_.append({'input':ti,'output':put((Tr*S+np.array(nodes[0]['translation'])).astype(np.float32),5126,'VEC3'),'interpolation':'LINEAR'}); C.append((0,'translation'))
+                continue
+            q=np.array([quat(R[k,f]) for f in range(N)],np.float32)
+            S_.append({'input':ti,'output':put(q,5126,'VEC4'),'interpolation':'LINEAR'}); C.append((first+k,'rotation'))
+            if k==0 and Tr is not None and first==0:
+                S_.append({'input':ti,'output':put((Tr*S+np.array(nodes[0]['translation'])).astype(np.float32),5126,'VEC3'),'interpolation':'LINEAR'}); C.append((0,'translation'))
+        return S_,C
     if motfile:
         md=open(motfile,'rb').read(); Bk=bank(md)
         nbl=lower_n; nbu=len(ns)-lower_n
-        def chans(r,first,ti):
-            N,nb,Tr,R,has=r; S_=[];C=[]
-            for k in range(nb):
-                if not has[k] or first+k>=len(ns): continue
-                q=np.array([quat(R[k,f]) for f in range(N)],np.float32)
-                S_.append({'input':ti,'output':put(q,5126,'VEC4'),'interpolation':'LINEAR'}); C.append((first+k,'rotation'))
-                if k==0 and Tr is not None and first==0:
-                    S_.append({'input':ti,'output':put((Tr*S+np.array(nodes[0]['translation'])).astype(np.float32),5126,'VEC3'),'interpolation':'LINEAR'}); C.append((0,'translation'))
-            return S_,C
         lo=[r for o,r in Bk if r and r[1]==nbl]; 
         if nbu<=0:
             for k,r in enumerate(lo):
@@ -175,17 +182,31 @@ def build(mdlfile,texdir,motfile,dst,name,skin_at=0,S=0.1,lower_n=8,rmtfile=None
         for k,r in enumerate(ex):
             ti=put(np.arange(r[0],dtype=np.float32)/30,5126,'SCALAR',mm=True); s,c=chans(r,nbl,ti)
             anims.append({'name':'u%02d'%k,'samplers':s,'channels':[{'sampler':i,'target':{'node':n_,'path':p_}} for i,(n_,p_) in enumerate(c)]})
-    for rmtfile in (rmtfile.split(',') if rmtfile else []):
+    for rmtspec in (rmtfile.split(';') if rmtfile else []):
+        rmtfile,_,only=rmtspec.partition(':'); only={int(x) for x in only.split(',')} if only else None
         # room motions (rmt): blocks are numbered in file order ('MTN ' full-body blocks of other characters included);
         # a clip of this model = lower-body block k followed by the upper-body block k+1 -> 'rNN' (NN = k)
         rd=open(rmtfile,'rb').read(); blocks=[]; i=-1
         while True:
             i=rd.find(b'MTN',i+1)
             if i<0: break
-            if rd[i+3] in (0x20,0x80) and i>=4: blocks.append(i)
+            if rd[i+3] in (0x20,0x30,0x80,0x90) and i>=4: blocks.append(i)
         nbl=lower_n; nbu=len(ns)-lower_n
         for k,o in enumerate(blocks):
-            if rd[o+3]!=0x80 or k+1>=len(blocks) or rd[blocks[k+1]+3]!=0x80: continue
+            if only is not None and k not in only: continue
+            nbk=struct.unpack_from('>H',rd,o+6)[0]
+            if nbu<=0 or nbk==len(ns) or (nbk>nbl and nbk<=len(ns)):
+                # whole-body clip (cutscene characters: tracks drive the first nb nodes)
+                if not (16<=nbk<=len(ns)): continue
+                r1=track_table(rd,o)
+                if not r1: continue
+                # the motion has no tracks for the rigid head parts (nodes with a model hanging off the head, flags 0x10)
+                nmap=[i for i,n in enumerate(ns) if not (n['flags']&0x10 and n['model']!=0xffffffff)]
+                if len(nmap)!=nbk: nmap=list(range(nbk))
+                ti=put(np.arange(r1[0],dtype=np.float32)/30,5126,'SCALAR',mm=True); s1,c1=chans(r1,0,ti,nmap)
+                anims.append({'name':os.path.basename(rmtfile).split('.')[0]+'/r%02d'%k,'samplers':s1,'channels':[{'sampler':i_,'target':{'node':n_,'path':p_}} for i_,(n_,p_) in enumerate(c1)]})
+                print('room motion r%02d frames %d (whole body %d tracks)'%(k,r1[0],nbk)); continue
+            if rd[o+3]&0xf0 not in (0x80,0x90) or k+1>=len(blocks): continue
             r1=track_table(rd,o); r2=track_table(rd,blocks[k+1])
             if not r1 or not r2 or r1[1]!=nbl or r2[1]!=nbu: continue
             ti=put(np.arange(r1[0],dtype=np.float32)/30,5126,'SCALAR',mm=True); s1,c1=chans(r1,0,ti)
