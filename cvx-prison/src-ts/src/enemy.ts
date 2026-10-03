@@ -10,10 +10,12 @@ export class EnemyModel {
   clips = new Map<string, THREE.AnimationClip>();
   action: THREE.AnimationAction | null = null;
   cur = '';
+  /** skeleton nodes bNN (original node numbering) */
+  bones: Record<string, THREE.Object3D> = {};
   async load(file: string) {
     const g = await loadGLTF(file);
     this.model = SkeletonUtils.clone(g.scene); toLambert(this.model);
-    this.model.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.frustumCulled = false; });
+    this.model.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.frustumCulled = false; if (/^b\d\d$/.test(o.name) && !this.bones[o.name]) this.bones[o.name] = o; });
     this.root.add(this.model);
     this.mixer = new THREE.AnimationMixer(this.model);
     for (const c of g.animations) this.clips.set(c.name, c);

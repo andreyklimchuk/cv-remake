@@ -26,6 +26,9 @@ export class Player {
   heading = 0;
   state = 'idle';
   frozen = false;
+  /** footstep on a motion frame (player.c PlFootSnd): foot bone (b17 left / b21 right), 0 walk / 1 run */
+  onStep: ((foot: THREE.Object3D | undefined, type: number) => void) | null = null;
+  private stepPrev = -1; private stepClip = '';
   private tail: THREE.Object3D[] = []; private tailRest: THREE.Quaternion[] = [];
   private sway = new THREE.Vector2(); private swayV = new THREE.Vector2();
   private lastPos = new THREE.Vector3(); private lastHead = 0;
@@ -166,9 +169,24 @@ export class Player {
       if (y !== null) this.root.position.y = y;
     }
     this.mixer.update(dt);
+    this.footsteps();
     this.updateTail(dt);
     this.updateLighter(dt);
     this.updateHands();
+  }
+  /** PlFootSnd[0]: walk (m00) frames 10 / 28, run (m04) 8 / 18, walk back (m11) 10 / 28; left foot first */
+  private footsteps() {
+    const F: Record<string, [number, number, number]> = { m00: [10, 28, 0], m04: [8, 18, 1], m11: [10, 28, 0] };
+    const f = this.state === 'walk' || this.state === 'run' || this.state === 'back' ? F[this.cur] : undefined;
+    const a = f && this.actions.get(this.cur);
+    if (!f || !a) { this.stepClip = ''; return; }
+    const fr = Math.floor(a.time * 30);
+    if (this.stepClip === this.cur) {
+      const hit = (k: number) => (this.stepPrev < k && fr >= k) || (fr < this.stepPrev && (fr >= k || this.stepPrev < k));
+      if (hit(f[0])) this.onStep?.(this.bones.b17, f[2]);
+      if (hit(f[1])) this.onStep?.(this.bones.b21, f[2]);
+    }
+    this.stepClip = this.cur; this.stepPrev = fr;
   }
   private slashHit = false;
   /** knife: ready (k00) -> stance (k03/k06/k09); attack plays the slash of the current direction.

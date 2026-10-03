@@ -20,6 +20,8 @@ export class Work {
   scripted = false;
   parts = new Map<number, { ang?: number[]; pos?: number[] }>();
   dead = false; hp = 0;
+  /** ObjLinkSet* / PlyItem: drawn attached to a bone (lkwkp / lkono / lox..loz, metres) of a player (0), enemy (1) or object (2) */
+  link: { kind: number; idx: number; bone: number; lo: [number, number, number] } | null = null;
   constructor(public kind: number, public idx: number) {}
 }
 interface Task { status: number; p: number; script: number; loop: number; cnt: number[]; cnt2: number; cnt3: number; lstack: number[]; lcond: number[]; data: number; work: Work | null; cno: number; bp: number[]; ba: number[]; addp: number[]; adda: number[]; ips: number[][]; ian: number[][] }
@@ -43,6 +45,8 @@ export interface EvtHost {
   moviePlaying(): boolean;
   playerHp(): number;
   log?(s: string): void;
+  /** sound commands of the scripts (sdfunc.c): see EvtVM.exec 0x15.. */
+  snd?(cmd: string, a: number[], w?: Work | null): void;
 }
 const ARR = new Set([1, 2, 3, 7, 8, 9, 12, 13, 14, 15, 16, 11]);
 const MTN_ADD: Record<number, number> = { 1: 0x10000, 2: 0x10000, 0: 0x8000, 3: 0x8000, 8: 0x8000, 4: 0x5555, 5: 0x4000, 9: 0x4000, 6: 0x3333, 7: 0x2aaa, 10: 0x2aaa, 11: 0x2000, 12: 0x1999, 13: 0x1555, 14: 0x2492, 15: 0x2000, 16: 0x1c71, 17: 0x1999, 18: 0x1745, 19: 0x1555, 20: 0x1249, 21: 0x1000, 22: 0xe38, 23: 0xccc, 24: 0xba2, 25: 0xaaa };
@@ -240,6 +244,37 @@ export class EvtVM {
         return adv(w.frm >= N ? 0 : 1);
       }
       case 0x5e: this.host.movie(b(1)); return adv(1);
+      // ---- sound (event.c bhBgmOn.. / sdfunc.c); fades in 1/100 s (x10), volumes in driver units (negative)
+      case 0x15: this.host.snd?.('bgm', [b(1), b(2) * 10, -45]); return adv(1);
+      case 0x16: this.host.snd?.('bgmOff', [b(1) * 10]); return adv(1);
+      case 0xa6: this.host.snd?.('bgm', [b(1), b(2) * 10, -b(3)]); return adv(1);
+      case 0x95: this.host.snd?.('bgm2', [b(1), -45]); return adv(1);
+      case 0xa7: this.host.snd?.('bgm2', [b(1), -b(2)]); return adv(1);
+      case 0x93: this.host.snd?.('bgmOff', [100]); return adv(1);
+      case 0x17: this.host.snd?.('se', [b(1), b(2), b(3), u16(4), b(6)]); return adv(1);
+      case 0x18: this.host.snd?.('seOff', [b(1)]); return adv(1);
+      case 0x1c: this.host.snd?.('bgSe', [b(1), u16(2), b(4) * 10]); return adv(1);
+      case 0x94: this.host.snd?.('bgSe', [b(1), u16(2), 0]); return adv(1);
+      case 0x1d: this.host.snd?.('bgSeOff', [b(1), b(2) * 10]); return adv(1);
+      case 0x92: this.host.snd?.('bgSeOff', [b(1), 100]); return adv(1);
+      case 0x8b: {
+        const sg = b(3), c = (o: number, m: number) => (sg & m ? -1 : 1) * u16(o) / 1000;
+        this.host.snd?.('objSe', [b(1), c(4, 1), c(6, 2), c(8, 4), u16(10)]); return adv(1);
+      }
+      case 0x45: this.host.snd?.('objSeOff', [b(1)]); return adv(1);
+      case 0x48: this.host.snd?.('foot', [b(1), b(3), b(4), b(5)], t.work); return adv(1);
+      // bhEasySESet: Type Slot StartVol LastVol StartPan LastPan Frame FloorType target(kind, idx, bone) SeType . SeNo
+      case 0x86: this.host.snd?.('easy', [b(1), b(2), -b(3), -b(4), b(5) - 128, b(6) - 128, b(7), b(8), b(9), b(10), b(11), b(12), u16(14)]); return adv(1);
+      case 0xd4: this.host.snd?.('sys', [u16(2)]); return adv(1);
+      case 0xb6: this.host.snd?.('case', [b(1)]); return adv(1);
+      // ---- links (bhObjLinkSet / Ply / EneItem / ObjItem / bhPlyItem): [3] bone, [4] 0 = on, [5] sign bits, [6..11] offset /100 game units
+      case 0x32: case 0x34: case 0x52: case 0x53: case 0xa3: {
+        const tgt = op === 0x32 || op === 0x34 ? this.work(2, b(2)) : this.work(3, b(2));
+        if (b(4) !== 0) { tgt.link = null; return adv(1); }
+        const sg = b(5), c = (o: number, m: number) => (sg & m ? -1 : 1) * u16(o) / 1000;
+        tgt.link = { kind: op === 0x34 || op === 0xa3 ? 0 : op === 0x52 ? 2 : 1, idx: b(1), bone: b(3), lo: [c(6, 1), c(8, 2), c(10, 4)] };
+        return adv(1);
+      }
       case 0x63: this.wpnl = Math.floor(Math.random() * 100) % Math.max(1, b(1)); return adv(1);
       case 0x65: {
         const k = b(1);

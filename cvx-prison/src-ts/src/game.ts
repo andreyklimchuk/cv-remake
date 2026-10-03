@@ -76,6 +76,7 @@ export class Game implements EvtHost {
     const gun = () => this.inv.slots.find((s) => s?.id === HANDGUN);
     this.player.canFire = () => (gun()?.count ?? 0) > 0;
     this.player.emptyClick = () => this.audio.se('empty');
+    this.player.onStep = (foot, type) => { const p = foot ? this.bonePos(0, 0, foot === this.player.bones.b17 ? 17 : 21) : this.player.pos.clone(); this.audio.foot(this.floorSound(p), type === 1, p, 0); };
     this.player.onFire = (p, d, aim) => this.onFire(p, d, aim);
     this.player.needReload = () => {
       const g = gun(), b = this.inv.slots.find((s) => s?.id === BULLETS);
@@ -136,14 +137,14 @@ export class Game implements EvtHost {
     vm.etc = r.data.triggers.map(atrFrom); vm.wal = r.data.collision.map(atrFrom); vm.flr = (r.data.areas ?? []).map(atrFrom);
     this.syncPlayerWork();
     this.cam.forced = null; this.wallSig = '';
+    this.audio.room(vm.stg, vm.room, vm.rcase); this.audio.listener = this.cam.cam;
     vm.init(ev.scripts);
     await this.spawnEnemies(r);
     this.applyWorks();
     this.scene.add(r.group);
-    this.cam.setRoom(r); this.cam.ev.setRoom((ev as { evc?: Evc[] }).evc ?? []); this.cam.lockFn = (f, n, _o, l) => this.lockPos(f, n, l);
+    this.cam.setRoom(r); this.cam.ev.setRoom((ev as { evc?: Evc[] }).evc ?? []); this.cam.lockFn = (f, n, o, l) => this.lockPos(f, n, l, o);
     this.player.root.updateMatrixWorld(true);
     this.cam.update(this.player.pos, this.player.headPos(), this.player.heading, true);
-    this.audio.room(id);
     this.renderer.compile(this.scene, this.cam.cam);
     const wait = minMs - (performance.now() - t0); if (wait > 0) await new Promise((res) => setTimeout(res, wait));
     if (fade) await this.ui.fade(false, 350);
@@ -205,7 +206,7 @@ export class Game implements EvtHost {
     }
     for (const [i, o] of r.objMeshes) {
       const w = vm.works.get('2:' + i); if (!w) continue;
-      o.visible = !w.gone && !w.hidden;
+      o.visible = !w.gone && !w.hidden && (!r.outside.has(i) || !!w.link);
       if (w.posSet) { o.position.set(w.px, w.py, w.pz); w.posSet = false; }
       if (w.angSet) { o.rotation.set(w.ax, w.ay, w.az, 'ZYX'); w.angSet = false; }
     }
@@ -304,7 +305,7 @@ export class Game implements EvtHost {
     } finally { this.dialog = false; }
   }
   /** bhGetEvtCamLockPosition: point of a character / object (local offset l) the event camera looks at */
-  private lockPos(f: number, n: number, l: [number, number, number]): THREE.Vector3 | null {
+  private lockPos(f: number, n: number, l: [number, number, number], ono = 0): THREE.Vector3 | null {
     const r = this.room!; let o: THREE.Object3D | undefined;
     if (f === 6) { const s = r.data.spawns[n] ?? r.data.spawns[0]; return s ? new THREE.Vector3(s.pos[0] + l[0], s.pos[1] + l[1], s.pos[2] + l[2]) : null; }
     if (f === 1) o = this.player.root;
@@ -312,7 +313,12 @@ export class Game implements EvtHost {
     else if (f === 3) o = r.objMeshes.get(n);
     else if (f === 4) o = r.itemMeshes.get(n);
     if (!o) return null;
-    o.updateMatrixWorld(true); return o.localToWorld(new THREE.Vector3(l[0], l[1], l[2]));
+    // lkono > 0: offset in the space of that bone (njCalcPoint(owP[lkono].mtx, l)); bone numbering as boneObj
+    if (ono > 0 && f <= 4) { const b = this.boneObj(f - 1, n, ono); if (b && b !== o) o = b; }
+    o.updateWorldMatrix(true, false);
+    const m = o.matrixWorld.clone(), sc = new THREE.Vector3().setFromMatrixScale(m);
+    m.multiply(new THREE.Matrix4().makeScale(1 / sc.x, 1 / sc.y, 1 / sc.z));
+    return new THREE.Vector3(l[0], l[1], l[2]).applyMatrix4(m);
   }
   /** room motion (rmt) of a scripted character: clip time = the work's frame counter (frm_no, 16.16) */
   private roomMotion(m: EnemyModel, w: { mtn: number; frm: number }) {
@@ -360,6 +366,82 @@ export class Game implements EvtHost {
     playMovie(this.ui.stage, `mv_${pad(no, 3)}`).finally(() => { this.movieOn = false; });
   }
   moviePlaying() { return this.movieOn; }
+  /** script bone number -> node: the player model uses the original numbering; the cutscene NPC models (27 nodes)
+   *  lack the face parts 6..14 (-> head 5) so their bones >= 15 are node - 4 (18 / 22 = wrists) */
+  private boneObj(kind: number, idx: number, bone: number): THREE.Object3D | undefined {
+    if (kind === 0) return this.player.bones['b' + pad(bone, 2)] ?? this.player.root;
+    if (kind === 1) {
+      const c = this.chars.find((q) => q.index === idx);
+      if (c) { const n = bone <= 5 ? bone : bone < 15 ? 5 : bone - 4; return c.m.bones['b' + pad(n, 2)] ?? c.m.root; }
+      const z = [...this.zombies, ...this.dogs].find((q) => q.index === idx);
+      return z ? z.bones['b' + pad(bone, 2)] ?? z.root : undefined;
+    }
+    if (kind === 2) return this.room?.objMeshes.get(idx);
+    if (kind === 3) return this.room?.itemMeshes.get(idx);
+    return undefined;
+  }
+  private bonePos(kind: number, idx: number, bone: number): THREE.Vector3 | undefined {
+    const o = this.boneObj(kind, idx, bone); if (!o) return undefined;
+    o.updateWorldMatrix(true, false); return new THREE.Vector3().setFromMatrixPosition(o.matrixWorld);
+  }
+  /** bhCheckFloorSound: FLR records (flg 1, type 1) give the floor sound type (prm0) under a point */
+  floorSound(p?: THREE.Vector3) {
+    if (!p) return 0; let sno = 0;
+    for (const a of this.vm.flr) if (a.flg & 1 && a.type === 1 && !(a.attr & 1) && this.inBox(a, p.x, p.z)) sno = a.prm[0];
+    return sno;
+  }
+  /** ObjLinkSet* / PlyItem: linked objects and items follow their bone (MdlPut.c: bone matrix * T(lo) * R(object)) */
+  private linkM = new THREE.Matrix4(); private linkT = new THREE.Matrix4(); private linkR = new THREE.Matrix4();
+  private linkBase = new Map<THREE.Object3D, { pos: THREE.Vector3; rot: THREE.Euler; scale: THREE.Vector3 }>();
+  private updateLinks() {
+    const r = this.room; if (!r) return;
+    for (const [k, w] of this.vm.works) {
+      if (w.kind !== 2 && w.kind !== 3) continue;
+      const o = (w.kind === 2 ? r.objMeshes : r.itemMeshes).get(w.idx); if (!o) continue;
+      if (!w.link) { const bs = this.linkBase.get(o); if (bs) { o.position.copy(bs.pos); o.rotation.copy(bs.rot); o.scale.copy(bs.scale); this.linkBase.delete(o); } continue; }
+      const b = this.boneObj(w.link.kind, w.link.idx, w.link.bone); if (!b || b === o) continue;
+      let base = this.linkBase.get(o); if (!base) { base = { pos: o.position.clone(), rot: o.rotation.clone(), scale: o.scale.clone() }; this.linkBase.set(o, base); }
+      b.updateWorldMatrix(true, false);
+      this.linkT.makeTranslation(w.link.lo[0], w.link.lo[1], w.link.lo[2]);
+      this.linkR.makeRotationFromEuler(base.rot).scale(base.scale);
+      this.linkM.copy(b.matrixWorld).multiply(this.linkT).multiply(this.linkR);
+      // undo the bone's own scale (models are in metres, the object keeps its 0.1 game-unit scale)
+      const bs = new THREE.Vector3().setFromMatrixScale(b.matrixWorld);
+      this.linkM.multiply(new THREE.Matrix4().makeScale(1 / bs.x, 1 / bs.y, 1 / bs.z));
+      if (o.parent) { o.parent.updateWorldMatrix(true, false); this.linkM.premultiply(new THREE.Matrix4().copy(o.parent.matrixWorld).invert()); }
+      this.linkM.decompose(o.position, o.quaternion, o.scale);
+      void k;
+    }
+  }
+  /** sound commands of the event scripts */
+  snd(cmd: string, a: number[], w?: { kind: number; idx: number } | null) {
+    const A = this.audio;
+    switch (cmd) {
+      case 'bgm': A.bgm(a[0], a[1], a[2]); break;
+      case 'bgm2': A.bgm(a[0], 100, a[1]); break;
+      case 'bgmOff': A.bgmOff(a[0]); break;
+      case 'se': A.eventSe(a[0], a[3], a[4] === 0 ? this.bonePos(a[1], a[2], 0) : undefined); break;
+      case 'seOff': A.eventSeOff(a[0]); break;
+      case 'bgSe': A.bgSe(a[0], a[1], a[2]); break;
+      case 'bgSeOff': A.bgSeOff(a[0], a[1] * 0.3); break;
+      case 'objSe': A.objSe(a[0], new THREE.Vector3(a[1], a[2], a[3]), a[4]); break;
+      case 'objSeOff': A.objSeOff(a[0]); break;
+      case 'foot': { // bhFootSeCall: [flag (0 = on), id, type, bone] of the task's character
+        if (!w || a[0] !== 0) break;
+        const p = this.bonePos(w.kind, w.idx, a[3]); A.foot(this.floorSound(p), a[2] === 1, p, Math.min(2, a[1])); break;
+      }
+      case 'easy': { // bhEasySESet
+        const [type, slot, sv, lv, , , frame, floor, kind, idx, bone, seType, seNo] = a;
+        const vol: [number, number, number] = [sv, lv, frame];
+        const p = this.bonePos(kind, idx, bone);
+        if (type === 7) A.eventSe(slot, seNo, undefined, vol);
+        else if (type === 1) A.foot(floor, seType === 1, lv !== -1 ? undefined : p, Math.min(2, slot), vol);
+        else if (type === 2) A.action(seNo, p);
+        else if (type === 6) A.bgSe(slot, seNo);
+        break;
+      }
+    }
+  }
   playerHp() { return this.player.hp; }
   log(s: string) { if (this.debug) console.log(s); }
 
@@ -561,7 +643,8 @@ export class Game implements EvtHost {
         }
       }
       this.cam.update(this.player.pos, this.player.headPos(), this.player.heading, false, dt);
-      this.audio.footsteps(this.player.state, dt);
+      this.updateLinks();
+      this.audio.update();
     }
     this.ui.hud.style.display = this.debug ? 'block' : 'none';
     if (this.debug && this.room) {

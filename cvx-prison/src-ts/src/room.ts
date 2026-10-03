@@ -14,6 +14,8 @@ export class Room {
   shapes: Shape[] = [];
   wallShapes: (Shape | null)[] = [];
   objMeshes = new Map<number, THREE.Object3D>();
+  /** objects placed outside the room bounds */
+  outside = new Set<number>();
   floor!: THREE.Mesh;
   itemMeshes = new Map<number, THREE.Object3D>();
   lights: THREE.PointLight[] = [];
@@ -37,8 +39,10 @@ export class Room {
       const ob = d.objects[i];
       if (!ob.model || ob.flags === '00000000') continue;
       const p = new THREE.Vector3(...ob.pos);
-      if (p.x < bb.min.x - 0.05 || p.z < bb.min.z - 0.05 || p.x > bb.max.x + 0.05 || p.z > bb.max.z + 0.05) continue;
+      // objects stored outside the room (cutscene hands of the NPCs, ...) are only drawn while linked to a bone
+      const outside = p.x < bb.min.x - 0.05 || p.z < bb.min.z - 0.05 || p.x > bb.max.x + 0.05 || p.z > bb.max.z + 0.05;
       const o = (await loadGLTF(`objects/${ob.model}.glb`)).scene.clone(true);
+      if (outside) { this.outside.add(i); o.visible = false; }
       toLambert(o); o.scale.setScalar(0.1); o.position.copy(p); o.rotation.set(ob.rot[0], ob.rot[2], ob.rot[1], 'ZYX'); o.name = ob.model;
       this.group.add(o); this.objMeshes.set(i, o);
     }
