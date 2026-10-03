@@ -122,7 +122,7 @@ def build_gltf(m, texpngs, name='model', alpha_tex=None, extra_nodes=None):
             ti=tex_index(t)
             if ti is not None: mt['pbrMetallicRoughness']['baseColorTexture']={'index':ti}
         if fl&0x10: mt['doubleSided']=True
-        if fl&0x08 or (alpha_tex and t in alpha_tex): mt['alphaMode']='BLEND' if fl&0x08 else 'MASK'
+        if fl&0x08 or (alpha_tex and t in alpha_tex): mt['alphaMode']='BLEND'
         mats.append(mt); matkey[key]=len(mats)-1; return matkey[key]
     for i,n in enumerate(ns):
         R=euler_m(n['ang'], bool(n['flags']&0x20))

@@ -18,6 +18,7 @@ P='/data/cvx/ghpub/cvx-prison'
 walk(P+'/data','data')
 walk('/data/cvx/web','src-ts')
 walk('/data/cvx/tools','tools')
+walk('/data/cvx/conv','conv')
 for f in ('README.md',):
     if os.path.exists('/data/cvx/'+f): pairs.append(('cvx-prison/'+f,'/data/cvx/'+f)) if not filecmp.cmp('/data/cvx/'+f,R+'/'+f,shallow=False) else None
 last=[x for x in pairs if x[0] in ('cvx-prison/game.js','cvx-prison/index.html')]

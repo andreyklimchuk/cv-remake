@@ -1,5 +1,5 @@
 import { assetUrl } from './assets';
-const SE = ['door_knob', 'door_open', 'door_close', 'step1', 'step2', 'typewriter', 'cursor', 'confirm', 'cancel'];
+const SE = ['door_knob', 'door_open', 'door_close', 'step1', 'step2', 'typewriter', 'cursor', 'confirm', 'cancel', 'gun_shot', 'gun_shell', 'gun_empty', 'gun_rl1', 'gun_rl2', 'gun_rl3'];
 /** Original sound effects (decoded from the PS3 ATRAC3 banks). No BGM. */
 export class Audio {
   ctx: AudioContext | null = null;
@@ -24,7 +24,7 @@ export class Audio {
     const g = c.createGain(); g.gain.value = vol; s.connect(g).connect(this.master); s.start(c.currentTime + delay);
     return b.duration / rate;
   }
-  se(name: 'door' | 'doorClose' | 'locked' | 'pickup' | 'menu' | 'cursor' | 'cancel' | 'typewriter' | 'lighter' | 'knife') {
+  se(name: 'door' | 'doorClose' | 'locked' | 'pickup' | 'menu' | 'cursor' | 'cancel' | 'typewriter' | 'lighter' | 'knife' | 'bite' | 'shot' | 'empty' | 'reload') {
     switch (name) {
       case 'door': { const d = this.play('door_knob'); this.play('door_open', 0.9, 1, Math.max(0.25, d * 0.6)); break; }
       case 'doorClose': this.play('door_close'); break;
@@ -35,6 +35,10 @@ export class Audio {
       case 'typewriter': this.play('typewriter'); break;
       case 'lighter': this.play('door_knob', 0.35, 2.2); break; // short metallic click for the lighter lid
       case 'knife': this.swish(); break;
+      // handgun bank (sound/se/arms/arms_000): 05 shot, 06 shell casing, 04 empty trigger, 01-03 reload
+      case 'shot': this.play('gun_shot'); this.play('gun_shell', 0.6, 1, 0.35); break;
+      case 'empty': this.play('gun_empty'); break;
+      case 'reload': this.play('gun_rl1', 1, 1, 0.1); this.play('gun_rl2', 1, 1, 0.4); this.play('gun_rl3', 1, 1, 0.75); break;
     }
   }
   /** knife swing: band-passed noise sweep */

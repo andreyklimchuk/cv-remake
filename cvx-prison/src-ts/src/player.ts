@@ -10,6 +10,12 @@ const WALK = 1.05, RUN = 2.6, TURN = 2.6, RADIUS = 0.2;
 // k01/k04/k07 slash (24 frames, blade reaches out on frame 8) and k03/k06/k09 the held stance.
 const K_DRAW = 'k00', K_SLASH = ['k01', 'k04', 'k07'], K_STANCE = ['k03', 'k06', 'k09'];
 const K_DRAW_T = 9 / 30, K_SLASH_T = 24 / 30, K_HIT_T = 8 / 30;
+// Original handgun motions (pl00w03 bank): g00 draw (9 frames), g01/g03/g05 shot forward/up/down (16 frames),
+// g02/g04/g06 aiming stances, g07 reload (32 frames).
+interface WeaponAnim { draw: string; act: string[]; stance: string[]; drawT: number; actT: number; hitT: number }
+const W_KNIFE: WeaponAnim = { draw: K_DRAW, act: K_SLASH, stance: K_STANCE, drawT: K_DRAW_T, actT: K_SLASH_T, hitT: K_HIT_T };
+const W_GUN: WeaponAnim = { draw: 'g00', act: ['g01', 'g03', 'g05'], stance: ['g02', 'g04', 'g06'], drawT: 9 / 30, actT: 16 / 30, hitT: 1 / 30 };
+const G_RELOAD = 'g07', G_RELOAD_T = 32 / 30;
 
 export class Player {
   root = new THREE.Group();
@@ -29,13 +35,24 @@ export class Player {
   /** original weapon hand models (pl00w01_R: hand holding the Zippo, pl00w02_R: hand with the combat knife) */
   private lighter: THREE.Object3D | null = null;
   private knifeHand: THREE.Object3D | null = null;
+  private gunHand: THREE.Object3D | null = null;
+  /** handgun equipped (pl00w03_R hand) */
+  gunOn = false;
+  /** fire request: returns false when the gun is empty (game handles ammo and the shot) */
+  onFire: ((p: THREE.Vector3, dir: THREE.Vector3, aim: number) => boolean) | null = null;
+  /** reload request: returns true when a reload was started */
+  needReload: (() => boolean) | null = null;
   private skinHandR: THREE.Object3D[] = [];
   private zippoParts: THREE.Object3D[] = [];
   knifeOn = false;
+  /** health (the original uses 200 for Claire; Caution below 120, Danger below 60) */
+  hp = 200;
+  /** externally driven motion (grabbed by an enemy, death): normal control is suspended */
+  sync: string | null = null;
   /** knife: aiming (ready stance) and slash timer */
   aiming = false; slashT = -1;
   /** knife state machine driven by the original clips */
-  private kState: 'none' | 'draw' | 'stance' | 'slash' = 'none'; private kT = 0; private kDir = 0; private kQueued = false;
+  private kState: 'none' | 'draw' | 'stance' | 'slash' | 'reload' = 'none'; private kT = 0; private kDir = 0; private kQueued = false;
   onSlash: ((p: THREE.Vector3, dir: THREE.Vector3) => void) | null = null;
   private flame!: THREE.Mesh; flameLight!: THREE.PointLight;
   private flameT = 0; private armBlend = 0;
@@ -66,6 +83,7 @@ export class Player {
       this.lighter.traverse((o) => { const mm = (o as THREE.Mesh).material as THREE.Material | undefined; if ((o as THREE.Mesh).isMesh && mm && /_t0$/.test(mm.name)) this.zippoParts.push(o); });
     } catch { this.lighter = null; }
     try { this.knifeHand = await this.loadHand('chars/hand_knife.glb'); } catch { this.knifeHand = null; }
+    try { this.gunHand = await this.loadHand('chars/hand_gun.glb'); } catch { this.gunHand = null; }
     const fg = new THREE.ConeGeometry(0.009, 0.035, 10, 1, true); fg.translate(0, 0.0175, 0);
     this.flame = new THREE.Mesh(fg, new THREE.MeshBasicMaterial({ color: 0xffb040, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }));
     const core = new THREE.Mesh(new THREE.SphereGeometry(0.006, 8, 6), new THREE.MeshBasicMaterial({ color: 0xfff0c0, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }));
@@ -74,13 +92,16 @@ export class Player {
     this.flameLight = new THREE.PointLight(0xffa850, 0, 6, 1.6); this.root.add(this.flameLight);
   }
   setLighter(on: boolean) { this.lighterOn = on && !!this.lighter; }
-  setKnife(on: boolean) { this.knifeOn = on && !!this.knifeHand; if (!this.knifeOn) { this.aiming = false; this.slashT = -1; } }
+  setKnife(on: boolean) { this.knifeOn = on && !!this.knifeHand; if (!this.knifeOn && !this.gunOn) { this.aiming = false; this.slashT = -1; } }
+  setGun(on: boolean) { this.gunOn = on && !!this.gunHand; if (this.gunOn) this.knifeOn = false; if (!this.knifeOn && !this.gunOn) { this.aiming = false; this.slashT = -1; } this.kState = 'none'; }
+  private get wpn() { return this.gunOn ? W_GUN : W_KNIFE; }
   /** which hand model is shown in the right hand */
   private updateHands() {
-    const zippo = this.armBlend > 0.5, knife = this.knifeOn && !zippo;
+    const zippo = this.armBlend > 0.5, knife = this.knifeOn && !zippo, gun = this.gunOn && !zippo;
     if (this.lighter) this.lighter.visible = zippo;
     if (this.knifeHand) this.knifeHand.visible = knife;
-    for (const h of this.skinHandR) h.visible = !zippo && !knife;
+    if (this.gunHand) this.gunHand.visible = gun;
+    for (const h of this.skinHandR) h.visible = !zippo && !knife && !gun;
   }
 
   play(name: string, fade = 0.18, speed = 1) { this.playId(CLIPS[name], fade, true, speed); }
@@ -98,11 +119,13 @@ export class Player {
   /** world position of Claire's head (camera target) */
   headPos(v = new THREE.Vector3()) { const b = this.bones.b05; if (b) return b.getWorldPosition(v); return v.copy(this.root.position).setY(this.root.position.y + 1.5); }
 
+  playSync(id: string | null, loop = false, fade = 0.08) { this.sync = id; this.aiming = false; this.kState = 'none'; if (id) this.playId(id, fade, loop); else this.play('idle', 0.25); }
   update(dt: number, inp: Input, room: Room, camYaw: number | null = null) {
+    if (this.sync) { this.state = 'sync'; this.root.rotation.y = this.heading; this.mixer.update(dt); this.updateTail(dt); this.updateLighter(dt); this.updateHands(); return; }
     let speed = 0, turn = 0;
     // knife: hold the aim button to ready the knife, attack button to slash (like the original R1 + X)
-    const canAim = this.knifeOn && !this.lighterOn && !this.frozen;
-    this.aiming = canAim && (inp.aim || this.kState === 'slash');
+    const canAim = (this.knifeOn || this.gunOn) && !this.lighterOn && !this.frozen;
+    this.aiming = canAim && (inp.aim || this.kState === 'slash' || this.kState === 'reload');
     if (!this.aiming) this.kState = 'none';
     if (!this.frozen && camYaw !== null) {
       // over-the-shoulder camera: movement relative to the camera, Claire turns towards the direction of travel
@@ -150,26 +173,37 @@ export class Player {
   /** knife: ready (k00) -> stance (k03/k06/k09); attack plays the slash of the current direction.
    *  W/↑ while holding the knife aims up, S/↓ aims down (as in the original). */
   private updateKnife(dt: number, inp: Input) {
-    const dir = inp.fwd ? 1 : inp.back ? 2 : 0;
+    const W = this.wpn, dir = inp.fwd ? 1 : inp.back ? 2 : 0;
     this.kT += dt;
-    if (this.kState === 'none') { this.kState = 'draw'; this.kT = 0; this.kQueued = false; this.playId(K_DRAW, 0.12, false); }
+    if (this.kState === 'none') { this.kState = 'draw'; this.kT = 0; this.kQueued = false; this.playId(W.draw, 0.12, false); }
     if (inp.attack && this.kState !== 'stance') this.kQueued = true;
-    if (this.kState === 'draw' && this.kT >= K_DRAW_T) { this.kState = 'stance'; this.kT = 0; }
+    if (this.kState === 'draw' && this.kT >= W.drawT) { this.kState = 'stance'; this.kT = 0; }
+    if (this.kState === 'reload' && this.kT >= G_RELOAD_T) { this.kState = 'stance'; this.kT = 0; this.kQueued = false; }
     if (this.kState === 'slash') {
-      if (!this.slashHit && this.kT >= K_HIT_T) {
+      if (!this.slashHit && this.kT >= W.hitT) {
         this.slashHit = true; this.root.updateMatrixWorld(true);
         const f = this.forward(), w = this.bones.b09 ? this.bones.b09.getWorldPosition(new THREE.Vector3()) : this.headPos();
-        this.onSlash?.(w.addScaledVector(f, 0.25), f);
+        if (this.gunOn) { if (this.kDir === 1) f.y = 0.6; else if (this.kDir === 2) f.y = -0.6; f.normalize(); this.onFire?.(w, f, this.kDir); }
+        else this.onSlash?.(w.addScaledVector(f, 0.25), f);
       }
-      if (this.kT >= K_SLASH_T) { this.kState = 'stance'; this.kT = 0; }
+      if (this.kT >= W.actT) { this.kState = 'stance'; this.kT = 0; }
     }
     if (this.kState === 'stance') {
-      if (inp.attack || this.kQueued) { this.kQueued = false; this.kState = 'slash'; this.kT = 0; this.kDir = dir; this.slashHit = false; this.playId(K_SLASH[dir], 0.06, false); }
-      else { this.kDir = dir; this.playId(K_STANCE[dir], 0.15, true); }
+      if (this.gunOn && this.needReload?.()) { this.kState = 'reload'; this.kT = 0; this.playId(G_RELOAD, 0.1, false); }
+      else if (inp.attack || this.kQueued) {
+        this.kQueued = false; this.kDir = dir; this.slashHit = false;
+        // an empty handgun only clicks (the game plays the sound); no shot motion
+        if (this.gunOn && this.onFire && !this.canFire?.()) { this.emptyClick?.(); this.kT = 0; this.kState = 'slash'; this.slashHit = true; this.playId(W.stance[dir], 0.15, true); }
+        else { this.kState = 'slash'; this.kT = 0; this.playId(W.act[dir], 0.06, false); }
+      }
+      else { this.kDir = dir; this.playId(W.stance[dir], 0.15, true); }
     }
     this.slashT = this.kState === 'slash' ? this.kT : -1;
-    this.state = this.kState === 'slash' ? 'slash' : 'aim';
+    this.state = this.kState === 'slash' ? 'slash' : this.kState === 'reload' ? 'reload' : 'aim';
   }
+  /** handgun: has a round in the magazine / plays the empty click */
+  canFire: (() => boolean) | null = null;
+  emptyClick: (() => void) | null = null;
   /** two-bone IK of the right arm towards world target T */
   private solveArm(T: THREE.Vector3, w: number, poleDir: THREE.Vector3) {
     const S = this.bones.b07, E = this.bones.b08, W = this.bones.b09; if (!S || !E || !W) return;
@@ -197,7 +231,7 @@ export class Player {
     // the ponytail (pt0..pt3, physics driven in the game) hangs down behind the head under gravity
     const p0 = this.tail[0]; this.root.updateMatrixWorld(true);
     const side = new THREE.Vector3(-f.z, 0, f.x);
-    const D = new THREE.Vector3(0, -1, 0).addScaledVector(f, -0.32 - this.sway.x * 1.1).addScaledVector(side, this.sway.y * 0.9).normalize();
+    const D = new THREE.Vector3(0, -1, 0).addScaledVector(f, -0.14 - this.sway.x * 1.1).addScaledVector(side, this.sway.y * 0.9).normalize();
     const X = side.clone().addScaledVector(D, -side.dot(D)).normalize(), Y = new THREE.Vector3().crossVectors(D, X);
     const qw = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(X, Y, D));
     const pq = p0.parent!.getWorldQuaternion(new THREE.Quaternion());

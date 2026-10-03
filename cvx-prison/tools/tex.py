@@ -1,5 +1,6 @@
 # MT Framework PS3 TEX (v0x98, big endian) -> PNG via a synthetic DDS header (Pillow decodes DXT)
-import struct,sys,io
+import struct,sys,io,os
+sys.path.insert(0,os.path.dirname(os.path.abspath(__file__)))
 from PIL import Image
 FMT={0x13:'DXT1',0x14:'DXT1',0x15:'DXT3',0x16:'DXT3',0x17:'DXT5',0x18:'DXT5',0x19:'DXT5',0x1f:'DXT5',0x2f:'DXT5'}
 def info(d):
@@ -15,6 +16,10 @@ def decode(d):
     i=info(d); w,h,f=i['w'],i['h'],i['fmt']
     nm=max(1,i['mips'])
     off=struct.unpack('>I',d[16:20])[0]
+    if f in FMT and FMT[f]=='DXT5' and w>=4 and h>=4:
+        # Pillow mis-decodes these blocks; decode BC3 directly (BC4 alpha + 4-colour block)
+        from bc4 import dxt5
+        return Image.fromarray(dxt5(d[off:],w,h),'RGBA'), i
     if f in FMT:
         bs=8 if FMT[f]=='DXT1' else 16
         sz=max(1,(w+3)//4)*max(1,(h+3)//4)*bs

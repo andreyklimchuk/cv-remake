@@ -18,11 +18,22 @@ export const RU: Record<string, string> = {
   "An old typewriter.": 'Старая пишущая машинка.',
   "I could save my progress\nif I had an ink ribbon.": 'Я могла бы сохраниться,\nбудь у меня красящая лента.',
   "You can save your\nprogress with this.": 'С её помощью можно\nсохранить прогресс.',
+  "A truck used for transport.": 'Грузовик для перевозок.',
+  "Oil is leaking from the\ncrashed wreck.": 'Из разбитой машины\nвытекает масло.',
+  "A dead body and a\nbriefcase can be seen inside.": 'Внутри видны труп\nи кейс.',
+  "It looks like it\ncrashed into the wall.": 'Похоже, он врезался\nв стену.',
+  "He is not breathing.": 'Он не дышит.',
+  "This is the central gate\nof the prison.": 'Это центральные ворота\nтюрьмы.',
+  "It's locked.": 'Заперто.',
+  "A hawk's picture is\ncarved into the hollow.": 'В углублении вырезано\nизображение ястреба.',
+  "It's been completely\nnailed down.": 'Всё наглухо\nзаколочено.',
+  "It's impossible to open it.": 'Открыть невозможно.',
+  "Apparently, a dust box.": 'Похоже, мусорный ящик.',
 };
 export const ITEM_RU: Record<string, string> = {
   'Combat Knife': 'Боевой нож', 'Handgun Bullets': 'Патроны для пистолета', 'Green Herb': 'Зелёная трава',
   'Ink Ribbon': 'Красящая лента', 'Board Clip': 'Планшет с бумагами', 'Hemostatic': 'Кровоостанавливающее',
-  'Lighter': 'Зажигалка', 'Lockpick': 'Отмычка', 'Handgun': 'Пистолет', 'F. Aid Spray': 'Аптечка-спрей',
+  'Lighter': 'Зажигалка', 'Briefcase': 'Кейс', 'Hawk Emblem': 'Эмблема ястреба', 'Sp. Alloy Emblem': 'Эмблема из спецсплава', 'Memo': 'Записка', 'Lockpick': 'Отмычка', 'Handgun': 'Пистолет', 'F. Aid Spray': 'Аптечка-спрей',
 };
 export let LANG: 'ru' | 'en' = (localStorage.getItem('cvx.lang') as any) || 'ru';
 export function setLang(l: 'ru' | 'en') { LANG = l; localStorage.setItem('cvx.lang', l); }

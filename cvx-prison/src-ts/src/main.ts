@@ -52,3 +52,4 @@ ${LANG === 'ru' ? 'Фанатский порт на основе ресурсо�
 }
 title();
 addEventListener('resize', () => { if (!game) ui.fit(ASPECT); });
+import './enemy';

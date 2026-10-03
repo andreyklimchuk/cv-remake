@@ -14,6 +14,10 @@ import type { Player } from './player';
 /** Original item descriptions (sysmes.msb, table 1, index = item id + 1) and Russian translations. */
 const DESC: Record<number, { en: string; ru: string }> = {
   8: { en: "This weapon is a\nveteran survivor's\nfirst choice.", ru: 'Это оружие —\nпервый выбор\nбывалого выживальщика.' },
+  9: { en: 'M93R\fAn Italian handgun\nwhich uses\n9mm × 19 rounds.', ru: 'M93R\fИтальянский пистолет\nпод патрон\n9 × 19 мм.' },
+  59: { en: 'An emblem carved\nwith a\nhawk symbol.\fIt appears to be\nmade of pure gold.', ru: 'Эмблема\nс изображением\nястреба.\fПохоже, она из\nчистого золота.' },
+  83: { en: 'A case made of\nmetal.\fThe case seems to\nbe closed.\fMaybe if you\nexamine it\nclosely...', ru: 'Металлический\nкейс.\fКейс, похоже,\nзакрыт.\fМожет, если\nосмотреть его\nповнимательнее...' },
+  86: { en: "A picture of a\nhawk is carved on\nit.\fIt's made of\nnewly-developed\nalloy TG-01.", ru: 'На ней вырезано\nизображение\nястреба.\fСделана из\nновейшего\nсплава TG-01.' },
   12: { en: '9mm × 19 Rounds\fThese can be used\nwith the M93R\nand Glock 17.', ru: 'Патроны 9 × 19 мм\fПодходят для\nM93R и Glock 17.' },
   21: { en: 'This was made by\nbreeding the herb\nfrom Raccoon city.', ru: 'Выведена из травы,\nпривезённой из\nРаккун-Сити.' },
   31: { en: 'Use this with a\ntypewriter to save\nyour progress.', ru: 'Используйте её\nс пишущей машинкой,\nчтобы сохраниться.' },
@@ -23,7 +27,7 @@ const DESC: Record<number, { en: string; ru: string }> = {
   104: { en: 'Medicine that is\nused to stop\nbleeding.\fIt should be used\non someone who\nis wounded.', ru: 'Лекарство,\nостанавливающее\nкровотечение.\fЕго нужно применить\nк раненому.' },
   133: { en: 'A board clip holding\nsome papers.', ru: 'Планшет-зажим\nс бумагами.' },
 };
-const WEAPONS = new Set([8]);
+const WEAPONS = new Set([8, 9]);
 const STANDARD = new Set([55]); // tools held in the "standard" slot (the lighter)
 const ru = () => LANG === 'ru';
 const T = {
@@ -33,7 +37,7 @@ const T = {
   name: () => (ru() ? 'КЛЭР' : 'CLAIRE'), full: () => (ru() ? 'КЛЭР РЕДФИЛД' : 'CLAIRE REDFIELD'),
   height: () => (ru() ? 'РОСТ' : 'HEIGHT'), weight: () => (ru() ? 'ВЕС' : 'WEIGHT'), blood: () => (ru() ? 'ГР.КРОВИ' : 'BLOOD TYPE'),
   cm: () => (ru() ? 'см' : 'cm'), kg: () => (ru() ? 'кг' : 'kg'), btype: () => (ru() ? '0' : 'O'),
-  cond: () => (ru() ? 'СОСТОЯНИЕ' : 'CONDITION'), fine: () => (ru() ? 'Норма' : 'Fine'), list: () => (ru() ? 'СПИСОК' : 'LIST'),
+  cond: () => (ru() ? 'СОСТОЯНИЕ' : 'CONDITION'), fine: () => (ru() ? 'Норма' : 'Fine'), caution: () => (ru() ? 'Осторожно' : 'Caution'), danger: () => (ru() ? 'Опасно' : 'Danger'), list: () => (ru() ? 'СПИСОК' : 'LIST'),
   use: () => (ru() ? 'Использовать' : 'Use'), equipA: () => (ru() ? 'Экипировать' : 'Equip'), unequip: () => (ru() ? 'Снять' : 'Unequip'),
   hold: () => (ru() ? 'Взять в руку' : 'Hold'), putAway: () => (ru() ? 'Убрать' : 'Put away'),
   check: () => (ru() ? 'Осмотреть' : 'Check'), combine: () => (ru() ? 'Комбинировать' : 'Combine'),
@@ -208,18 +212,21 @@ export class InventoryScreen {
     g.beginPath(); g.moveTo(w / 2 - 7, h * 0.44); g.lineTo(w / 2 + 7, h * 0.44); g.lineTo(w / 2 + 10, h * 0.78); g.lineTo(w / 2 - 10, h * 0.78); g.closePath(); g.fill();
     g.fillStyle = '#f6f0d0'; g.font = 'bold 8px Arial'; g.textAlign = 'center'; g.fillText('MADE IN HEAVEN', w / 2, h - 5);
   }
+  /** condition from Claire's health (200 max): Fine, Caution (< 120), Danger (< 60) */
+  private cond() { const hp = this.player?.hp ?? 200; return hp < 60 ? 2 : hp < 120 ? 1 : 0; }
+  private condRgb(a = 1) { return ['rgba(40,200,40,', 'rgba(230,180,30,', 'rgba(220,40,30,'][this.cond()] + a + ')'; }
   private drawEcg(dt: number) {
     const c = this.q<HTMLCanvasElement>('.ecg'), g = c.getContext('2d')!; this.ecgT += dt;
     const w = c.width, h = c.height; g.fillStyle = '#000'; g.fillRect(0, 0, w, h);
     g.strokeStyle = '#4a4a4a'; g.lineWidth = 1;
     for (let y = 6; y < h; y += 9) { g.beginPath(); g.moveTo(8, y + 0.5); g.lineTo(w - 8, y + 0.5); g.stroke(); }
     // damped-oscillation trace like the original "Fine" wave, sweeping left to right
-    const period = 1.9, ph = (this.ecgT % period) / period, x0 = 40, span = w - 80, head = x0 + ph * span, y0 = h * 0.52;
+    const period = [1.9, 1.3, 0.9][this.cond()], ph = (this.ecgT % period) / period, x0 = 40, span = w - 80, head = x0 + ph * span, y0 = h * 0.52;
     const yy = (x: number) => { const t = (x - x0) / span; if (t <= 0.18) return 0; const u = (t - 0.18) * 14; return Math.sin(u * 1.6) * Math.exp(-u * 0.32) * 0.95; };
     g.lineWidth = 2;
     for (let x = x0; x < head; x += 2) {
       const age = (head - x) / span;
-      g.strokeStyle = `rgba(40,200,40,${Math.max(0, 1 - age * 1.6).toFixed(3)})`;
+      g.strokeStyle = this.condRgb(+Math.max(0, 1 - age * 1.6).toFixed(3));
       g.beginPath(); g.moveTo(x, y0 - yy(x) * h * 0.45); g.lineTo(x + 2, y0 - yy(x + 2) * h * 0.45); g.stroke();
     }
   }
@@ -285,7 +292,7 @@ export class InventoryScreen {
   private setText(t: string | string[]) { this.pages = Array.isArray(t) ? t : t.split('\f'); this.page = 0; this.text = this.pages[0] ?? ''; const el = this.q('.msgtx'); if (el) el.textContent = this.text; }
   private slotHtml(it: InvItem | null | undefined, icon: string | null, extra = '') {
     if (!it) return '';
-    return `${icon ? `<img src="${icon}">` : `<span style="font:bold 12px Arial">${escapeHtml(itemName(it.name))}</span>`}${it.count > 1 || it.id === 12 ? `<span class="cnt">${it.count}</span>` : ''}${extra}`;
+    return `${icon ? `<img src="${icon}">` : `<span style="font:bold 12px Arial">${escapeHtml(itemName(it.name))}</span>`}${it.count > 1 || it.id === 12 || it.id === 9 ? `<span class="cnt">${it.count}</span>` : ''}${extra}`;
   }
   async render() {
     const q = this.q;
@@ -294,7 +301,7 @@ export class InventoryScreen {
     q('.l-eq').textContent = T.equip(); q('.l-st').textContent = T.standard(); q('.l-status').textContent = T.status();
     q('.l-name').textContent = T.name(); q('.l-info').textContent = T.info(); q('.l-cond').textContent = T.cond(); q('.l-list').textContent = T.list();
     q('.i-full').textContent = T.full(); q('.i-h').textContent = T.height(); q('.i-w').textContent = T.weight(); q('.i-b').textContent = T.blood();
-    q('.i-cm').textContent = T.cm(); q('.i-kg').textContent = T.kg(); q('.i-bt').textContent = T.btype(); q('.fine').textContent = T.fine();
+    q('.i-cm').textContent = T.cm(); q('.i-kg').textContent = T.kg(); q('.i-bt').textContent = T.btype(); { const st = this.cond(), el = q('.fine') as HTMLElement; el.textContent = st === 2 ? T.danger() : st === 1 ? T.caution() : T.fine(); el.style.color = this.condRgb(); }
     const find = (id: number | null) => (id == null ? null : this.inv.slots.find((s) => s?.id === id) ?? null);
     const eq = find(this.equipped), st = find(this.standard);
     if (!eq) this.equipped = null; if (!st && this.standard != null) { this.standard = null; this.onEquipChange?.(); }
