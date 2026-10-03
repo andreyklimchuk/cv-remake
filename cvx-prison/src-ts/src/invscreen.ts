@@ -28,6 +28,8 @@ const DESC: Record<number, { en: string; ru: string }> = {
   133: { en: 'A board clip holding\nsome papers.', ru: 'Планшет-зажим\nс бумагами.' },
 };
 const WEAPONS = new Set([8, 9]);
+/** icon orientation overrides for models lying in another pose in item1/ */
+const ICON_ROT: Record<number, [number, number, number]> = { 9: [-1.15, 0, 0.25] };
 const STANDARD = new Set([55]); // tools held in the "standard" slot (the lighter)
 const ru = () => LANG === 'ru';
 const T = {
@@ -259,7 +261,9 @@ export class InventoryScreen {
     if (this.icons.has(id)) return this.icons.get(id)!;
     const obj = await this.model(id); if (!obj) return null;
     const s0 = new THREE.Box3().setFromObject(obj).getSize(new THREE.Vector3());
-    if (s0.y <= s0.x && s0.y <= s0.z) obj.rotation.set(1.15, 0, -0.25);
+    const ov = (window as any).__iconRot?.[id] ?? ICON_ROT[id];
+    if (ov) obj.rotation.set(ov[0], ov[1], ov[2]);
+    else if (s0.y <= s0.x && s0.y <= s0.z) obj.rotation.set(1.15, 0, -0.25);
     else if (s0.x <= s0.y && s0.x <= s0.z) obj.rotation.set(0.3, -1.2, 0);
     else obj.rotation.set(0.3, -0.45, 0);
     const { scene, cam } = this.stageFor(obj); cam.aspect = 1.5; cam.updateProjectionMatrix();
@@ -304,7 +308,7 @@ export class InventoryScreen {
     q('.i-cm').textContent = T.cm(); q('.i-kg').textContent = T.kg(); q('.i-bt').textContent = T.btype(); { const st = this.cond(), el = q('.fine') as HTMLElement; el.textContent = st === 2 ? T.danger() : st === 1 ? T.caution() : T.fine(); el.style.color = this.condRgb(); }
     const find = (id: number | null) => (id == null ? null : this.inv.slots.find((s) => s?.id === id) ?? null);
     const eq = find(this.equipped), st = find(this.standard);
-    if (!eq) this.equipped = null; if (!st && this.standard != null) { this.standard = null; this.onEquipChange?.(); }
+    if (!eq && this.equipped != null) { this.equipped = null; this.onEquipChange?.(); } if (!st && this.standard != null) { this.standard = null; this.onEquipChange?.(); }
     q('.eqbox').innerHTML = eq ? `<div class="slot" style="left:50px;top:0">${this.slotHtml(eq, await this.icon(eq.id))}</div>` : '';
     q('.stbox').innerHTML = st ? `<div class="slot" style="left:0;top:0">${this.slotHtml(st, await this.icon(st.id))}</div>` : '';
     const html: string[] = [];
@@ -330,7 +334,7 @@ export class InventoryScreen {
   }
   private doUse() {
     const s = this.cur(); if (!s) return;
-    if (WEAPONS.has(s.id)) { this.equipped = this.equipped === s.id ? null : s.id; this.setText(this.equipped ? T.equipped(itemName(s.name)) : this.curName()); }
+    if (WEAPONS.has(s.id)) { this.equipped = this.equipped === s.id ? null : s.id; this.onEquipChange?.(); this.setText(this.equipped ? T.equipped(itemName(s.name)) : this.curName()); }
     else if (STANDARD.has(s.id)) {
       this.standard = this.standard === s.id ? null : s.id; this.onEquipChange?.();
       this.setText(this.standard ? T.lit() : T.unlit());
@@ -341,7 +345,7 @@ export class InventoryScreen {
     const obj = await this.model(s.id);
     const box = this.q('.chk'); box.style.display = 'block'; this.q('.chk .hint').textContent = T.rot();
     const r = this.renderer(); r.setSize(538, 278, false);
-    const grp = new THREE.Group(); if (obj) grp.add(obj);
+    const grp = new THREE.Group(); if (obj) { grp.add(obj); const ov = ICON_ROT[s.id]; if (ov) obj.rotation.set(ov[0], ov[1], ov[2]); }
     const { scene, cam } = this.stageFor(grp); cam.aspect = 538 / 278; cam.position.z = 3.4; cam.updateProjectionMatrix();
     this.chk = { scene, cam, obj: grp, rx: 0.35, ry: 0 };
     this.setText(itemDesc(s.id));

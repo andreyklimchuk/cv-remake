@@ -29,9 +29,43 @@ export const RU: Record<string, string> = {
   "It's been completely\nnailed down.": 'Всё наглухо\nзаколочено.',
   "It's impossible to open it.": 'Открыть невозможно.',
   "Apparently, a dust box.": 'Похоже, мусорный ящик.',
+  "Abandoned materials\nare piled up here.": "Здесь свалены\nброшенные материалы.",
+  "Nothing useful.": "Ничего полезного.",
+  "It's been locked with a padlock.": "Заперто на висячий замок.",
+  "It's been locked from\nthe other side with a padlock.": "Заперто на висячий замок\nс другой стороны.",
+  "It can't be opened\nfrom this side.": "С этой стороны\nне открыть.",
+  "There is a big hole in\nthe wire netting...": "В проволочной сетке\nбольшая дыра...",
+  "There is a bloodstain\nunder the eaves.": "Под навесом\nпятно крови.",
+  "You no longer need to use\nthis key.": "Этот ключ больше\nне понадобится.",
+  "It seems that someone\ndidn't finish their soup.": "Похоже, кто-то\nне доел свой суп.",
+  "It's still a bit warm...": "Он ещё немного тёплый...",
+  "Nothing useful here.": "Здесь ничего полезного.",
+  "Shabby magazines are\npiled up here.": "Здесь свалены\nпотрёпанные журналы.",
+  "This toilet has some\nrather disgusting stains.": "На этом унитазе\nотвратительные пятна.",
+  "A horrible smell lingers...": "Стоит ужасный запах...",
+  "Half-eaten food items are\nscattered in this area.": "Здесь разбросаны\nнедоеденные продукты.",
+  "Take the prison map?": "Взять карту тюрьмы?",
+  "You've taken the prison map.": "Вы взяли карту тюрьмы.",
+  "There is an indentation\non the indigo blue plate.": "На тёмно-синей пластине\nесть углубление.",
+  "It appears to be locked.": "Похоже, заперто.",
+  "I must release the lock first.": "Сначала нужно\nснять блокировку.",
+  "This switch controls\nthe outdoor shutters.": "Этот переключатель управляет\nнаружными ставнями.",
+  "Push the switch?": "Нажать переключатель?",
+  "A guillotine, covered in blood.": "Гильотина, вся в крови.",
+  "It seems that there is\nsome fresh blood on it.": "Похоже, на ней\nсвежая кровь.",
+  "Something seems to have\nbeen tied up here...": "Похоже, здесь кого-то\nдержали связанным...",
+  "Fresh blood is stuck\nto the wall...": "На стене\nсвежая кровь...",
+  "A person might have been\ntied to the pillar...": "Возможно, к столбу\nбыл привязан человек...",
+  "It's completely nailed down.": "Всё наглухо заколочено.",
+  "The outdoor shutter is locked.": "Наружная ставня заперта.",
+  "I must release the lock.": "Нужно снять блокировку.",
+  "The outdoor shutter\nis already open.": "Наружная ставня\nуже открыта.",
+  "The lock has already\nbeen released.": "Блокировка\nуже снята.",
+  "Perhaps I can open it\nwith the switch on the left...": "Может, её можно открыть\nпереключателем слева...",
+  "An outdoor shutter.": "Наружная ставня.",
 };
 export const ITEM_RU: Record<string, string> = {
-  'Combat Knife': 'Боевой нож', 'Handgun Bullets': 'Патроны для пистолета', 'Green Herb': 'Зелёная трава',
+  'Combat Knife': 'Боевой нож', 'Map': 'Карта', 'Extinguisher': 'Огнетушитель', 'Eagle Plate': 'Пластина с орлом', 'Handgun Bullets': 'Патроны для пистолета', 'Green Herb': 'Зелёная трава',
   'Ink Ribbon': 'Красящая лента', 'Board Clip': 'Планшет с бумагами', 'Hemostatic': 'Кровоостанавливающее',
   'Lighter': 'Зажигалка', 'Briefcase': 'Кейс', 'Hawk Emblem': 'Эмблема ястреба', 'Sp. Alloy Emblem': 'Эмблема из спецсплава', 'Memo': 'Записка', 'Lockpick': 'Отмычка', 'Handgun': 'Пистолет', 'F. Aid Spray': 'Аптечка-спрей',
 };
@@ -39,7 +73,7 @@ export let LANG: 'ru' | 'en' = (localStorage.getItem('cvx.lang') as any) || 'ru'
 export function setLang(l: 'ru' | 'en') { LANG = l; localStorage.setItem('cvx.lang', l); }
 /** Split original message into pages (form-feed separated) and translate each page. */
 export function pages(msg: string): string[] {
-  const raw = msg.replace(/<0>|<1>/g, '').split('\f').map((s) => s.replace(/^\n+/, '').replace(/\{[0-9a-f]+:[0-9a-f]+\}/g, '').trimEnd()).filter((s) => s.trim().length);
+  const raw = msg.replace(/<0>|<1>/g, '').replace(/\n\s*\{4:39\}es\s+\{4:2e\}o/g, '').replace(/\{0d\}/g, '-').split('\f').map((s) => s.replace(/^\n+/, '').replace(/\{[0-9a-f]+:[0-9a-f]+\}/g, '').trimEnd()).filter((s) => s.trim().length);
   if (LANG === 'en') return raw;
   return raw.map((p) => RU[p] ?? RU[p.trim()] ?? p);
 }
@@ -53,7 +87,7 @@ export const UI = {
   full: () => (ru() ? 'Нет места в инвентаре.' : 'You cannot carry any more items.'),
   saveQ: () => (ru() ? 'Сохранить игру? (будет использована красящая лента)' : 'Use an ink ribbon to save?'),
   saved: () => (ru() ? 'Игра сохранена.' : 'Game saved.'),
-  locked: () => (ru() ? 'Дальше — улица острова Рокфорт.\nЭта часть пока не перенесена.' : 'Beyond this door lies Rockfort Island.\nThis area is not ported yet.'),
+  locked: () => (ru() ? 'Эта часть игры\nпока не перенесена.' : 'This area is\nnot ported yet.'),
   camFixed: () => (ru() ? 'Камера: фиксированная' : 'Camera: fixed'),
   camBehind: () => (ru() ? 'Камера: от плеча (мышь — обзор)' : 'Camera: over the shoulder (mouse to look)'),
   // lighter-lit variants of the dark-area messages

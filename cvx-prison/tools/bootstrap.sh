@@ -8,12 +8,17 @@ if [ ! -d web/src ]; then
   cd /data/cvx; R=/tmp/zz/cv-remake-cvx-prison/cvx-prison
   cp -r $R/src-ts web; mkdir -p ghpub_dl tools; cp -r $R/data $R/index.html $R/game.js ghpub_dl/
   [ -d $R/tools ] && cp -rn $R/tools/* tools/ || true
-  ln -sfn /data/cv-remake/node_modules web/node_modules
+  [ -d $R/conv ] && cp -r $R/conv . || true
+  # node modules live outside the backed-up tree
+  if [ ! -d /data/cvxweb/node_modules ]; then mkdir -p /data/cvxweb && (cd /data/cvxweb && npm init -y >/dev/null && npm i three@0.170 vite@5 typescript @types/three@0.170 playwright >/dev/null); fi
+  ln -sfn /data/cvxweb/node_modules web/node_modules
   python3 - <<'PY'
 import re,json,base64,os,glob
 os.chdir('/data/cvx')
 G={}
-for f in glob.glob('ghpub_dl/data/*.js'):
+# only the parts referenced by index.html are current (data/ may also hold stale parts)
+cur=re.findall(r'<script src="(data/[^"]+)"',open('ghpub_dl/index.html').read())
+for f in ['ghpub_dl/'+x for x in cur]:
     if '/mv_' in f: continue
     t=open(f).read(); m=re.search(r"push\(\['([^']*)',(\d+),'(.*)'\]\)",t)
     if m: G.setdefault(m.group(1),{})[int(m.group(2))]=m.group(3)

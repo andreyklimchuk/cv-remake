@@ -105,9 +105,10 @@ export class Player {
   }
 
   play(name: string, fade = 0.18, speed = 1) { this.playId(CLIPS[name], fade, true, speed); }
-  private playId(id: string, fade: number, loop: boolean, speed = 1) {
+  private playId(id: string, fade: number, loop: boolean, speed = 1, restart = false) {
     const a = this.actions.get(id); if (!a) return;
-    a.timeScale = speed; if (this.cur === id) return;
+    a.timeScale = speed; if (this.cur === id && !restart) return;
+    if (this.cur === id) { a.reset(); a.play(); return; }
     const prev = this.actions.get(this.cur);
     a.reset(); a.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, Infinity); a.clampWhenFinished = !loop; a.play();
     if (prev && fade > 0) a.crossFadeFrom(prev, fade, false); else if (prev) prev.stop();
@@ -175,7 +176,7 @@ export class Player {
   private updateKnife(dt: number, inp: Input) {
     const W = this.wpn, dir = inp.fwd ? 1 : inp.back ? 2 : 0;
     this.kT += dt;
-    if (this.kState === 'none') { this.kState = 'draw'; this.kT = 0; this.kQueued = false; this.playId(W.draw, 0.12, false); }
+    if (this.kState === 'none') { this.kState = 'draw'; this.kT = 0; this.kQueued = false; this.playId(W.draw, 0.12, false, 1, true); }
     if (inp.attack && this.kState !== 'stance') this.kQueued = true;
     if (this.kState === 'draw' && this.kT >= W.drawT) { this.kState = 'stance'; this.kT = 0; }
     if (this.kState === 'reload' && this.kT >= G_RELOAD_T) { this.kState = 'stance'; this.kT = 0; this.kQueued = false; }
@@ -189,12 +190,12 @@ export class Player {
       if (this.kT >= W.actT) { this.kState = 'stance'; this.kT = 0; }
     }
     if (this.kState === 'stance') {
-      if (this.gunOn && this.needReload?.()) { this.kState = 'reload'; this.kT = 0; this.playId(G_RELOAD, 0.1, false); }
+      if (this.gunOn && this.needReload?.()) { this.kState = 'reload'; this.kT = 0; this.playId(G_RELOAD, 0.1, false, 1, true); }
       else if (inp.attack || this.kQueued) {
         this.kQueued = false; this.kDir = dir; this.slashHit = false;
         // an empty handgun only clicks (the game plays the sound); no shot motion
         if (this.gunOn && this.onFire && !this.canFire?.()) { this.emptyClick?.(); this.kT = 0; this.kState = 'slash'; this.slashHit = true; this.playId(W.stance[dir], 0.15, true); }
-        else { this.kState = 'slash'; this.kT = 0; this.playId(W.act[dir], 0.06, false); }
+        else { this.kState = 'slash'; this.kT = 0; this.playId(W.act[dir], 0.06, false, 1, true); }
       }
       else { this.kDir = dir; this.playId(W.stance[dir], 0.15, true); }
     }

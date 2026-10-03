@@ -102,32 +102,34 @@ def build(mdlfile,texdir,motfile,dst,name,skin_at=0,S=0.1,lower_n=8):
         if fl&0x10: mt['doubleSided']=True
         if fl&0x08: mt['alphaMode']='BLEND'
         mats.append(mt); tmap[key]=len(mats)-1; return tmap[key]
-    Mw=Wb[mi]; Rn=Mw[:3,:3]
     prim_out=[]
-    for pr in prims:
-        Pp=[];Nn=[];T=[];J=[];Wt=[];I=[];vm={}
-        for rev,pts in pr['strips']:
-            ids=[]
-            for ix,uv in pts:
-                k=(ix,uv)
-                if k not in vm:
-                    if ix not in v: continue
-                    vm[k]=len(Pp); p,nn=v[ix]
-                    Pp.append((Mw@np.array(list(p)+[1]))[:3]*S); Nn.append(Rn@np.array(nn)); T.append(uv or (0,0))
-                    a,ca,b,cb=rec[ix]; par=ns[a]['parent']
-                    w=(ca+1)/10 if ca<9 else 1.0
-                    if par<0 or w>=1: J.append((a,0,0,0)); Wt.append((1,0,0,0))
-                    else: J.append((a,par,0,0)); Wt.append((w,1-w,0,0))
-                ids.append(vm[k])
-            for j in range(len(ids)-2):
-                a_,b_,c_=ids[j],ids[j+1],ids[j+2]
-                if (j%2==1)^rev: a_,b_=b_,a_
-                if a_!=b_ and b_!=c_ and a_!=c_: I.append((a_,b_,c_))
-        if not I: continue
-        Nn=np.array(Nn,np.float32); l=np.linalg.norm(Nn,axis=1,keepdims=True); l[l==0]=1
-        at={'POSITION':put(np.array(Pp,np.float32),5126,'VEC3',34962,True),'NORMAL':put((Nn/l).astype(np.float32),5126,'VEC3',34962),
-            'TEXCOORD_0':put(np.array(T,np.float32),5126,'VEC2',34962),'JOINTS_0':put(np.array(J,np.uint16),5123,'VEC4',34962),'WEIGHTS_0':put(np.array(Wt,np.float32),5126,'VEC4',34962)}
-        prim_out.append({'attributes':at,'indices':put(np.array(I,np.uint32).reshape(-1),5125,'SCALAR',34963),'material':mat(pr)})
+    parts=[(mi,v,prims,True)]+[(k,)+tuple(m.model(ns[k]['model']))+(False,) for k,n in enumerate(ns) if n['model']!=0xffffffff and k!=mi]
+    for pi_,v,prims,skinned in parts:
+      Mw=Wb[pi_]; Rn=Mw[:3,:3]
+      for pr in prims:
+          Pp=[];Nn=[];T=[];J=[];Wt=[];I=[];vm={}
+          for rev,pts in pr['strips']:
+              ids=[]
+              for ix,uv in pts:
+                  k=(ix,uv)
+                  if k not in vm:
+                      if ix not in v: continue
+                      vm[k]=len(Pp); p,nn=v[ix]
+                      Pp.append((Mw@np.array(list(p)+[1]))[:3]*S); Nn.append(Rn@np.array(nn)); T.append(uv or (0,0))
+                      a,ca,b,cb=rec[ix] if skinned else (pi_,9,pi_,9); par=ns[a]['parent']
+                      w=(ca+1)/10 if ca<9 else 1.0
+                      if par<0 or w>=1: J.append((a,0,0,0)); Wt.append((1,0,0,0))
+                      else: J.append((a,par,0,0)); Wt.append((w,1-w,0,0))
+                  ids.append(vm[k])
+              for j in range(len(ids)-2):
+                  a_,b_,c_=ids[j],ids[j+1],ids[j+2]
+                  if (j%2==1)^rev: a_,b_=b_,a_
+                  if a_!=b_ and b_!=c_ and a_!=c_: I.append((a_,b_,c_))
+          if not I: continue
+          Nn=np.array(Nn,np.float32); l=np.linalg.norm(Nn,axis=1,keepdims=True); l[l==0]=1
+          at={'POSITION':put(np.array(Pp,np.float32),5126,'VEC3',34962,True),'NORMAL':put((Nn/l).astype(np.float32),5126,'VEC3',34962),
+              'TEXCOORD_0':put(np.array(T,np.float32),5126,'VEC2',34962),'JOINTS_0':put(np.array(J,np.uint16),5123,'VEC4',34962),'WEIGHTS_0':put(np.array(Wt,np.float32),5126,'VEC4',34962)}
+          prim_out.append({'attributes':at,'indices':put(np.array(I,np.uint32).reshape(-1),5125,'SCALAR',34963),'material':mat(pr)})
     nodes=[]
     for i,n in enumerate(ns):
         L=Lb[i]; nd={'name':'b%02d'%i,'translation':(L[:3,3]*S).tolist(),'rotation':mat2quat(L[:3,:3])}
@@ -142,12 +144,6 @@ def build(mdlfile,texdir,motfile,dst,name,skin_at=0,S=0.1,lower_n=8):
     if motfile:
         md=open(motfile,'rb').read(); Bk=bank(md)
         nbl=lower_n; nbu=len(ns)-lower_n
-        lo=[r for o,r in Bk if r and r[1]==nbl]; 
-        first_up=None
-        # upper list = trailing run of nbu-bone clips that follows the last lower clip
-        idx=[k for k,(o,r) in enumerate(Bk) if r and r[1]==nbl]; last=idx[-1]
-        up=[r for o,r in Bk[last+1:] if r and r[1]==nbu]
-        # extras (upper-only) between lower clips
         def chans(r,first,ti):
             N,nb,Tr,R,has=r; S_=[];C=[]
             for k in range(nb):
@@ -157,6 +153,17 @@ def build(mdlfile,texdir,motfile,dst,name,skin_at=0,S=0.1,lower_n=8):
                 if k==0 and Tr is not None and first==0:
                     S_.append({'input':ti,'output':put((Tr*S+np.array(nodes[0]['translation'])).astype(np.float32),5126,'VEC3'),'interpolation':'LINEAR'}); C.append((0,'translation'))
             return S_,C
+        lo=[r for o,r in Bk if r and r[1]==nbl]; 
+        if nbu<=0:
+            for k,r in enumerate(lo):
+                ti=put(np.arange(r[0],dtype=np.float32)/30,5126,'SCALAR',mm=True); s,c=chans(r,0,ti)
+                anims.append({'name':'m%02d'%k,'samplers':s,'channels':[{'sampler':i,'target':{'node':n_,'path':p_}} for i,(n_,p_) in enumerate(c)]})
+            lo=[]
+        first_up=None
+        # upper list = trailing run of nbu-bone clips that follows the last lower clip
+        idx=[k for k,(o,r) in enumerate(Bk) if r and r[1]==nbl]; last=idx[-1] if lo else len(Bk)
+        up=[r for o,r in Bk[last+1:] if r and r[1]==nbu]
+        # extras (upper-only) between lower clips
         for k in range(min(len(lo),len(up))):
             N=lo[k][0]; ti=put(np.arange(N,dtype=np.float32)/30,5126,'SCALAR',mm=True)
             s1,c1=chans(lo[k],0,ti)
@@ -164,7 +171,7 @@ def build(mdlfile,texdir,motfile,dst,name,skin_at=0,S=0.1,lower_n=8):
             s2,c2=chans(up[k],nbl,ti2)
             Ss=s1+s2; Cs=[{'sampler':i,'target':{'node':n_,'path':p_}} for i,(n_,p_) in enumerate(c1+c2)]
             anims.append({'name':'m%02d'%k,'samplers':Ss,'channels':Cs})
-        ex=[r for o,r in Bk[:last] if r and r[1]==nbu]
+        ex=[r for o,r in Bk[:last] if r and r[1]==nbu] if nbu>0 else []
         for k,r in enumerate(ex):
             ti=put(np.arange(r[0],dtype=np.float32)/30,5126,'SCALAR',mm=True); s,c=chans(r,nbl,ti)
             anims.append({'name':'u%02d'%k,'samplers':s,'channels':[{'sampler':i,'target':{'node':n_,'path':p_}} for i,(n_,p_) in enumerate(c)]})
@@ -183,4 +190,4 @@ def build(mdlfile,texdir,motfile,dst,name,skin_at=0,S=0.1,lower_n=8):
     return len(anims)
 if __name__=='__main__':
     a=sys.argv[1:]
-    print(build(a[0],a[1],a[2] if a[2]!='-' else None,a[3],a[4],int(a[5],0) if len(a)>5 else 0))
+    print(build(a[0],a[1],a[2] if a[2]!='-' else None,a[3],a[4],int(a[5],0) if len(a)>5 else 0,lower_n=int(a[6]) if len(a)>6 else 8))
