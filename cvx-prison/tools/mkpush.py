@@ -19,8 +19,10 @@ walk(P+'/data','data')
 walk('/data/cvx/web','src-ts')
 walk('/data/cvx/tools','tools')
 walk('/data/cvx/conv','conv')
-for f in ('README.md',):
-    if os.path.exists('/data/cvx/'+f): pairs.append(('cvx-prison/'+f,'/data/cvx/'+f)) if not filecmp.cmp('/data/cvx/'+f,R+'/'+f,shallow=False) else None
+walk('/data/cvx/evt','evt')
+walk('/data/cvx/dev','dev')
+for f in ('README.md','HANDOFF.md'):
+    if os.path.exists('/data/cvx/'+f): pairs.append(('cvx-prison/'+f,'/data/cvx/'+f)) if not os.path.exists(R+'/'+f) or not filecmp.cmp('/data/cvx/'+f,R+'/'+f,shallow=False) else None
 last=[x for x in pairs if x[0] in ('cvx-prison/game.js','cvx-prison/index.html')]
 for f in ('game.js','index.html'):
     if not filecmp.cmp(P+'/'+f,R+'/'+f,shallow=False): last.append(('cvx-prison/'+f,P+'/'+f))
