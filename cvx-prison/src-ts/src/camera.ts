@@ -13,6 +13,8 @@ export type CamMode = 'fixed' | 'behind';
 export class CameraRig {
   cam = new THREE.PerspectiveCamera(FOV, ASPECT, 0.05, 200);
   index = -1;
+  /** camera chosen by the event scripts (CAMSET) while a cinematic runs; null = automatic */
+  forced: number | null = null;
   mode: CamMode = 'fixed';
   usingFallback = false;
   private cams: CamDef[] = [];
@@ -89,11 +91,13 @@ export class CameraRig {
   update(p: THREE.Vector3, head: THREE.Vector3, heading: number, snap = false, dt = 1 / 60): boolean {
     const prevIdx = this.index, prevOv = this.override;
     if (this.mode === 'behind') { this.applyCut(null); this.updateShoulder(p, head, snap, dt); return false; }
-    let idx = this.zoneCam(p);
+    const forced = this.forced !== null && this.cams[this.forced] ? this.forced : null;
+    let idx = forced ?? this.zoneCam(p);
     this.index = idx;
     // visibility check a few times per second
     this.visT -= dt;
-    if (snap || this.visT <= 0 || idx !== prevIdx) {
+    if (forced !== null) this.override = -2;
+    else if (snap || this.visT <= 0 || idx !== prevIdx) {
       this.visT = 0.2;
       const zc = this.cams[idx];
       if (zc && this.visible(zc, p, head)) this.override = -2;

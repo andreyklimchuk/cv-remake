@@ -96,6 +96,8 @@ export class InventoryScreen {
   equipped: number | null = null;   // weapon box
   standard: number | null = null;   // standard box (lighter)
   onEquipChange?: () => void;
+  /** use of a key item (returns true when the game took over: inventory closes) */
+  onUseItem?: (id: number) => boolean;
   private mode: Mode = 'list'; private sel = 0; private menuSel = 3; private subSel = 0;
   private subOpts: { t: string; k: string }[] = [];
   private text = ''; private pages: string[] = []; private page = 0;
@@ -338,7 +340,8 @@ export class InventoryScreen {
     else if (STANDARD.has(s.id)) {
       this.standard = this.standard === s.id ? null : s.id; this.onEquipChange?.();
       this.setText(this.standard ? T.lit() : T.unlit());
-    } else this.setText(s.id === 12 ? T.ammo() : T.noNeed());
+    } else if (this.onUseItem?.(s.id)) return;
+    else this.setText(s.id === 12 ? T.ammo() : T.noNeed());
   }
   private async openCheck() {
     const s = this.cur(); if (!s) return;

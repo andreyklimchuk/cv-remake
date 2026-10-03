@@ -1,3 +1,4 @@
+import { ITEM_NAMES } from './sysmes';
 // Russian translations of the original English in-game texts (originals are kept as fallback).
 export const RU: Record<string, string> = {
   "There are hairs scattered here.": 'Здесь разбросаны волосы.',
@@ -45,6 +46,13 @@ export const RU: Record<string, string> = {
   "A horrible smell lingers...": "Стоит ужасный запах...",
   "Half-eaten food items are\nscattered in this area.": "Здесь разбросаны\nнедоеденные продукты.",
   "Take the prison map?": "Взять карту тюрьмы?",
+  // system messages of the item screen
+  "Take the\n{N}?": "Взять\n{N}?",
+  "You've taken the\n{N}.": "Вы взяли\n{N}.",
+  "You can't take any\nmore items.": "Больше нельзя\nвзять предметов.",
+  "Use it now?": "Использовать сейчас?",
+  "There's no need to\nuse it now.": "Сейчас в этом\nнет необходимости.",
+  "Use an ink ribbon?": "Использовать красящую ленту?",
   "You've taken the prison map.": "Вы взяли карту тюрьмы.",
   "There is an indentation\non the indigo blue plate.": "На тёмно-синей пластине\nесть углубление.",
   "It appears to be locked.": "Похоже, заперто.",
@@ -71,11 +79,20 @@ export const ITEM_RU: Record<string, string> = {
 };
 export let LANG: 'ru' | 'en' = (localStorage.getItem('cvx.lang') as any) || 'ru';
 export function setLang(l: 'ru' | 'en') { LANG = l; localStorage.setItem('cvx.lang', l); }
-/** Split original message into pages (form-feed separated) and translate each page. */
-export function pages(msg: string): string[] {
-  const raw = msg.replace(/<0>|<1>/g, '').replace(/\n\s*\{4:39\}es\s+\{4:2e\}o/g, '').replace(/\{0d\}/g, '-').split('\f').map((s) => s.replace(/^\n+/, '').replace(/\{[0-9a-f]+:[0-9a-f]+\}/g, '').trimEnd()).filter((s) => s.trim().length);
-  if (LANG === 'en') return raw;
-  return raw.map((p) => RU[p] ?? RU[p.trim()] ?? p);
+/** does the original message end with the Yes/No question? */
+export function hasChoice(msg: string) { return /\{4:39\}es/.test(msg); }
+/** Split original message into pages (form-feed separated) and translate each page.
+ * {3:XX} is the name of item XX ({3:ffff} = the item in question, `sb`). */
+export function pages(msg: string, sb?: number): string[] {
+  const names: string[] = [];
+  const m = msg.replace(/\{3:([0-9a-f]+)\}/g, (_, h: string) => { const id = h === 'ffff' ? sb ?? 0 : parseInt(h, 16); names.push(ITEM_NAMES[id] ?? ''); return '\u0001'; });
+  const raw = m.replace(/<0>|<1>/g, '').replace(/\n\s*\{4:39\}es\s+\{4:2e\}o/g, '').replace(/\{0d\}/g, '-').split('\f').map((s) => s.replace(/^\n+/, '').replace(/\{[0-9a-f]+:[0-9a-f]+\}/g, '').trimEnd()).filter((s) => s.trim().length);
+  let k = 0;
+  return raw.map((p) => {
+    const key = p.replace(/\u0001/g, '{N}');
+    const t = LANG === 'en' ? key : RU[key] ?? RU[key.trim()] ?? key;
+    return t.replace(/\{N\}/g, () => itemName(names[k++] ?? ''));
+  });
 }
 export function itemName(en: string) { return LANG === 'ru' ? (ITEM_RU[en] ?? en) : en; }
 const ru = () => LANG === 'ru';
@@ -85,13 +102,8 @@ export const UI = {
   yes: () => (ru() ? 'Да' : 'Yes'), no: () => (ru() ? 'Нет' : 'No'),
   got: (n: string) => (ru() ? `Получено: ${n}.` : `Picked up the ${n}.`),
   full: () => (ru() ? 'Нет места в инвентаре.' : 'You cannot carry any more items.'),
-  saveQ: () => (ru() ? 'Сохранить игру? (будет использована красящая лента)' : 'Use an ink ribbon to save?'),
   saved: () => (ru() ? 'Игра сохранена.' : 'Game saved.'),
   locked: () => (ru() ? 'Эта часть игры\nпока не перенесена.' : 'This area is\nnot ported yet.'),
   camFixed: () => (ru() ? 'Камера: фиксированная' : 'Camera: fixed'),
   camBehind: () => (ru() ? 'Камера: от плеча (мышь — обзор)' : 'Camera: over the shoulder (mouse to look)'),
-  // lighter-lit variants of the dark-area messages
-  litOutside: () => (ru() ? 'При свете зажигалки видно:\nза решёткой лишь пустой\nтёмный коридор...' : 'By the lighter\'s flame I can see\nonly an empty, dark\ncorridor outside...'),
-  litDark: () => (ru() ? 'Зажигалка освещает угол.\nЗдесь ничего нет.' : 'The lighter lights up the corner.\nThere is nothing here.'),
-  litWound: () => (ru() ? 'Даже при свете зажигалки\nя вряд ли смогу как следует\nобработать его рану.' : "Even with the lighter I don't\nthink I can treat\nhis wound properly."),
 };

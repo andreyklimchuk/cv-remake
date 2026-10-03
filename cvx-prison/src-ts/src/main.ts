@@ -30,7 +30,8 @@ ${LANG === 'ru' ? 'Фанатский порт на основе ресурсо�
     if (k === 'lang') { setLang(LANG === 'ru' ? 'en' : 'ru'); render(); return; }
     removeEventListener('keydown', onKey);
     el.remove();
-    if (k === 'new' || k === 'movie') await playMovie(ui.stage, 'mv_000');
+    // a new game: the opening movie is started by the rm_0000 event script (bhMovieStart 0)
+    if (k === 'movie') await playMovie(ui.stage, 'mv_000');
     if (k === 'movie') { ui.stage.appendChild(el); addEventListener('keydown', onKey); render(); return; }
     ui.fadeEl.style.transition = 'none'; ui.fadeEl.style.opacity = '1';
     const ld = document.createElement('div'); ld.className = 'loading'; ld.textContent = LANG === 'ru' ? 'ЗАГРУЗКА…' : 'LOADING…';

@@ -3,17 +3,17 @@ import { loadGLTF, loadJSON, toLambert } from './assets';
 
 export interface CamDef { zone: [number, number, number, number]; pos: [number, number, number]; pitch: number; yaw: number; roll: number; flags: string; lim?: [number, number, number, number]; lens?: number }
 export interface RoomData {
-  id: string; cameras: CamDef[]; collision: any[]; triggers: any[]; spawns: { pos: [number, number, number]; ang: number }[];
+  id: string; cameras: CamDef[]; collision: any[]; triggers: any[]; areas?: any[]; enemies?: { id: number; flags: string; pos: [number, number, number]; rot: [number, number, number]; ex?: string }[]; spawns: { pos: [number, number, number]; ang: number }[];
   messages: string[]; items: { id: number; name?: string; pos: [number, number, number]; rot: [number, number, number] }[];
   objects: { id: number; model?: string; flags: string; pos: [number, number, number]; rot: [number, number, number] }[]; lights: any[];
 }
 export type Shape = { k: 'box'; x0: number; z0: number; x1: number; z1: number } | { k: 'circle'; x: number; z: number; r: number } | { k: 'tri'; a: THREE.Vector2; b: THREE.Vector2; c: THREE.Vector2 };
-export interface Trigger { kind: 'door' | 'message' | 'item' | 'other'; x0: number; z0: number; x1: number; z1: number; flags: number; raw: any; arg: number; room?: number; spawn?: number }
 
 export class Room {
   group = new THREE.Group();
   shapes: Shape[] = [];
-  triggers: Trigger[] = [];
+  wallShapes: (Shape | null)[] = [];
+  objMeshes = new Map<number, THREE.Object3D>();
   floor!: THREE.Mesh;
   itemMeshes = new Map<number, THREE.Object3D>();
   lights: THREE.PointLight[] = [];
@@ -33,17 +33,18 @@ export class Room {
       this.occluders.push(m);
     });
     const bb = new THREE.Box3().setFromObject(scene);
-    for (const ob of d.objects) {
+    for (let i = 0; i < d.objects.length; i++) {
+      const ob = d.objects[i];
       if (!ob.model || ob.flags === '00000000') continue;
       const p = new THREE.Vector3(...ob.pos);
       if (p.x < bb.min.x - 0.05 || p.z < bb.min.z - 0.05 || p.x > bb.max.x + 0.05 || p.z > bb.max.z + 0.05) continue;
       const o = (await loadGLTF(`objects/${ob.model}.glb`)).scene.clone(true);
       toLambert(o); o.scale.setScalar(0.1); o.position.copy(p); o.rotation.set(ob.rot[0], ob.rot[2], ob.rot[1], 'ZYX'); o.name = ob.model;
-      this.group.add(o);
+      this.group.add(o); this.objMeshes.set(i, o);
     }
     for (const l of d.lights) this.addLight(l);
-    for (const c of d.collision) this.addCollider(c);
-    for (const t of d.triggers) this.addTrigger(t);
+    this.wallShapes = d.collision.map((c) => this.colliderShape(c));
+    this.shapes = this.wallShapes.filter((x, i) => x && (parseInt(d.collision[i].type, 16) & 1)) as Shape[];
   }
   private buildFloor(root: THREE.Object3D) {
     const out: number[] = []; const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), n = new THREE.Vector3();
@@ -69,26 +70,20 @@ export class Room {
     const pl = new THREE.PointLight(col, Math.min(mx, 3.5) * 2.2, range, 1); pl.position.set(l.pos[0], l.pos[1], l.pos[2]);
     this.group.add(pl); this.lights.push(pl);
   }
-  private addCollider(e: any) {
-    const t = parseInt(e.type, 16); if ((t & 0xff) !== 1) return;
+  /** collision record -> 2D shape (walls of the floor level only; enabled/disabled by the event scripts) */
+  private colliderShape(e: any): Shape | null {
+    const t = parseInt(e.type, 16);
     const shape = (t >> 8) & 0xff;
-    if (shape === 7 || shape === 6 || shape === 2 || e.y > 0.6) return;
-    if (shape === 4 || shape === 5) { this.shapes.push({ k: 'tri', a: new THREE.Vector2(e.x, e.z), b: new THREE.Vector2(e.x + e.sx, e.z), c: new THREE.Vector2(e.x, e.z + e.sz) }); return; }
-    if (shape === 3) { this.shapes.push({ k: 'circle', x: e.x, z: e.z, r: Math.max(0.08, e.sx * 0.5) }); return; }
-    this.shapes.push({ k: 'box', x0: e.x, z0: e.z, x1: e.x + e.sx, z1: e.z + e.sz });
+    if (shape === 7 || shape === 6 || shape === 2 || e.y > 0.6) return null;
+    if (shape === 4 || shape === 5) return { k: 'tri', a: new THREE.Vector2(e.x, e.z), b: new THREE.Vector2(e.x + e.sx, e.z), c: new THREE.Vector2(e.x, e.z + e.sz) };
+    if (shape === 3) return { k: 'circle', x: e.x, z: e.z, r: Math.max(0.08, e.sx * 0.5) };
+    return { k: 'box', x0: e.x, z0: e.z, x1: e.x + e.sx, z1: e.z + e.sz };
   }
-  private addTrigger(e: any) {
-    const t = parseInt(e.type, 16), lo = t & 0xff, kind = (t >> 8) & 0xff;
-    const base = { x0: e.x, z0: e.z, x1: e.x + e.sx, z1: e.z + e.sz, flags: parseInt(e.flags, 16), raw: e };
-    if (lo === 1 && kind === 0) this.triggers.push({ ...base, kind: 'door', arg: e.extra, room: (e.extra >> 8) & 0xff, spawn: (e.extra >> 16) & 0xff });
-    else if (kind === 3) this.triggers.push({ ...base, kind: 'message', arg: (e.extra >> 8) & 0xff });
-    else if (kind === 4) this.triggers.push({ ...base, kind: 'item', arg: e.extra & 0xff });
-    else this.triggers.push({ ...base, kind: 'other', arg: e.extra });
-  }
-  async placeItems(taken: Set<number>, allow: (i: number, it: any) => boolean) {
+  /** enable flags of the collision records (ATR flg bit 0, switched by the WALL command) */
+  syncWalls(on: (i: number) => boolean) { this.shapes = this.wallShapes.filter((x, i) => x && on(i)) as Shape[]; }
+  async placeItems() {
     for (let i = 0; i < this.data.items.length; i++) {
       const it = this.data.items[i];
-      if (taken.has(i) || !allow(i, it)) continue;
       try {
         const o = (await loadGLTF(`items/it_${String(it.id).padStart(3, '0')}.glb`)).scene.clone(true);
         toLambert(o); o.scale.setScalar(0.1); o.position.set(...it.pos); o.rotation.set(it.rot[0], it.rot[2], it.rot[1], 'ZYX');
