@@ -38,7 +38,7 @@ fi
 G=/tmp/cvxg; mkdir -p $G
 if [ ! -s $G/f.bin ]; then curl -sL -o $G/f.bin "https://drive.usercontent.google.com/download?id=1XmromPRRQPSTS66wKcS_SEXGJigBBeWV&export=download&confirm=t"; fi
 if [ ! -d $G/n ]; then
-  cd $G && 7za x -y -ox f.bin "*/biocv_disc/eng/*" "*/biocv_disc/*.*" "*/sa/PS3/*" "*/nativePS3/system/*" -r > /dev/null
+  cd $G && 7za x -y -ox f.bin "*/biocv_disc/eng/*" "*/biocv_disc/*.*" "*/sa/PS3/*" "*/nativePS3/system/*" "*/nativePS3/sound/*" "*/nativePS3/movie/mv_001.pam" -r > /dev/null
   ln -sfn "$G/x/Resident Evil Code Veronica X/NPEB00553-[RESIDENT EVIL CODE Veronica X]/PS3_GAME/USRDIR/BHCV/nativePS3" $G/n
 fi
 ln -sfn $G/n /data/cvx/g

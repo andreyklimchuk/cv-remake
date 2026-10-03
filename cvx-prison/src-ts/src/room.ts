@@ -18,6 +18,8 @@ export class Room {
   outside = new Set<number>();
   floor!: THREE.Mesh;
   itemMeshes = new Map<number, THREE.Object3D>();
+  /** room motions (rmt clips 'rm_XXXX/rNN') of the item models */
+  itemClips = new Map<number, THREE.AnimationClip[]>();
   lights: THREE.PointLight[] = [];
   /** opaque meshes used for camera occlusion tests */
   occluders: THREE.Mesh[] = [];
@@ -89,7 +91,8 @@ export class Room {
     for (let i = 0; i < this.data.items.length; i++) {
       const it = this.data.items[i];
       try {
-        const o = (await loadGLTF(`items/it_${String(it.id).padStart(3, '0')}.glb`)).scene.clone(true);
+        const gl = await loadGLTF(`items/it_${String(it.id).padStart(3, '0')}.glb`), o = gl.scene.clone(true);
+        if (gl.animations.length) this.itemClips.set(i, gl.animations);
         toLambert(o); o.scale.setScalar(0.1); o.position.set(...it.pos); o.rotation.set(it.rot[0], it.rot[2], it.rot[1], 'ZYX');
         this.group.add(o); this.itemMeshes.set(i, o);
       } catch { /* missing model */ }

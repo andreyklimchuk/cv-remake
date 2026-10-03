@@ -47,6 +47,8 @@ export interface EvtHost {
   log?(s: string): void;
   /** sound commands of the scripts (sdfunc.c): see EvtVM.exec 0x15.. */
   snd?(cmd: string, a: number[], w?: Work | null): void;
+  /** room effects: disp (efid, on), mode (efid, mode1), yure (0 = shake amplitude v / 1 = off) */
+  eff?(cmd: 'disp' | 'mode' | 'yure', a: number, v: number): void;
 }
 const ARR = new Set([1, 2, 3, 7, 8, 9, 12, 13, 14, 15, 16, 11]);
 const MTN_ADD: Record<number, number> = { 1: 0x10000, 2: 0x10000, 0: 0x8000, 3: 0x8000, 8: 0x8000, 4: 0x5555, 5: 0x4000, 9: 0x4000, 6: 0x3333, 7: 0x2aaa, 10: 0x2aaa, 11: 0x2000, 12: 0x1999, 13: 0x1555, 14: 0x2492, 15: 0x2000, 16: 0x1c71, 17: 0x1999, 18: 0x1745, 19: 0x1555, 20: 0x1249, 21: 0x1000, 22: 0xe38, 23: 0xccc, 24: 0xba2, 25: 0xaaa };
@@ -114,7 +116,10 @@ export class EvtVM {
   // ---- interpreter core
   private check(n: number) {
     const s = this.s[n]; if (!s) return;
-    this.cur = n; this.p = 0; this.ifel = 0; this.gsp = []; this.ct = this.tasks[0];
+    this.cur = n; this.p = 0; this.ifel = 0; this.gsp = [];
+    // bhInitEvent runs scd0 with bhCetask = bhEtask[0]; bhControlEvent runs scd1 right after the previous
+    // bhEventScheduler2, which leaves bhCetask = &bhEtask[15] (so scd1 never touches the work of task 0)
+    this.ct = this.tasks[n === 0 ? 0 : 15] ?? this.tasks[0];
     this.runLoop();
   }
   private runLoop() {
@@ -245,6 +250,9 @@ export class EvtVM {
       }
       case 0x5e: this.host.movie(b(1)); return adv(1);
       // ---- sound (event.c bhBgmOn.. / sdfunc.c); fades in 1/100 s (x10), volumes in driver units (negative)
+      // bhVoiceOn: [target, VoiceNo(u16), mode, fade*10, work]; bhVoiceOff: [fade*10]
+      case 0x19: this.host.snd?.('voice', [u16(2), b(4), b(5) * 10]); return adv(1);
+      case 0x1a: this.host.snd?.('voiceOff', [b(1) * 10]); return adv(1);
       case 0x15: this.host.snd?.('bgm', [b(1), b(2) * 10, -45]); return adv(1);
       case 0x16: this.host.snd?.('bgmOff', [b(1) * 10]); return adv(1);
       case 0xa6: this.host.snd?.('bgm', [b(1), b(2) * 10, -b(3)]); return adv(1);
@@ -296,9 +304,19 @@ export class EvtVM {
         if (w) { if (v === 0x8f || v === 0x90) w.paused = false; else if (v === 0x92) w.paused = b(6) === 4; else if (v === 0x93) w.paused = b(5) === 4; }
         return adv(1);
       }
-      case 0x69: this.common(t); return adv(1);
+      case 0x69: {
+        // interpolation subs (1c-21, 2b-2d) consume one byte less than their table length: the trailing 0xfe is
+        // then executed as bhEvtNext, i.e. each step of a FOR loop waits one frame (Common_controll cases 28-33, 43-45)
+        this.common(t); const sb = b(1);
+        if (((sb >= 0x1c && sb <= 0x21) || (sb >= 0x2b && sb <= 0x2d)) && b(L - 1) === 0xfe) { this.p += L - 1; return 1; }
+        return adv(1);
+      }
       case 0x81: { const busy = !!(this.st & 0x40000) || !!(this.st & 8); return adv(busy ? (b(1) ? 0 : 1) : (b(1) ? 1 : 0)); }
       case 0x9b: return adv(this.host.moviePlaying() ? 0 : 1);
+      // effects (bhEffDispSet / bhEffModeSet / bhEffAmbSet) and bhCamYureSet
+      case 0x43: this.host.eff?.('disp', b(1), b(2)); return adv(1);
+      case 0x91: this.host.eff?.('mode', b(1), b(2)); return adv(1);
+      case 0x5a: this.host.eff?.('yure', b(1), u16(2)); return adv(1);
       case 0xbc: { const k = this.tasks[b(1)]; if (k) k.status = 0; return adv(1); }
       // ---- flow control
       case 0xf3: case 0xfd: {

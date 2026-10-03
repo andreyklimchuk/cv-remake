@@ -14,6 +14,7 @@ import { EvtVM, atrFrom, newFlags, type EvtFlags, type EvtHost, type Atr } from 
 import { loadJSON } from './assets';
 import { ITEM_NAMES, SYSMES } from './sysmes';
 import { playMovie } from './movie';
+import { Effects } from './effects';
 
 export interface SaveData { hp?: number; room: string; pos?: number; x: number; y: number; z: number; h: number; inv: any[]; eq?: number | null; std?: number | null; evt?: { f: EvtFlags; rcase: number }; t: number }
 /** rooms converted from the PS3 data (room file = rm_<stage><room><case>) */
@@ -33,6 +34,7 @@ const pad = (n: number, w: number) => String(n).padStart(w, '0');
 export class Game implements EvtHost {
   renderer: THREE.WebGLRenderer;
   scene = new THREE.Scene();
+  fx = new Effects();
   cam = new CameraRig();
   input = new Input();
   player = new Player();
@@ -68,7 +70,7 @@ export class Game implements EvtHost {
     this.invScreen.onEquipChange = () => { this.player.setLighter(this.invScreen.standard === LIGHTER); this.player.setKnife(this.invScreen.equipped === KNIFE); this.player.setGun(this.invScreen.equipped === HANDGUN); };
     this.invScreen.onUseItem = (id) => this.useItem(id);
     this.scene.background = new THREE.Color(0);
-    this.scene.add(this.ambient, this.hemi, this.player.root);
+    this.scene.add(this.ambient, this.hemi, this.player.root, this.fx.group);
     addEventListener('resize', () => this.resize());
     this.resize();
     const cm = localStorage.getItem('cvx.cam'); if (cm === 'behind') this.cam.mode = 'behind';
@@ -138,6 +140,7 @@ export class Game implements EvtHost {
     this.syncPlayerWork();
     this.cam.forced = null; this.wallSig = '';
     this.audio.room(vm.stg, vm.room, vm.rcase); this.audio.listener = this.cam.cam;
+    this.fx.floors = vm.flr; await this.fx.load(id);
     vm.init(ev.scripts);
     await this.spawnEnemies(r);
     this.applyWorks();
@@ -203,6 +206,8 @@ export class Game implements EvtHost {
       o.visible = !w.gone && !w.hidden;
       if (w.posSet) { o.position.set(w.px, w.py, w.pz); w.posSet = false; }
       if (w.angSet) { o.rotation.set(w.ax, w.ay, w.az, 'ZYX'); w.angSet = false; }
+      // room motion of the item model (MOTION kind 3): the clip carries the world placement relative to the work position
+      if (w.mtnKind === 3 && w.mtn >= 0) this.nodeMotion(o, r.itemClips.get(i), w);
     }
     for (const [i, o] of r.objMeshes) {
       const w = vm.works.get('2:' + i); if (!w) continue;
@@ -311,7 +316,7 @@ export class Game implements EvtHost {
     if (f === 1) o = this.player.root;
     else if (f === 2) o = this.chars.find((c) => c.index === n)?.m.root ?? [...this.zombies, ...this.dogs].find((z) => z.index === n)?.root;
     else if (f === 3) o = r.objMeshes.get(n);
-    else if (f === 4) o = r.itemMeshes.get(n);
+    else if (f === 4) { o = r.itemMeshes.get(n); o = o?.getObjectByName('n000') ?? o; }
     if (!o) return null;
     // lkono > 0: offset in the space of that bone (njCalcPoint(owP[lkono].mtx, l)); bone numbering as boneObj
     if (ono > 0 && f <= 4) { const b = this.boneObj(f - 1, n, ono); if (b && b !== o) o = b; }
@@ -328,12 +333,21 @@ export class Game implements EvtHost {
     const a = m.action; if (!a) return;
     a.time = Math.min(w.frm / 65536 / 30, a.getClip().duration); m.mixer.update(0);
   }
+  private mixers = new WeakMap<THREE.Object3D, { mixer: THREE.AnimationMixer; cur: string; action: THREE.AnimationAction | null }>();
+  /** rmt clip on a plain node hierarchy (items): time = frm_no (16.16) */
+  private nodeMotion(o: THREE.Object3D, clips: THREE.AnimationClip[] | undefined, w: { mtn: number; frm: number }) {
+    const name = `${this.roomId}/r${pad(w.mtn, 2)}`, clip = clips?.find((c) => c.name === name); if (!clip) return;
+    let m = this.mixers.get(o); if (!m) { m = { mixer: new THREE.AnimationMixer(o), cur: '', action: null }; this.mixers.set(o, m); }
+    if (m.cur !== name) { m.mixer.stopAllAction(); m.action = m.mixer.clipAction(clip); m.action.setLoop(THREE.LoopOnce, 1); m.action.clampWhenFinished = true; m.action.play(); m.action.paused = true; m.cur = name; }
+    m.action!.time = Math.min(w.frm / 65536 / 30, clip.duration); m.mixer.update(0);
+  }
   /** one 30 Hz frame of the event system */
   private evtFrame() {
     const vm = this.vm;
     this.syncPlayerWork();
     this.floorCheck();
     vm.tick();
+    this.fx.update(this.cam.cam);
     this.cam.ev.step();
     this.applyWorks();
     if (vm.cb & 0x10 && !this.dialog) this.itemScreen();
@@ -363,9 +377,12 @@ export class Game implements EvtHost {
   door(_attr: number, stg: number, room: number, pos: number) { this.pendingDoor = { stg, room, pos }; }
   movie(no: number) {
     this.movieOn = true;
+    // PlayStartMovieEx: StopBgm(0); StopVoice(0)
+    this.audio.bgmOff(0); this.audio.voiceOff(0);
     playMovie(this.ui.stage, `mv_${pad(no, 3)}`).finally(() => { this.movieOn = false; });
   }
   moviePlaying() { return this.movieOn; }
+  eff(cmd: 'disp' | 'mode' | 'yure', a: number, v: number) { if (cmd === 'disp') this.fx.disp(a, v); else if (cmd === 'mode') this.fx.mode(a, v); else this.fx.yure(a, v); }
   /** script bone number -> node: the player model uses the original numbering; the cutscene NPC models (27 nodes)
    *  lack the face parts 6..14 (-> head 5) so their bones >= 15 are node - 4 (18 / 22 = wrists) */
   private boneObj(kind: number, idx: number, bone: number): THREE.Object3D | undefined {
@@ -420,6 +437,8 @@ export class Game implements EvtHost {
       case 'bgm': A.bgm(a[0], a[1], a[2]); break;
       case 'bgm2': A.bgm(a[0], 100, a[1]); break;
       case 'bgmOff': A.bgmOff(a[0]); break;
+      case 'voice': A.voice(a[0], a[1] === 1 ? a[2] : 0); break;
+      case 'voiceOff': A.voiceOff(a[0]); break;
       case 'se': A.eventSe(a[0], a[3], a[4] === 0 ? this.bonePos(a[1], a[2], 0) : undefined); break;
       case 'seOff': A.eventSeOff(a[0]); break;
       case 'bgSe': A.bgSe(a[0], a[1], a[2]); break;
@@ -576,15 +595,23 @@ export class Game implements EvtHost {
     for (const c of codes) { this.input.down.add(c); this.input.pressed.add(c); }
     for (let t = 0; t < sec; t += 1 / 30) { this.step(1 / 30); this.input.pressed.clear(); }
     for (const c of codes) this.input.down.delete(c);
-    this.renderer.render(this.scene, this.cam.cam);
+    this.render();
   }
   loop = () => {
     requestAnimationFrame(this.loop);
     const dt = Math.min(this.clock.getDelta(), 1 / 10);
     this.step(dt);
-    this.renderer.render(this.scene, this.cam.cam);
+    this.render();
     this.input.endFrame();
   };
+  /** scene + effects; bhCamYureSet offsets the camera position (cam.ofx..ofz) */
+  render() {
+    const c = this.cam.cam, of = this.fx.of;
+    c.position.x += of[0] * 0.1; c.position.y += of[1] * 0.1; c.position.z += of[2] * 0.1; c.updateMatrixWorld();
+    this.fx.draw(c);
+    this.renderer.render(this.scene, c);
+    c.position.x -= of[0] * 0.1; c.position.y -= of[1] * 0.1; c.position.z -= of[2] * 0.1; c.updateMatrixWorld();
+  }
   step(dt: number) {
     const inp = this.input;
     this.playTime += dt;
