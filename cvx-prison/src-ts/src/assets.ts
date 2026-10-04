@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { AMB_U, type AmbCat } from './light';
 
 declare global { interface Window { __ASSETS?: Record<string, string> } }
 
@@ -23,8 +24,11 @@ export async function loadJSON<T = any>(p: string): Promise<T> {
   return r.json() as Promise<T>;
 }
 
-/** Convert glTF PBR materials into cheap Lambert ones (the original game used simple vertex lighting). */
-export function toLambert(root: THREE.Object3D) {
+/** Convert glTF PBR materials into Lambert ones lit like the original (Ninja chunk easy multi light):
+ * textures stay in their stored (gamma) space and the renderer outputs without conversion, so the lighting math runs on
+ * the same values as on the console; the ambient term is the room's ambient entry of the model category (light.ts). */
+const AMB_CHUNK = THREE.ShaderChunk.lights_fragment_begin.replace('getAmbientLightIrradiance( ambientLightColor )', 'uAmb');
+export function toLambert(root: THREE.Object3D, cat: AmbCat = 'chr') {
   root.traverse((o) => {
     const m = o as THREE.Mesh;
     if (!m.isMesh) return;
@@ -38,8 +42,17 @@ export function toLambert(root: THREE.Object3D) {
         opacity: s.opacity,
       };
       const out = unlit ? new THREE.MeshBasicMaterial(p as any) : new THREE.MeshLambertMaterial(p);
-      out.name = s.name; out.userData = { ...s.userData };
-      if (out.map) out.map.anisotropy = 4;
+      out.name = s.name; out.userData = { ...s.userData, amb: cat };
+      if (out.map) { out.map.anisotropy = 4; if (out.map.colorSpace !== THREE.NoColorSpace) { out.map.colorSpace = THREE.NoColorSpace; out.map.needsUpdate = true; } }
+      if (!unlit) {
+        // Ninja chunk material (DA, 0xb2b2b2): diffuse = ambient reflectance 0.7 on the room / character / object models
+        if (cat !== 'inv') out.color.multiplyScalar(0xb2 / 255);
+        const u = AMB_U[cat];
+        out.onBeforeCompile = (sh) => {
+          sh.uniforms.uAmb = u;
+          sh.fragmentShader = 'uniform vec3 uAmb;\n' + sh.fragmentShader.replace('#include <lights_fragment_begin>', AMB_CHUNK);
+        };
+      }
       return out;
     };
     m.material = Array.isArray(m.material) ? m.material.map(conv) : conv(m.material);
