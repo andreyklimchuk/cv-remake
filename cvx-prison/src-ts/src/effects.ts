@@ -16,9 +16,9 @@ interface O {
   px: number; py: number; pz: number; sx: number; sy: number; sz: number; sxb: number; syb: number; szb: number;
   ax: number; ay: number; az: number; xn: number; yn: number; zn: number; spd: number;
   aox: number; aoy: number; aoz: number; axp: number; ayp: number; azp: number; gpx: number; gpy: number; gpz: number;
-  tex: number; ani: number; bls: number; bld: number; tv: TV[]; exp: UV[] | null; er: ER[] | null; func: 0 | 106 | 107; lkono: number;
+  tex: number; ani: number; bls: number; bld: number; tv: TV[]; exp: UV[] | null; er: ER[] | null; func: 0 | 21 | 106 | 107; lkono: number;
 }
-export interface EftRec { flg: number; id: number; type: number; flr: number; mdlver: number; p: number[]; s: number[]; ax: number; ay: number }
+export interface EftRec { flg: number; id: number; type: number; flr: number; mdlver: number; p: number[]; s: number[]; ax: number; ay: number; lk?: string }
 
 const rnd = Math.random;
 const ANG = Math.PI * 2 / 65536;
@@ -123,11 +123,15 @@ export class Effects {
     for (const o of this.eff) o.flg = 0;
     this.of = [0, 0, 0]; this.windr = this.winds = 0;
     const recs = await loadJSON<EftRec[]>(`eft/${roomId}.json`).catch(() => [] as EftRec[]);
-    for (const r of recs) this.setTb({ flg: r.flg, id: r.id, type: r.type, flr: r.flr, mdlver: r.mdlver, px: r.p[0], py: r.p[1], pz: r.p[2], sx: r.s[0], sy: r.s[1], sz: r.s[2], ax: r.ax, ay: r.ay });
+    for (const r of recs) {
+      const i = this.setTb({ flg: r.flg, id: r.id, type: r.type, flr: r.flr, mdlver: r.mdlver, px: r.p[0], py: r.p[1], pz: r.p[2], sx: r.s[0], sy: r.s[1], sz: r.s[2], ax: r.ax, ay: r.ay });
+      // EF record link block: lkono (3rd word) selects e.g. the page of a bhEff2D texture set
+      if (i >= 0 && r.lk && r.lk.length >= 24) this.eff[i].lkono = parseInt(r.lk.slice(16, 24), 16) | 0;
+    }
     // textures used by this room's effects
     if (!this.index) this.index = await loadJSON<Record<string, number>>('effects/index.json').catch(() => ({}));
     const ids = new Set<number>();
-    for (const r of recs) if (r.id < 100 || r.id >= 400) ids.add(r.id);
+    for (const r of recs) if (r.id < 100 || r.id >= 400) ids.add(r.id === 20 ? r.type : r.id);
     await Promise.all([...ids].flatMap((id) => Array.from({ length: this.index![id] ?? 0 }, (_, k) => this.texture(id, k))));
   }
   private index: Record<string, number> | null = null;
@@ -137,8 +141,15 @@ export class Effects {
     if (k >= (this.index?.[id] ?? 0)) { this.tex.set(key, null); return null; }
     const p = `effects/${key}.png`;
     if (window.__ASSETS && !window.__ASSETS[p]) { this.tex.set(key, null); return null; }
-    return this.loader.loadAsync(assetUrl(p)).then((t) => { t.flipY = false; t.colorSpace = THREE.SRGBColorSpace; t.magFilter = THREE.LinearFilter; this.tex.set(key, t); return t; }, () => { this.tex.set(key, null); return null; });
+    return this.loader.loadAsync(assetUrl(p)).then((t) => { t.flipY = false; t.colorSpace = THREE.NoColorSpace; t.magFilter = THREE.LinearFilter; this.tex.set(key, t); return t; }, () => { this.tex.set(key, null); return null; });
   }
+  /** screen-space layer (640x480 of the original) for bhEff2D sprites and the bhDraw021 cinema bars */
+  layer = document.createElement('div');
+  private l2d = new Map<number, HTMLDivElement>();
+  private bars: HTMLDivElement | null = null;
+  lang: 'ru' | 'en' = 'ru';
+  /** WORK 4 n + POS / bhCommonCtr: the event script moves an effect work (game units) */
+  setPos(i: number, x: number, y: number, z: number) { const o = this.eff[i]; o.px = x; o.py = y; o.pz = z; }
   disp(i: number, on: number) { const o = this.eff[i]; if (on === 0) o.stflg |= 0x1000000; else o.stflg &= ~0x1000000; }
   mode(i: number, v: number) { this.eff[i].mode1 = v; }
   yure(kind: number, v: number) { if (kind === 0) this.of = [0.01 * v * rnd(), 0.01 * v * rnd(), 0.01 * v * rnd()]; else this.of = [0, 0, 0]; }
@@ -174,11 +185,44 @@ export class Effects {
     const v = new THREE.Vector3(0, 0, z).applyEuler(new THREE.Euler(ax * ANG, ay * ANG, 0, 'ZYX')); return v;
   }
 
+  /** bhEff2D: screen-space textured quad, texture set `type`, page lkono; size (sx/4)*512 x (sy/4)*512 at (px, py) */
+  private e2D(op: O) {
+    if (op.mode0 === 0) { op.flg |= 0x1000000; op.tex = op.type; op.ani = op.lkono; op.px = op.py = op.pz = 0; this.uv4(op, 0, 0, 1, 1); for (const t of op.tv) t.col = 0xFFE0E0E0; op.bls = 8; op.bld = 6; op.mode0 = 1; return; }
+    if (op.mode1 === 0) { op.flg |= 0x1000000; return; }
+    op.flg &= ~0x1000000; this.trs2d.push(op);
+  }
+  /** bhEff021: cinema bars (sys->cb_flg 0x40) while mode1 != 0 */
+  private e021(op: O) { if (op.mode1 !== 0) { op.func = 21; this.fnc.push(op); } else op.flg |= 0x1000000; }
+  private trs2d: O[] = [];
+  /** draw the 2D layer (DOM, 640x480 coordinates scaled to the stage) */
+  draw2D() {
+    const seen = new Set<number>();
+    for (const op of this.trs2d) {
+      if (op.stflg & 0x1000000) continue;
+      const i = this.eff.indexOf(op); seen.add(i);
+      let el = this.l2d.get(i);
+      const key = `ef_${String(op.tex).padStart(3, '0')}_${op.ani}`, src = this.lang === 'ru' ? `effects/${key}_ru.png` : `effects/${key}.png`;
+      if (!el) { el = document.createElement('div'); el.style.cssText = 'position:absolute;background-size:100% 100%;image-rendering:auto'; this.layer.appendChild(el); this.l2d.set(i, el); }
+      if (el.dataset.src !== src) { el.dataset.src = src; const ok = !window.__ASSETS || window.__ASSETS[src]; el.style.backgroundImage = `url(${assetUrl(ok ? src : `effects/${key}.png`)})`; }
+      const w = (op.sx / 4) * 512 * (op.tv[1].u - op.tv[0].u), h = (op.sy / 4) * 512 * (op.tv[2].v - op.tv[0].v);
+      // vertex colour 0xFFE0E0E0 modulates the texture (same 8-bit scale as the 3D sprites: 0xE0 -> 0.88)
+      el.style.left = `${(op.px / 640) * 100}%`; el.style.top = `${(op.py / 480) * 100}%`; el.style.width = `${(w / 640) * 100}%`; el.style.height = `${(h / 480) * 100}%`;
+      el.style.display = 'block'; el.style.filter = 'brightness(0.88)';
+    }
+    for (const [i, el] of this.l2d) if (!seen.has(i)) el.style.display = 'none';
+    const barsOn = this.fnc.some((o) => o.func === 21);
+    if (barsOn && !this.bars) {
+      this.bars = document.createElement('div');
+      this.bars.style.cssText = 'position:absolute;inset:0;pointer-events:none;background:linear-gradient(to bottom,#000 0,#000 8.333%,transparent 21.667%,transparent 78.333%,#000 91.667%,#000 100%)';
+      this.layer.appendChild(this.bars);
+    }
+    if (this.bars) this.bars.style.display = barsOn ? 'block' : 'none';
+  }
   /** bhControlEffect: one 30 Hz frame */
   update(camera: THREE.Camera) {
     camera.getWorldPosition(this.camPos).multiplyScalar(10); camera.getWorldDirection(this.camDir);
     for (const op of this.fnc) if (op.func === 107) for (const e of op.er!) e.ay++;
-    this.trs.length = 0; this.fnc.length = 0;
+    this.trs.length = 0; this.fnc.length = 0; this.trs2d.length = 0;
     for (let i = 0; i < 512; i++) {
       const op = this.eff[i];
       if (!(op.flg & 1) || op.stflg & 0x1000000) continue;
@@ -189,6 +233,8 @@ export class Effects {
   private run(op: O) {
     switch (op.id) {
       case 15: return this.e015(op);
+      case 20: return this.e2D(op);
+      case 21: return this.e021(op);
       case 32: case 36: case 39: case 52: case 54: case 59: case 70: case 71: case 72: case 73: case 74: case 75: case 76: case 77: case 78: case 79:
       case 31: case 33: case 34: case 35: case 41: case 45: op.flg = 0; return; // bhEffDmy (texture holders)
       case 100: return this.e100(op);

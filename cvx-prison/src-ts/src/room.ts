@@ -1,11 +1,14 @@
 import * as THREE from 'three';
 import { loadGLTF, loadJSON, toLambert } from './assets';
+import type { LgtRec, AmbRec } from './light';
 
-export interface CamDef { zone: [number, number, number, number]; pos: [number, number, number]; pitch: number; yaw: number; roll: number; flags: string; lim?: [number, number, number, number]; lens?: number }
+export interface CamDef { zone: [number, number, number, number]; pos: [number, number, number]; pitch: number; yaw: number; roll: number; flags: string; lim?: [number, number, number, number]; lens?: number; hid?: number[]; hidl?: number[] }
 export interface RoomData {
   id: string; cameras: CamDef[]; collision: any[]; triggers: any[]; areas?: any[]; enemies?: { id: number; flags: string; pos: [number, number, number]; rot: [number, number, number]; ex?: string }[]; spawns: { pos: [number, number, number]; ang: number }[];
   messages: string[]; items: { id: number; name?: string; pos: [number, number, number]; rot: [number, number, number] }[];
   objects: { id: number; model?: string; flags: string; pos: [number, number, number]; rot: [number, number, number] }[]; lights: any[];
+  /** original light tables (conv/light_patch.py) */
+  lgt?: LgtRec[]; evl?: LgtRec[]; amb?: AmbRec;
 }
 export type Shape = { k: 'box'; x0: number; z0: number; x1: number; z1: number } | { k: 'circle'; x: number; z: number; r: number } | { k: 'tri'; a: THREE.Vector2; b: THREE.Vector2; c: THREE.Vector2 };
 
@@ -24,12 +27,38 @@ export class Room {
   /** opaque meshes used for camera occlusion tests */
   occluders: THREE.Mesh[] = [];
   constructor(public data: RoomData) {}
+  /** room model objects by index (rom->mdl.objP[i]) */
+  nodes = new Map<number, THREE.Object3D>();
+  /** cut.c bhSetHideObjLgt: objects whose bit is set in the camera's hidobj mask are not drawn (evalflags 0x8) */
+  setHidden(mask: number[]) {
+    // NJD_EVAL_HIDE skips only the object's own model, its children are still drawn -> hide the node's own primitives
+    for (const i of this.nodes.keys()) {
+      const hide = !!((mask[i >> 5] ?? 0) & (0x80000000 >>> (i & 31)));
+      for (const m of this.ownMeshes(i)) m.geometry.setDrawRange(0, hide ? 0 : Infinity);
+    }
+  }
+  /** primitives of room object i itself (not of its child objects) */
+  ownMeshes(i: number): THREE.Mesh[] {
+    const o = this.nodes.get(i); if (!o) return [];
+    const own: THREE.Mesh[] = [];
+    if ((o as THREE.Mesh).isMesh) own.push(o as THREE.Mesh);
+    for (const c of o.children) if ((c as THREE.Mesh).isMesh && !/^n\d+$/.test(c.name)) own.push(c as THREE.Mesh);
+    return own;
+  }
+  /** meshes hidden by a hide mask (used to ignore them in visibility checks) */
+  hiddenMeshes(mask: number[] | undefined): Set<THREE.Object3D> {
+    const s = new Set<THREE.Object3D>(); if (!mask) return s;
+    for (const i of this.nodes.keys()) if ((mask[i >> 5] ?? 0) & (0x80000000 >>> (i & 31))) for (const m of this.ownMeshes(i)) s.add(m);
+    return s;
+  }
   static async load(id: string) { const d = await loadJSON<RoomData>(`rooms/${id}.json`); const r = new Room(d); await r.build(); return r; }
   async build() {
     const d = this.data;
     const scene = (await loadGLTF(`rooms/${d.id}.glb`)).scene.clone(true);
-    scene.scale.setScalar(0.1); toLambert(scene); this.group.add(scene); scene.updateMatrixWorld(true);
+    scene.scale.setScalar(0.1); toLambert(scene, 'rom'); this.group.add(scene); scene.updateMatrixWorld(true);
     this.buildFloor(scene);
+    // room model objects in Ninja walk order (conv_mdl names them nNNN) for the camera hide masks
+    scene.traverse((o) => { const m = /^n(\d+)$/.exec(o.name); if (m) this.nodes.set(+m[1], o); });
     scene.traverse((o) => {
       const m = o as THREE.Mesh; if (!m.isMesh || !m.visible) return;
       const mat = (Array.isArray(m.material) ? m.material[0] : m.material) as THREE.Material & { alphaTest?: number };
@@ -45,10 +74,10 @@ export class Room {
       const outside = p.x < bb.min.x - 0.05 || p.z < bb.min.z - 0.05 || p.x > bb.max.x + 0.05 || p.z > bb.max.z + 0.05;
       const o = (await loadGLTF(`objects/${ob.model}.glb`)).scene.clone(true);
       if (outside) { this.outside.add(i); o.visible = false; }
-      toLambert(o); o.scale.setScalar(0.1); o.position.copy(p); o.rotation.set(ob.rot[0], ob.rot[2], ob.rot[1], 'ZYX'); o.name = ob.model;
+      toLambert(o, 'obj'); o.scale.setScalar(0.1); o.position.copy(p); o.rotation.set(ob.rot[0], ob.rot[2], ob.rot[1], 'ZYX'); o.name = ob.model;
       this.group.add(o); this.objMeshes.set(i, o);
     }
-    for (const l of d.lights) this.addLight(l);
+    // lights: light.ts (RoomLights) uses the original tables d.lgt / d.evl
     this.wallShapes = d.collision.map((c) => this.colliderShape(c));
     this.shapes = this.wallShapes.filter((x, i) => x && (parseInt(d.collision[i].type, 16) & 1)) as Shape[];
   }
@@ -93,7 +122,7 @@ export class Room {
       try {
         const gl = await loadGLTF(`items/it_${String(it.id).padStart(3, '0')}.glb`), o = gl.scene.clone(true);
         if (gl.animations.length) this.itemClips.set(i, gl.animations);
-        toLambert(o); o.scale.setScalar(0.1); o.position.set(...it.pos); o.rotation.set(it.rot[0], it.rot[2], it.rot[1], 'ZYX');
+        toLambert(o, 'itm'); o.scale.setScalar(0.1); o.position.set(...it.pos); o.rotation.set(it.rot[0], it.rot[2], it.rot[1], 'ZYX');
         this.group.add(o); this.itemMeshes.set(i, o);
       } catch { /* missing model */ }
     }

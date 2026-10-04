@@ -315,6 +315,6 @@ export class Player {
     const fl = 1 + Math.sin(this.flameT * 23) * 0.08 + Math.sin(this.flameT * 37.7) * 0.06 + (Math.random() - 0.5) * 0.08;
     this.flame.position.copy(top); this.flame.scale.set(1, fl, 1);
     this.flameLight.position.copy(top).add(new THREE.Vector3(0, 0.05, 0));
-    this.flameLight.intensity = this.armBlend > 0.6 ? 2.6 * fl : 0;
+    // the flame's light is the room light lgtp[1] (light.ts, player.c wpnr_no 1)
   }
 }

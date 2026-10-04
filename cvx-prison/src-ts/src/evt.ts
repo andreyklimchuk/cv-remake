@@ -24,7 +24,7 @@ export class Work {
   link: { kind: number; idx: number; bone: number; lo: [number, number, number] } | null = null;
   constructor(public kind: number, public idx: number) {}
 }
-interface Task { status: number; p: number; script: number; loop: number; cnt: number[]; cnt2: number; cnt3: number; lstack: number[]; lcond: number[]; data: number; work: Work | null; cno: number; bp: number[]; ba: number[]; addp: number[]; adda: number[]; ips: number[][]; ian: number[][] }
+interface Task { elgt?: number[]; status: number; p: number; script: number; loop: number; cnt: number[]; cnt2: number; cnt3: number; lstack: number[]; lcond: number[]; data: number; work: Work | null; cno: number; bp: number[]; ba: number[]; addp: number[]; adda: number[]; ips: number[][]; ian: number[][] }
 export interface EvtHost {
   hasItem(id: number): boolean;
   loseItem(id: number): void;
@@ -49,6 +49,8 @@ export interface EvtHost {
   snd?(cmd: string, a: number[], w?: Work | null): void;
   /** room effects: disp (efid, on), mode (efid, mode1), yure (0 = shake amplitude v / 1 = off) */
   eff?(cmd: 'disp' | 'mode' | 'yure', a: number, v: number): void;
+  /** light.c commands: set (v2 off, no, table), type (no, type, aspd), param (no, table, r, g, b, nr, fr in 1/100), amb (r, g, b, entry) */
+  light?(cmd: 'set' | 'type' | 'param' | 'amb', a: number[]): void;
 }
 const ARR = new Set([1, 2, 3, 7, 8, 9, 12, 13, 14, 15, 16, 11]);
 const MTN_ADD: Record<number, number> = { 1: 0x10000, 2: 0x10000, 0: 0x8000, 3: 0x8000, 8: 0x8000, 4: 0x5555, 5: 0x4000, 9: 0x4000, 6: 0x3333, 7: 0x2aaa, 10: 0x2aaa, 11: 0x2000, 12: 0x1999, 13: 0x1555, 14: 0x2492, 15: 0x2000, 16: 0x1c71, 17: 0x1999, 18: 0x1745, 19: 0x1555, 20: 0x1249, 21: 0x1000, 22: 0xe38, 23: 0xccc, 24: 0xba2, 25: 0xaaa };
@@ -308,12 +310,23 @@ export class EvtVM {
         // interpolation subs (1c-21, 2b-2d) consume one byte less than their table length: the trailing 0xfe is
         // then executed as bhEvtNext, i.e. each step of a FOR loop waits one frame (Common_controll cases 28-33, 43-45)
         this.common(t); const sb = b(1);
-        if (((sb >= 0x1c && sb <= 0x21) || (sb >= 0x2b && sb <= 0x2d)) && b(L - 1) === 0xfe) { this.p += L - 1; return 1; }
+        // the same for the per-frame adds 02 / 03 / 11 / 12 (bhScePtr += 2: '69 02 00 fe' -> 'fe' waits a frame)
+        if (((sb >= 0x1c && sb <= 0x21) || (sb >= 0x2b && sb <= 0x2d) || sb === 0x02 || sb === 0x03 || sb === 0x11 || sb === 0x12) && b(L - 1) === 0xfe) { this.p += L - 1; return 1; }
         return adv(1);
       }
       case 0x81: { const busy = !!(this.st & 0x40000) || !!(this.st & 8); return adv(busy ? (b(1) ? 0 : 1) : (b(1) ? 1 : 0)); }
       case 0x9b: return adv(this.host.moviePlaying() ? 0 : 1);
       // effects (bhEffDispSet / bhEffModeSet / bhEffAmbSet) and bhCamYureSet
+      // lights (light.c): bhLightSet, bhLightTypeSet, bhLightParameterSet, bhLightParameterCSet / Start (FOR interpolation), bhEffAmbSet
+      case 0x35: this.host.light?.('set', [b(1), b(2), b(3)]); return adv(1);
+      case 0x4b: this.host.light?.('type', [b(1), b(2), b(3)]); return adv(1);
+      case 0x78: this.host.light?.('param', [b(1), b(2), u16(4), u16(6), u16(8), u16(10), u16(12)]); return adv(1);
+      case 0x73: t.elgt = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((k) => u16(2 + 2 * k) / 100); return adv(1);
+      case 0x74: {
+        const e = t.elgt ?? [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], fr = t.cnt3 ? t.cnt2 / t.cnt3 : 0, li = (k: number) => e[5 + k] + (e[k] - e[5 + k]) * fr;
+        this.host.light?.('param', [b(1), b(2), li(0) * 100, li(1) * 100, li(2) * 100, li(3) * 100, li(4) * 100]); return adv(0);
+      }
+      case 0x44: this.host.light?.('amb', [b(1), b(2), b(3), b(4)]); return adv(1);
       case 0x43: this.host.eff?.('disp', b(1), b(2)); return adv(1);
       case 0x91: this.host.eff?.('mode', b(1), b(2)); return adv(1);
       case 0x5a: this.host.eff?.('yure', b(1), u16(2)); return adv(1);

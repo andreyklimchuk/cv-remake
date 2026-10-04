@@ -11,14 +11,18 @@ import { LANG, UI, pages, hasChoice } from './text';
 import { Zombie, Dog, EnemyModel } from './enemy';
 import type { Evc } from './evcam';
 import { EvtVM, atrFrom, newFlags, type EvtFlags, type EvtHost, type Atr } from './evt';
-import { loadJSON } from './assets';
+import { loadJSON, loadGLTF, toLambert } from './assets';
 import { ITEM_NAMES, SYSMES } from './sysmes';
 import { playMovie } from './movie';
 import { Effects } from './effects';
+import { RoomLights, patchLightShader } from './light';
+patchLightShader();
+// colours are used as stored (gamma space, like the console) - no sRGB <-> linear conversions
+THREE.ColorManagement.enabled = false;
 
 export interface SaveData { hp?: number; room: string; pos?: number; x: number; y: number; z: number; h: number; inv: any[]; eq?: number | null; std?: number | null; evt?: { f: EvtFlags; rcase: number }; t: number }
 /** rooms converted from the PS3 data (room file = rm_<stage><room><case>) */
-const ROOMS = new Set(['rm_0000', 'rm_0010', 'rm_0020', 'rm_0021', 'rm_0030', 'rm_0031', 'rm_0040', 'rm_0050', 'rm_0060', 'rm_0070', 'rm_0080']);
+const ROOMS = new Set(['rm_0000', 'rm_0010', 'rm_0020', 'rm_0021', 'rm_0030', 'rm_0031', 'rm_0040', 'rm_0050', 'rm_0060', 'rm_0070', 'rm_0080', 'rm_0090', 'rm_0160']);
 /** converted zombie models en01aNN (NN = model variant byte of the enemy record) */
 const NPC_MODELS = new Set(['en91a00', 'en93a00', 'en98a00']);
 const ZOMBIE_VARIANTS = new Set([0, 1, 2, 9, 10, 32, 33]);
@@ -37,6 +41,8 @@ export class Game implements EvtHost {
   renderer: THREE.WebGLRenderer;
   scene = new THREE.Scene();
   fx = new Effects();
+  /** light.c: room / event light tables and ambient */
+  lights = new RoomLights();
   cam = new CameraRig();
   input = new Input();
   player = new Player();
@@ -64,8 +70,12 @@ export class Game implements EvtHost {
   constructor(public ui: UIRoot) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
     this.renderer.setPixelRatio(1);
-    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    // the original lights in the stored texture space (no sRGB decode / encode), see assets.toLambert
+    this.renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
     this.ui.stage.prepend(this.renderer.domElement);
+    // effect 2D layer (bhEff2D / cinema bars) above the 3D view, below messages and the fade
+    this.fx.layer.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:4;overflow:hidden'; this.fx.lang = LANG;
+    this.renderer.domElement.after(this.fx.layer);
     this.msg = new MessageBox(this.ui.msg);
     this.msg.onCursor = () => this.audio.se('cursor');
     this.vm = new EvtVM(this);
@@ -73,7 +83,8 @@ export class Game implements EvtHost {
     this.invScreen.onEquipChange = () => { this.player.setLighter(this.invScreen.standard === LIGHTER); this.player.setKnife(this.invScreen.equipped === KNIFE); this.player.setGun(this.invScreen.equipped === HANDGUN); };
     this.invScreen.onUseItem = (id) => this.useItem(id);
     this.scene.background = new THREE.Color(0);
-    this.scene.add(this.ambient, this.hemi, this.player.root, this.fx.group);
+    this.scene.add(this.lights.group, this.player.root, this.fx.group);
+    this.lights.lockFn = (f, n, l, o) => this.lockPos(f, n, l, o);
     addEventListener('resize', () => this.resize());
     this.resize();
     const cm = localStorage.getItem('cvx.cam'); if (cm === 'behind') this.cam.mode = 'behind';
@@ -144,6 +155,7 @@ export class Game implements EvtHost {
     this.cam.forced = null; this.wallSig = '';
     this.audio.room(vm.stg, vm.room, vm.rcase); this.audio.listener = this.cam.cam;
     this.fx.floors = vm.flr; await this.fx.load(id);
+    this.lights.setRoom(r.data.lgt, r.data.evl, r.data.amb);
     vm.init(ev.scripts);
     await this.spawnEnemies(r);
     this.applyWorks();
@@ -182,6 +194,13 @@ export class Game implements EvtHost {
         m.root.position.set(e.pos[0], e.pos[1], e.pos[2]); m.root.rotation.y = e.rot[1] ?? 0;
         { const w = this.vm.works.get('1:' + i); m.root.visible = !(w && (w.gone || w.hidden)); }
         this.chars.push({ index: i, m }); this.scene.add(m.root);
+      } else if (e.id === 67) {
+        // en67: cockroaches (10 sprites of the original non-skinned model at their stored offsets). Their own movement
+        // routine (en67) is not in the decompilation, so they stay at the stored positions.
+        const w = this.vm.works.get('1:' + i); if (w && (w.gone || w.hidden)) continue;
+        const g = await loadGLTF('npc/en67a00.glb').catch(() => null); if (!g) continue;
+        const o = g.scene.clone(true); toLambert(o, 'chr'); o.position.set(e.pos[0], e.pos[1], e.pos[2]); o.rotation.y = e.rot[1] ?? 0;
+        this.actors.push(o); this.scene.add(o);
       } else console.info(`${this.roomId}: character en${pad(e.id, 2)} (enemy ${i}) not converted`);
     }
   }
@@ -214,10 +233,15 @@ export class Game implements EvtHost {
     }
     for (const [i, o] of r.objMeshes) {
       const w = vm.works.get('2:' + i); if (!w) continue;
-      o.visible = !w.gone && !w.hidden && (!r.outside.has(i) || !!w.link);
+      // objitm.c bhDrawObject: a linked object (flg 0x80) takes the model-hidden flag (stflg 0x1000000) of its parent
+      const pw = w.link ? vm.works.get(`${w.link.kind}:${w.link.kind === 0 ? 0 : w.link.idx}`) : undefined;
+      const gone = w.link ? !!pw?.gone : w.gone;
+      o.visible = !gone && !w.hidden && (!r.outside.has(i) || !!w.link);
       if (w.posSet) { o.position.set(w.px, w.py, w.pz); w.posSet = false; }
       if (w.angSet) { o.rotation.set(w.ax, w.ay, w.az, 'ZYX'); w.angSet = false; }
     }
+    // WORK 4 n: effect works moved by the script (metres here, game units = 0.1 m in O_WRK)
+    for (const [k, w] of vm.works) if (w.kind === 4 && w.posSet) { this.fx.setPos(w.idx, w.px * 10, w.py * 10, w.pz * 10); w.posSet = false; }
     for (const c of this.chars) {
       const w = vm.works.get('1:' + c.index), m = c.m; if (!w) continue;
       m.root.visible = !w.gone && !w.hidden;
@@ -317,7 +341,7 @@ export class Game implements EvtHost {
       }
       this.inv.add(id, ITEM_NAMES[id] ?? '', count);
       vm.cb |= 0x800;
-      if (vm.cb & 0x8000 && id === HANDGUN) { S.equipped = HANDGUN; S.onEquipChange!(); }
+      if (vm.cb & 0x8000 && id === HANDGUN) { S.equipped = HANDGUN; S.standard = null; S.onEquipChange!(); } // one weapon slot: the lighter is put away
       vm.cb &= ~0x8000;
       S.refresh();
       await S.say(pages(SYSMES[158], id));
@@ -364,8 +388,35 @@ export class Game implements EvtHost {
     this.fx.update(this.cam.cam);
     this.cam.ev.step();
     this.applyWorks();
+    this.lightFrame();
     if (vm.cb & 0x10 && !this.dialog) this.itemScreen();
     if (vm.cb & 0x200000) { vm.cb &= ~0x200000; this.saveScreen(); }
+  }
+  /** bhControlLight (30 Hz): event light table while the event camera runs; player.c lights lgtp[1] while the lighter is equipped */
+  private lightFrame() {
+    this.lights.event = this.cam.ev.active;
+    this.lights.lighter(this.weapon() === 1 && this.player.root.visible);
+    this.player.root.updateMatrixWorld(true);
+    this.hideFrame();
+    this.lights.frame();
+  }
+  /** hide masks of the current camera (cut.c bhSetHideObjLgt / bhSetEventHideObjLgt): room objects and lights */
+  private hidSig = '';
+  private hideFrame() {
+    const r = this.room; if (!r) return;
+    const ev = this.cam.ev; let k: { hid?: number[]; hidl?: number[] } | undefined;
+    if (ev.active) k = ev.evc[ev.no]?.keys[Math.min(ev.key, (ev.evc[ev.no]?.keys.length ?? 1) - 1)];
+    else if (this.cam.shown >= 0) k = r.data.cameras[this.cam.shown];
+    const sig = `${r.data.id}|${ev.active}|${k?.hid?.join(',')}|${k?.hidl?.join(',')}`; if (sig === this.hidSig) return; this.hidSig = sig;
+    r.setHidden(k?.hid ?? []); this.lights.hide(ev.active, k?.hidl ?? []);
+  }
+  /** light commands of the scripts (bhLightSet / bhLightTypeSet / bhLightParameterSet / bhEffAmbSet) */
+  light(cmd: string, a: number[]) {
+    const L = this.lights;
+    if (cmd === 'set') L.set(a[0], a[1], a[2]);
+    else if (cmd === 'type') L.type(a[0], a[1], a[2]);
+    else if (cmd === 'param') L.param(a[0], a[1], a[2], a[3], a[4], a[5], a[6]);
+    else if (cmd === 'amb') L.setAmb(a[0], a[1], a[2], a[3]);
   }
   private get inCine() { const w0 = this.vm.works.get('0:0'); return !!(this.vm.st & 4) || !!w0?.scripted || !!w0?.gone; }
 
@@ -629,7 +680,7 @@ export class Game implements EvtHost {
   render() {
     const c = this.cam.cam, of = this.fx.of;
     c.position.x += of[0] * 0.1; c.position.y += of[1] * 0.1; c.position.z += of[2] * 0.1; c.updateMatrixWorld();
-    this.fx.draw(c);
+    this.fx.draw(c); this.fx.draw2D();
     this.renderer.render(this.scene, c);
     c.position.x -= of[0] * 0.1; c.position.y -= of[1] * 0.1; c.position.z -= of[2] * 0.1; c.updateMatrixWorld();
   }

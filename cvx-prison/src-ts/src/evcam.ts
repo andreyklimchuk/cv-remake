@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 /** event camera records exported from data/evc (conv/evc_export.py) */
-export interface EvcKey { flg: number; frame: number; pos: [number, number, number]; ang: [number, number, number]; pers: number; lk: [number, number, number]; l: [number, number, number] }
+export interface EvcKey { flg: number; frame: number; pos: [number, number, number]; ang: [number, number, number]; pers: number; lk: [number, number, number]; l: [number, number, number]; hid?: number[]; hidl?: number[] }
 export interface Evc { flg: number; type: number; nxt: number; keys: EvcKey[] }
 /** world position of a lock target (lkflg 1 player, 2 enemy, 3 object, 4 item, 6 position table) + local offset */
 export type LockFn = (flg: number, no: number, ono: number, l: [number, number, number]) => THREE.Vector3 | null;

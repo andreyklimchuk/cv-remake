@@ -270,14 +270,14 @@ export class InventoryScreen {
     if (!this.r3) {
       const cv = this.q<HTMLCanvasElement>('.chk canvas');
       this.r3 = new THREE.WebGLRenderer({ canvas: cv, antialias: true, alpha: true, preserveDrawingBuffer: true });
-      this.r3.outputColorSpace = THREE.SRGBColorSpace;
+      this.r3.outputColorSpace = THREE.LinearSRGBColorSpace;
     }
     return this.r3;
   }
   private async model(id: number): Promise<THREE.Object3D | null> {
     const n = `it_${String(id).padStart(3, '0')}.glb`;
     let g; try { g = await loadGLTF('inv/' + n); } catch { try { g = await loadGLTF('items/' + n); } catch { return null; } }
-    const o = g.scene.clone(true); toLambert(o);
+    const o = g.scene.clone(true); toLambert(o, 'inv');
     const box = new THREE.Box3().setFromObject(o); const c = box.getCenter(new THREE.Vector3()); const s = box.getSize(new THREE.Vector3()).length() || 1;
     o.position.sub(c); const piv = new THREE.Group(); piv.add(o); piv.scale.setScalar(2 / s);
     return piv;

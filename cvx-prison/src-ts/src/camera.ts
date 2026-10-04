@@ -31,26 +31,14 @@ export class CameraRig {
   /** per camera: walls/ceiling slabs the camera is pressed against (the original culls them) */
   private cut: Set<THREE.Object3D>[] = [];
   private cutOn: Set<THREE.Object3D> | null = null;
+  /** per camera: room objects hidden by its original hidobj mask (cut.c bhSetHideObjLgt), ignored by the visibility checks */
   private computeCuts() {
     this.cut = []; const R = this.room; if (!R) return;
-    const t = this.tmpCam, rc = new THREE.Raycaster(), q = new THREE.Vector3();
-    for (const c of this.cams) {
-      t.position.set(c.pos[0], c.pos[1], c.pos[2]); t.rotation.set(-c.pitch, c.yaw, c.roll, 'YXZ'); t.updateMatrixWorld(true);
-      const cnt = new Map<THREE.Object3D, number>();
-      for (let y = -0.95; y <= 0.951; y += 0.1) for (let x = -0.95; x <= 0.951; x += 0.1) {
-        q.set(x, y, 0.5).unproject(t); rc.set(t.position, q.sub(t.position).normalize()); rc.far = 0.9;
-        const h = rc.intersectObjects(R.occluders, false)[0];
-        if (h) cnt.set(h.object, (cnt.get(h.object) ?? 0) + 1);
-      }
-      const s = new Set<THREE.Object3D>(); for (const [o, n] of cnt) if (n >= 3) s.add(o);
-      this.cut.push(s);
-    }
+    for (const c of this.cams) this.cut.push(R.hiddenMeshes(c.hid));
   }
-  private applyCut(s: Set<THREE.Object3D> | null) {
-    if (s === this.cutOn) return;
-    if (this.cutOn) for (const o of this.cutOn) o.visible = true;
-    this.cutOn = s; if (s) for (const o of s) o.visible = false;
-  }
+  /** the hiding itself is done by Game.hideFrame from `shown` (room camera on screen, -1 = event / follow camera) */
+  private applyCut(s: Set<THREE.Object3D> | null) { this.cutOn = s; }
+  shown = -1;
   setRoom(room: Room) { this.cutOn = null; this.room = room; this.ev.stop(); this.forced = null; this.cams = room.data.cameras; this.computeCuts(); this.cams = room.data.cameras; this.index = -1; this.override = -2; this.follow.init = false; this.trackYaw = null; }
   private inside(c: CamDef, x: number, z: number, m = 0) {
     const [x0, z0, x1, z1] = c.zone;
@@ -96,6 +84,7 @@ export class CameraRig {
   }
   update(p: THREE.Vector3, head: THREE.Vector3, heading: number, snap = false, dt = 1 / 60): boolean {
     const prevIdx = this.index, prevOv = this.override;
+    this.shown = -1;
     if (this.ev.active) { this.applyCut(null); this.ev.apply(this.cam, this.evSub); this.follow.init = false; this.index = -1; return false; }
     if (this.mode === 'behind') { this.applyCut(null); this.updateShoulder(p, head, snap, dt); return false; }
     const forced = this.forced !== null && this.cams[this.forced] ? this.forced : null;
@@ -123,6 +112,7 @@ export class CameraRig {
     if (this.override === -1) { this.applyCut(null); this.updateFollow(p, head, heading, snap || prevOv !== -1, dt); return prevOv !== -1; }
     const ci = this.override >= 0 ? this.override : idx;
     const c = this.cams[ci]; if (!c) return false;
+    this.shown = ci;
     this.applyCut(this.cut[ci]?.size ? this.cut[ci] : null);
     const changed = ci !== (prevOv >= 0 ? prevOv : prevIdx) || prevOv === -1;
     this.cam.fov = FOV; this.cam.updateProjectionMatrix();

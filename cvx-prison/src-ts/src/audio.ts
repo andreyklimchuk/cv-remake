@@ -6,9 +6,9 @@ const SE = ['door_knob', 'door_open', 'door_close', 'typewriter', 'gun_shot', 'g
 interface BankSample { f: string; n: number; sr: number; loop?: [number, number] }
 interface BankList { s: number; v: number; p?: number; l?: number }
 interface Bank { samples: BankSample[]; lists: Record<string, BankList> }
-const ROOM_BANKS = new Set(['000', '002', '003', '004', '005', '006', '007', '008']);
-const BG_BANKS = new Set(['002', '003', '005', '008']);
-const PC_BANKS = ['000_0', '003_0', '003_1', '005_0', '006_0', '007_0'];
+const ROOM_BANKS = new Set(['000', '002', '003', '004', '005', '006', '007', '008', '009']);
+const BG_BANKS = new Set(['002', '003', '005', '008', '016']);
+const PC_BANKS = ['000_0', '003_0', '003_1', '005_0', '006_0', '007_0', '010_0', '014_0'];
 /** ADX / sound-driver volume curve (adxwrap.c AdxVolTbl): volume units 0..-127 -> 0.1 dB */
 const VOLTBL = (() => { const t: number[] = []; for (let i = 0; i < 128; i++) t.push(i <= 32 ? -2 * i : i <= 64 ? -64 - 6 * (i - 32) : i <= 96 ? -256 - 8 * (i - 64) : i < 127 ? -512 - 16 * (i - 96) : -999); return t; })();
 const unitsDb = (u: number) => VOLTBL[Math.max(0, Math.min(127, Math.round(-u)))] / 10;
@@ -85,7 +85,9 @@ export class Audio {
     let pc = PC_BANKS[0];
     for (const b of PC_BANKS) if (+b.slice(0, 3) <= +srr && (b.endsWith('_0') || +b[4] === rcase)) pc = b;
     if (PC_BANKS.includes(`${pad(+srr, 3)}_${rcase}`)) pc = `${pad(+srr, 3)}_${rcase}`;
-    if (srr === '003') pc = '003_1'; // pc_003_0 holds only floor lists 0/1
+    // the yard rooms 002 / 003 (burning car, cemetery) use the footstep set of the next rooms (pc_005_0: floor 3 = gravel
+    // pc_003_0/01), as heard in the original; the PS3 room -> pc table itself is not readable
+    if (srr === '002' || srr === '003') pc = '005_0';
     this.pcBank = `pc_${pc}`;
     for (const k of [...this.slots.keys()]) if (!k.startsWith('bg')) this.stop(k);
     for (const b of [this.rmBank, this.bgBank, this.pcBank, 'rm_common']) if (b) this.bank(b);

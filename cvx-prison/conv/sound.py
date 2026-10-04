@@ -62,9 +62,9 @@ def bgm(names):
         print('bgm',hex(rid),nm,idx[rid])
     json.dump(idx,open(OUT+'/bgm.json','w'),separators=(',',':'))
 if __name__=='__main__':
-    for n in ['000','002','003','004','005','006','007','008']: bank(f'{G}/se/room/rm_000/rm_{n}_0',f'rm_{n}_0')
+    for n in ['000','002','003','004','005','006','007','008','009']: bank(f'{G}/se/room/rm_000/rm_{n}_0',f'rm_{n}_0')
     bank(f'{G}/se/room/rm_common','rm_common')
     bank(f'{G}/se/core/sys','sys')
-    for n in ['002','003','005','008']: bank(f'{G}/se/bg/bg_{n}_0',f'bg_{n}_0')
-    for n in ['000_0','003_0','003_1','005_0','006_0','007_0']: bank(f'{G}/se/pc/pc_{n}',f'pc_{n}')
+    for n in ['002','003','005','008','016']: bank(f'{G}/se/bg/bg_{n}_0',f'bg_{n}_0')
+    for n in ['000_0','003_0','003_1','005_0','006_0','007_0','010_0','014_0']: bank(f'{G}/se/pc/pc_{n}',f'pc_{n}')
     bgm({'main00','main01','sub_01','sub_02','sub_03','sub_04','sub_05','sub_08','sub_31','sub_32','sub_39','sub_70'})
