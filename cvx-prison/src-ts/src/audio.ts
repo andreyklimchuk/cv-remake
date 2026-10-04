@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 import { assetUrl } from './assets';
 /** UI / door / weapon sounds already decoded from the PS3 banks (sys, door_000, arms_000). */
-const SE = ['door_knob', 'door_open', 'door_close', 'typewriter', 'cursor', 'confirm', 'cancel', 'gun_shot', 'gun_shell', 'gun_empty', 'gun_rl1', 'gun_rl2', 'gun_rl3'];
+const SE = ['door_knob', 'door_open', 'door_close', 'typewriter', 'gun_shot', 'gun_shell', 'gun_empty', 'gun_rl1', 'gun_rl2', 'gun_rl3'];
 /** SE banks converted by conv/sound.py (sound/se/**: .spc samples + .srq request lists). */
 interface BankSample { f: string; n: number; sr: number; loop?: [number, number] }
 interface BankList { s: number; v: number; p?: number; l?: number }
 interface Bank { samples: BankSample[]; lists: Record<string, BankList> }
-const ROOM_BANKS = new Set(['000', '002', '003', '004', '005', '006', '008']);
+const ROOM_BANKS = new Set(['000', '002', '003', '004', '005', '006', '007', '008']);
 const BG_BANKS = new Set(['002', '003', '005', '008']);
 const PC_BANKS = ['000_0', '003_0', '003_1', '005_0', '006_0', '007_0'];
 /** ADX / sound-driver volume curve (adxwrap.c AdxVolTbl): volume units 0..-127 -> 0.1 dB */
@@ -45,6 +45,7 @@ export class Audio {
     const resume = () => this.ctx?.state === 'suspended' && this.ctx.resume();
     addEventListener('keydown', resume); addEventListener('pointerdown', resume);
     for (const n of SE) this.buf(`audio/${n}.ogg`);
+    this.bank('sys');
   }
   private buf(p: string): Promise<AudioBuffer | null> {
     let pr = this.bufP.get(p);
@@ -84,6 +85,7 @@ export class Audio {
     let pc = PC_BANKS[0];
     for (const b of PC_BANKS) if (+b.slice(0, 3) <= +srr && (b.endsWith('_0') || +b[4] === rcase)) pc = b;
     if (PC_BANKS.includes(`${pad(+srr, 3)}_${rcase}`)) pc = `${pad(+srr, 3)}_${rcase}`;
+    if (srr === '003') pc = '003_1'; // pc_003_0 holds only floor lists 0/1
     this.pcBank = `pc_${pc}`;
     for (const k of [...this.slots.keys()]) if (!k.startsWith('bg')) this.stop(k);
     for (const b of [this.rmBank, this.bgBank, this.pcBank, 'rm_common']) if (b) this.bank(b);
@@ -227,14 +229,16 @@ export class Audio {
     const g = c.createGain(); g.gain.value = vol; s.connect(g).connect(this.sfx); s.start(c.currentTime + delay);
     return b.duration / rate;
   }
-  se(name: 'door' | 'doorClose' | 'locked' | 'pickup' | 'menu' | 'cursor' | 'cancel' | 'typewriter' | 'lighter' | 'knife' | 'bite' | 'shot' | 'empty' | 'reload') {
+  se(name: 'door' | 'doorClose' | 'locked' | 'pickup' | 'menu' | 'cursor' | 'cancel' | 'error' | 'typewriter' | 'lighter' | 'knife' | 'bite' | 'shot' | 'empty' | 'reload') {
     switch (name) {
       case 'door': { const d = this.play('door_knob'); this.play('door_open', 0.9, 1, Math.max(0.25, d * 0.6)); break; }
       case 'doorClose': this.play('door_close'); break;
       case 'locked': this.play('door_knob'); this.play('door_knob', 1, 1.05, 0.35); break;
-      case 'pickup': case 'menu': this.play('confirm'); break;
-      case 'cursor': this.play('cursor', 0.7); break;
-      case 'cancel': this.play('cancel'); break;
+      // system bank (sound/se/core/sys, CallSystemSe): 0 cancel, 1 invalid, 2 cursor, 3 decide
+      case 'pickup': case 'menu': this.sys(3); break;
+      case 'cursor': this.sys(2); break;
+      case 'cancel': this.sys(0); break;
+      case 'error': this.sys(1); break;
       case 'typewriter': this.play('typewriter'); break;
       case 'lighter': this.play('door_knob', 0.35, 2.2); break; // short metallic click for the lighter lid
       case 'knife': this.swish(); break;
@@ -244,6 +248,9 @@ export class Audio {
       case 'reload': this.play('gun_rl1', 1, 1, 0.1); this.play('gun_rl2', 1, 1, 0.4); this.play('gun_rl3', 1, 1, 0.75); break;
     }
   }
+  private sysSw = 0;
+  /** CallSystemSe(no): system bank request list, two alternating voices */
+  sys(no: number) { this.sysSw ^= 1; this.playList('sys', no, `sys${this.sysSw}`); }
   /** knife swing: band-passed noise sweep */
   swish() {
     const c = this.ctx; if (!c) return;

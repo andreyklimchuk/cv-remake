@@ -4,7 +4,8 @@
 import * as THREE from 'three';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { assetUrl, loadGLTF, toLambert } from './assets';
-import { itemName, LANG } from './text';
+import { itemName, LANG, pages, UI } from './text';
+import { ITEM_NAMES, SYSMES } from './sysmes';
 import { escapeHtml } from './ui';
 import type { Inventory, InvItem } from './inventory';
 import type { Input } from './input';
@@ -43,9 +44,6 @@ const T = {
   use: () => (ru() ? 'Использовать' : 'Use'), equipA: () => (ru() ? 'Экипировать' : 'Equip'), unequip: () => (ru() ? 'Снять' : 'Unequip'),
   hold: () => (ru() ? 'Взять в руку' : 'Hold'), putAway: () => (ru() ? 'Убрать' : 'Put away'),
   check: () => (ru() ? 'Осмотреть' : 'Check'), combine: () => (ru() ? 'Комбинировать' : 'Combine'),
-  noNeed: () => (ru() ? 'Сейчас в этом\nнет необходимости.' : "There's no need to\nuse it now."),
-  ammo: () => (ru() ? 'Патроны нельзя\nиспользовать отдельно.' : 'The ammos cannot\nbe used alone.'),
-  noCombine: () => (ru() ? 'Это не с чем\nкомбинировать.' : "There's nothing to\ncombine it with."),
   noData: () => (ru() ? 'Нет данных.' : 'No data.'),
   equipped: (n: string) => (ru() ? `${n}: экипировано.` : `Equipped the ${n}.`),
   lit: () => (ru() ? 'Клэр зажгла зажигалку.' : 'Claire lit the lighter.'),
@@ -87,10 +85,29 @@ const css = `
 .inv .sub div.sel{color:#ff8a2e;background:rgba(0,0,0,.35)}
 .inv .chk{position:absolute;display:none;left:75px;top:162px;width:538px;height:278px;z-index:2;background:radial-gradient(ellipse at 50% 45%,#1a1a70,#03031c 75%);border:3px solid;border-color:#cbbf7a #6e663c #6e663c #cbbf7a}
 .inv .chk canvas{position:absolute;left:0;top:0;width:100%;height:100%}
+.inv .grp{position:absolute;left:0;top:0;width:${W}px;height:${H}px;pointer-events:none}
+.inv .grp>*{pointer-events:auto}
+.inv .slot.cmb{outline:3px dashed #ffb030;outline-offset:-3px}
+.inv .ich{display:inline-block;margin:0 1.2em}
+.inv .ich.sel{color:#ff8a2e}
+.inv.get .stc{visibility:hidden}
 .inv .chk .hint{position:absolute;bottom:4px;width:100%;text-align:center;font:11px Arial,sans-serif;color:#8a8ab8}
 `;
 
-type Mode = 'list' | 'menu' | 'sub' | 'check';
+type Mode = 'list' | 'menu' | 'sub' | 'check' | 'comb' | 'get';
+/** curedata (item 20..29): low nibble = recovery level (Use_00), 0x10 = cures poison */
+const CUREDATA = [4, 1, 0, 16, 2, 4, 17, 18, 3, 20];
+const HP_MAX = 160;
+/** combidata: item -> [partner, result, type] (0/1 ammo into weapon, 2 ammo merge, 6 herbs) */
+const COMBI: Record<number, [number, number, number][]> = {
+  9: [[19, 10, 0], [12, 9, 0]], 12: [[5, 5, 1], [9, 9, 1], [10, 10, 1], [12, 12, 2], [131, 131, 1]],
+  21: [[21, 24, 6], [22, 25, 6], [23, 26, 6], [24, 28, 6], [26, 27, 6]], 22: [[21, 25, 6], [26, 29, 6]],
+  23: [[21, 26, 6], [24, 27, 6], [25, 29, 6]], 24: [[21, 28, 6], [23, 27, 6]], 25: [[23, 29, 6]], 26: [[21, 27, 6], [22, 29, 6]],
+};
+const AMMO = new Set([12]);
+const BULLET_MAX: Record<number, number> = { 9: 15, 10: 15, 12: 15 };
+/** panel groups slide in from these offsets (640x480 units): 1 top menu, 2 status, 3 equipment, 5 item list, 6 message */
+const CEN_OFF: Record<number, [number, number]> = { 1: [0, -120], 2: [-448, 0], 3: [288, 0], 5: [208, 0], 6: [0, 152] };
 export class InventoryScreen {
   open = false;
   equipped: number | null = null;   // weapon box
@@ -98,6 +115,9 @@ export class InventoryScreen {
   onEquipChange?: () => void;
   /** use of a key item (returns true when the game took over: inventory closes) */
   onUseItem?: (id: number) => boolean;
+  private anim: { dir: 1 | -1; f: number; wait: number; se7: boolean; lock: number; done?: () => void } | null = null;
+  private ask: { pages: string[]; page: number; choices: string[] | null; sel: number; res: (v: number) => void } | null = null;
+  private cmbA = -1; private getId = -1; private acc = 0;
   private mode: Mode = 'list'; private sel = 0; private menuSel = 3; private subSel = 0;
   private subOpts: { t: string; k: string }[] = [];
   private text = ''; private pages: string[] = []; private page = 0;
@@ -112,43 +132,53 @@ export class InventoryScreen {
     root.innerHTML = `<div class="scr">
 <canvas class="bgc" width="${W}" height="${H}"></canvas>
 <!-- top menu -->
+<div class="grp" data-c="1">
 <div class="abs olive" style="left:40px;top:55px;width:428px;height:72px"></div>
 <div class="abs olive" style="left:300px;top:118px;width:168px;height:28px;border-top:0"></div>
 <div class="abs menu"></div>
+</div>
 <!-- equipment / standard -->
+<div class="grp" data-c="3">
 <div class="abs olive" style="left:484px;top:55px;width:442px;height:100px"></div>
 <div class="abs stripes" style="left:868px;top:58px;width:56px;height:76px"></div>
 <div class="abs blue eqbox" style="left:515px;top:62px;width:203px;height:68px"></div>
 <div class="abs blue stbox" style="left:765px;top:62px;width:103px;height:68px"></div>
 <div class="abs bar l-eq" style="left:482px;top:133px;width:246px;height:20px"></div>
 <div class="abs bar l-st" style="left:730px;top:133px;width:196px;height:20px"></div>
+</div>
 <!-- status panel -->
+<div class="grp" data-c="2">
 <div class="abs olive" style="left:0;top:135px;width:617px;height:312px"></div>
 <div class="abs stripes" style="left:2px;top:138px;width:72px;height:305px"></div>
 <div class="abs black" style="left:75px;top:162px;width:538px;height:278px"></div>
-<div class="abs tab l-status" style="left:83px;top:148px;width:139px;height:24px"></div>
-<canvas class="abs portrait" width="126" height="120" style="left:105px;top:189px;width:126px;height:120px;border:2px solid #0a0a40;background:linear-gradient(180deg,#1a1a6a,#08082c)"></canvas>
-<div class="abs plate l-name" style="left:104px;top:314px;width:127px;height:26px"></div>
-<canvas class="abs redemb" width="118" height="66" style="left:108px;top:350px;width:118px;height:66px"></canvas>
-<div class="abs teal info" style="left:245px;top:189px;width:202px;height:97px;background:#08083a"><div class="head l-info"></div>
+<div class="abs tab l-status stc" style="left:83px;top:148px;width:139px;height:24px"></div>
+<canvas class="abs portrait stc" width="126" height="120" style="left:105px;top:189px;width:126px;height:120px;border:2px solid #0a0a40;background:linear-gradient(180deg,#1a1a6a,#08082c)"></canvas>
+<div class="abs plate l-name stc" style="left:104px;top:314px;width:127px;height:26px"></div>
+<canvas class="abs redemb stc" width="118" height="66" style="left:108px;top:350px;width:118px;height:66px"></canvas>
+<div class="abs teal info stc" style="left:245px;top:189px;width:202px;height:97px;background:#08083a"><div class="head l-info"></div>
  <div class="infotx" style="top:18px"><span class="i-full"></span></div>
  <div class="infotx" style="top:37px"><span class="i-h"></span><span>169<small class="i-cm"></small></span></div>
  <div class="infotx" style="top:56px"><span class="i-w"></span><span>52.4<small class="i-kg"></small></span></div>
  <div class="infotx" style="top:75px"><span class="i-b"></span><span class="i-bt"></span></div></div>
-<canvas class="abs emblem" width="116" height="97" style="left:465px;top:189px;width:116px;height:97px;border:2px solid #23238a"></canvas>
-<div class="abs teal" style="left:245px;top:299px;width:336px;height:117px;background:#000"><div class="head l-cond"></div>
+<canvas class="abs emblem stc" width="116" height="97" style="left:465px;top:189px;width:116px;height:97px;border:2px solid #23238a"></canvas>
+<div class="abs teal stc" style="left:245px;top:299px;width:336px;height:117px;background:#000"><div class="head l-cond"></div>
  <canvas class="ecg" width="330" height="98" style="position:absolute;left:0;top:13px;width:330px;height:98px"></canvas>
  <div class="fine" style="position:absolute;right:10px;bottom:4px;font:bold 22px Arial,sans-serif;color:#28c828;letter-spacing:.04em"></div></div>
-<div class="abs pegs"></div>
+<div class="abs pegs stc"></div>
 <div class="abs chk"><canvas width="538" height="278"></canvas><div class="hint"></div></div>
+</div>
 <!-- item list -->
+<div class="grp" data-c="5">
 <div class="abs olive" style="left:658px;top:162px;width:214px;height:300px"></div>
 <div class="abs blue list" style="left:667px;top:170px;width:200px;height:263px;padding:0"></div>
 <div class="abs bar l-list" style="left:667px;top:437px;width:200px;height:20px"></div>
 <div class="abs stripes" style="left:872px;top:155px;width:54px;height:440px"></div>
+</div>
 <!-- message box -->
+<div class="grp" data-c="6">
 <div class="abs olive" style="left:40px;top:450px;width:578px;height:146px"></div>
 <div class="abs black" style="left:58px;top:459px;width:541px;height:127px"><div class="msgtx"></div></div>
+</div>
 <div class="abs olive sub"></div>
 </div>`;
     this.drawBackground(); this.drawRed(); this.drawEmblem();
@@ -216,9 +246,10 @@ export class InventoryScreen {
     g.beginPath(); g.moveTo(w / 2 - 7, h * 0.44); g.lineTo(w / 2 + 7, h * 0.44); g.lineTo(w / 2 + 10, h * 0.78); g.lineTo(w / 2 - 10, h * 0.78); g.closePath(); g.fill();
     g.fillStyle = '#f6f0d0'; g.font = 'bold 8px Arial'; g.textAlign = 'center'; g.fillText('MADE IN HEAVEN', w / 2, h - 5);
   }
-  /** condition from Claire's health (200 max): Fine, Caution (< 120), Danger (< 60) */
-  private cond() { const hp = this.player?.hp ?? 200; return hp < 60 ? 2 : hp < 120 ? 1 : 0; }
-  private condRgb(a = 1) { return ['rgba(40,200,40,', 'rgba(230,180,30,', 'rgba(220,40,30,'][this.cond()] + a + ')'; }
+  /** condition level (4 steps like the original status screen): Fine, Caution (yellow), Caution (orange), Danger */
+  private lvl() { const hp = this.player?.hp ?? HP_MAX; return hp >= 120 ? 0 : hp >= 60 ? 1 : hp >= 30 ? 2 : 3; }
+  private cond() { return [0, 1, 1, 2][this.lvl()]; }
+  private condRgb(a = 1) { return ['rgba(40,200,40,', 'rgba(230,200,30,', 'rgba(240,120,20,', 'rgba(220,40,30,'][this.lvl()] + a + ')'; }
   private drawEcg(dt: number) {
     const c = this.q<HTMLCanvasElement>('.ecg'), g = c.getContext('2d')!; this.ecgT += dt;
     const w = c.width, h = c.height; g.fillStyle = '#000'; g.fillRect(0, 0, w, h);
@@ -286,12 +317,86 @@ export class InventoryScreen {
     pc.getContext('2d')!.drawImage(img, 0, 0, 252, 240);
   }
   // ---------- state ----------
-  async show(open: boolean) {
-    this.open = open; this.root.style.display = open ? 'block' : 'none';
+  /** open / close with the original panel animation (8 frames slide, SE 7 when in place, SE 9 on close) */
+  show(open: boolean, get = -1): Promise<void> {
     if (open) {
-      this.layout(); this.mode = 'list'; this.menuSel = 3; this.setText(this.curName());
-      this.audio.se('menu'); await this.renderPortrait(); await this.render();
-    } else this.closeCheck();
+      this.open = true; this.root.style.display = 'block';
+      this.layout(); this.mode = get >= 0 ? 'get' : 'list'; this.menuSel = 3; this.getId = get; this.cmbA = -1; this.ask = null;
+      this.root.classList.toggle('get', get >= 0);
+      this.setText(get >= 0 ? '' : this.curName());
+      this.audio.se('menu');
+      return new Promise((res) => {
+        this.anim = { dir: 1, f: 0, wait: 0, se7: false, lock: get >= 0 ? 8 : 14, done: res };
+        this.applyAnim();
+        this.renderPortrait().then(() => this.render());
+        if (get >= 0) this.showGetModel(get);
+      });
+    }
+    if (!this.open) return Promise.resolve();
+    this.anim?.done?.();
+    this.ask?.res(this.ask.choices ? this.ask.choices.length - 1 : 0); this.ask = null;
+    this.audio.sys(9);
+    return new Promise((res) => {
+      this.anim = { dir: -1, f: 8, wait: 6, se7: true, lock: 0, done: () => {
+        this.open = false; this.root.style.display = 'none'; this.closeCheck(); this.mode = 'list';
+        this.root.classList.remove('get'); this.getId = -1; res();
+      } };
+    });
+  }
+  /** one 30 Hz frame of the open / close animation */
+  private stepAnim() {
+    const a = this.anim!;
+    if (a.dir > 0) {
+      if (a.f < 8) { a.f++; if (a.f === 8 && !a.se7) { a.se7 = true; this.audio.sys(7); } }
+      else if (--a.lock <= 0) { this.anim = null; a.done?.(); }
+    } else if (a.wait > 0) a.wait--;
+    else if (a.f > 0) a.f--;
+    else { this.anim = null; a.done?.(); }
+    this.applyAnim();
+  }
+  private applyAnim() {
+    const f = this.anim ? this.anim.f : 8, k = 1 - f / 8;
+    this.root.querySelectorAll<HTMLElement>('.grp').forEach((g) => {
+      const o = CEN_OFF[+g.dataset.c!] ?? [0, 0];
+      g.style.transform = k ? `translate(${(o[0] * k * W) / 640}px,${(o[1] * k * H) / 480}px)` : '';
+    });
+    const op = Math.min(1, f * 0.0571 * 2.2);
+    this.root.style.background = `rgba(0,0,0,${op})`; this.q<HTMLElement>('.bgc').style.opacity = String(Math.min(1, f * 0.0571));
+  }
+  /** message box question / pages inside the status screen; resolves with the chosen index (0 without choices) */
+  say(pg: string[], choices?: string[]): Promise<number> {
+    this.ask?.res(-1);
+    return new Promise((res) => { this.ask = { pages: pg.length ? pg : [''], page: 0, choices: choices ?? null, sel: 0, res }; this.renderAsk(); });
+  }
+  private renderAsk() {
+    const a = this.ask!, last = a.page === a.pages.length - 1, el = this.q('.msgtx');
+    el.innerHTML = escapeHtml(a.pages[a.page]) + (last && a.choices ? '\n' + a.choices.map((c, i) => `<span class="ich ${i === a.sel ? 'sel' : ''}">${escapeHtml(c)}</span>`).join('') : '');
+  }
+  private updateAsk() {
+    const a = this.ask!, inp = this.input, last = a.page === a.pages.length - 1;
+    const end = (v: number) => { this.ask = null; this.q('.msgtx').textContent = this.text; a.res(v); };
+    if (last && a.choices) {
+      if (inp.hit('KeyA', 'ArrowLeft') || inp.hit('KeyD', 'ArrowRight')) { a.sel = (a.sel + 1) % a.choices.length; this.audio.se('cursor'); this.renderAsk(); }
+      else if (inp.action) { this.audio.se(a.sel === a.choices.length - 1 ? 'cancel' : 'menu'); end(a.sel); }
+      else if (inp.cancel) { this.audio.se('cancel'); end(a.choices.length - 1); }
+    } else if (inp.action || inp.cancel) { if (last) end(0); else { a.page++; this.renderAsk(); } }
+  }
+  /** GetItem: the picked-up item turns in the check window */
+  private async showGetModel(id: number) {
+    const obj = await this.model(id); if (this.getId !== id) return;
+    const box = this.q('.chk'); box.style.display = 'block'; this.q('.chk .hint').textContent = '';
+    const r = this.renderer(); r.setSize(538, 278, false);
+    const grp = new THREE.Group(); if (obj) { grp.add(obj); const ov = ICON_ROT[id]; if (ov) obj.rotation.set(ov[0], ov[1], ov[2]); }
+    const { scene, cam } = this.stageFor(grp); cam.aspect = 538 / 278; cam.position.z = 3.4; cam.updateProjectionMatrix();
+    this.chk = { scene, cam, obj: grp, rx: 0.35, ry: 0 };
+  }
+  /** redraw after the game changed the inventory */
+  refresh() { this.render(); }
+  /** Use_00: recovery items (curedata) */
+  heal(id: number) {
+    const c = CUREDATA[id - 20] ?? 0, h = c & 15, P = this.player; if (!P) return;
+    if (h === 1) P.hp += 50; else if (h === 2) P.hp += 100; else if (h >= 3) P.hp = HP_MAX;
+    P.hp = Math.min(HP_MAX, P.hp);
   }
   private cur(): InvItem | null { return this.inv.slots[this.sel] ?? null; }
   private curName() { const s = this.cur(); return s ? itemName(s.name) : ''; }
@@ -317,7 +422,7 @@ export class InventoryScreen {
     for (let i = 0; i < 8; i++) {
       const s = this.inv.slots[i]; const ic = s ? await this.icon(s.id) : null;
       const mark = s && (s.id === this.equipped || s.id === this.standard) ? '<span class="eq">E</span>' : '';
-      html.push(`<div class="slot ${i === this.sel && this.mode !== 'menu' ? 'sel' : ''}" style="left:${(i % 2) * 100}px;top:${Math.floor(i / 2) * 65.5}px">${this.slotHtml(s, ic, mark)}</div>`);
+      html.push(`<div class="slot ${i === this.sel && this.mode !== 'menu' && this.mode !== 'get' ? 'sel' : ''} ${this.mode === 'comb' && i === this.cmbA ? 'cmb' : ''}" style="left:${(i % 2) * 100}px;top:${Math.floor(i / 2) * 65.5}px">${this.slotHtml(s, ic, mark)}</div>`);
     }
     q('.list').innerHTML = html.join('');
     const sub = q('.sub');
@@ -325,7 +430,7 @@ export class InventoryScreen {
       sub.innerHTML = this.subOpts.map((o, i) => `<div class="${i === this.subSel ? 'sel' : ''}">${o.t}</div>`).join('');
       sub.style.left = '478px'; sub.style.top = Math.min(330, 175 + Math.floor(this.sel / 2) * 65) + 'px'; sub.style.display = 'block';
     } else sub.style.display = 'none';
-    q('.msgtx').textContent = this.text;
+    if (this.ask) this.renderAsk(); else q('.msgtx').textContent = this.text;
   }
   private openSub() {
     const s = this.cur(); if (!s) return;
@@ -336,12 +441,42 @@ export class InventoryScreen {
   }
   private doUse() {
     const s = this.cur(); if (!s) return;
-    if (WEAPONS.has(s.id)) { this.equipped = this.equipped === s.id ? null : s.id; this.onEquipChange?.(); this.setText(this.equipped ? T.equipped(itemName(s.name)) : this.curName()); }
-    else if (STANDARD.has(s.id)) {
-      this.standard = this.standard === s.id ? null : s.id; this.onEquipChange?.();
+    if (WEAPONS.has(s.id)) {
+      // a weapon and the lighter share Claire's hands: equipping one puts the other away
+      this.equipped = this.equipped === s.id ? null : s.id; if (this.equipped) this.standard = null;
+      this.onEquipChange?.(); this.setText(this.equipped ? T.equipped(itemName(s.name)) : this.curName());
+    } else if (STANDARD.has(s.id)) {
+      this.standard = this.standard === s.id ? null : s.id; if (this.standard) this.equipped = null; this.onEquipChange?.();
       this.setText(this.standard ? T.lit() : T.unlit());
+    } else if (s.id >= 20 && s.id <= 29) {
+      if (CUREDATA[s.id - 20] === 0) { this.setText(pages(SYSMES[161])); return; } // red herb alone
+      this.heal(s.id); this.inv.take(s.id); this.setText(this.curName());
     } else if (this.onUseItem?.(s.id)) return;
-    else this.setText(s.id === 12 ? T.ammo() : T.noNeed());
+    else this.setText(pages(SYSMES[AMMO.has(s.id) ? 160 : 161]));
+  }
+  /** Combi_00 / herb mixing: item in slot a is combined into slot b */
+  private async combine(a: number, b: number) {
+    const A = this.inv.slots[a], B = this.inv.slots[b];
+    const e = A && B && a !== b ? COMBI[B.id]?.find((x) => x[0] === A.id) : undefined;
+    if (!A || !B || !e) { this.audio.se('error'); return; }
+    const [, res, type] = e;
+    if (type === 0 || type === 1) {
+      const [W_, M] = AMMO.has(A.id) ? [B, A] : [A, B];
+      if (!AMMO.has(M.id)) { this.inv.slots[a] = null; B.id = res; B.name = ITEM_NAMES[res] ?? B.name; this.audio.se('menu'); return; }
+      const max = BULLET_MAX[W_.id] ?? 15, n = Math.min(max - W_.count, M.count);
+      if (n <= 0) { this.audio.se('cancel'); this.setText(pages(SYSMES[156])); return; }
+      W_.count += n; M.count -= n; if (M.count <= 0) this.inv.slots[this.inv.slots.indexOf(M)] = null;
+      this.audio.se('menu');
+    } else if (type === 2) {
+      B.count += A.count; this.inv.slots[a] = null; this.audio.se('menu');
+    } else if (type === 6) {
+      this.audio.se('menu');
+      const c = await this.say(pages(SYSMES[155]), [UI.yes(), UI.no()]);
+      if (c !== 0) return;
+      this.inv.slots[a] = null; this.inv.slots[b] = { id: res, name: ITEM_NAMES[res] ?? '', count: 1 };
+      this.sel = b;
+    } else { this.audio.se('error'); return; }
+    this.setText(this.curName());
   }
   private async openCheck() {
     const s = this.cur(); if (!s) return;
@@ -355,10 +490,24 @@ export class InventoryScreen {
     this.mode = 'check';
   }
   private closeCheck() { this.chk = null; const b = this.q('.chk'); if (b) b.style.display = 'none'; if (this.mode === 'check') this.mode = 'list'; }
+  private spinGet(dt: number) {
+    if (this.mode !== 'get' || !this.chk) return;
+    const c = this.chk; c.ry += dt * 0.6; c.obj.rotation.set(c.rx, c.ry, 0);
+    this.r3!.setClearColor(0, 0); this.r3!.render(c.scene, c.cam);
+  }
   /** Per-frame update while the screen is open. Returns false when the screen was closed. */
   update(dt: number): boolean {
     if (!this.open) return false;
     const inp = this.input;
+    this.acc += dt;
+    if (this.anim) {
+      while (this.acc >= 1 / 30 && this.anim) { this.acc -= 1 / 30; this.stepAnim(); }
+      this.drawEcg(dt); this.spinGet(dt);
+      return true;
+    }
+    this.acc = 0;
+    if (this.mode === 'get') { this.drawEcg(dt); this.spinGet(dt); if (this.ask) this.updateAsk(); return true; }
+    if (this.ask) { this.drawEcg(dt); this.updateAsk(); return true; }
     const L = inp.hit('KeyA', 'ArrowLeft'), R = inp.hit('KeyD', 'ArrowRight'), U = inp.hit('KeyW', 'ArrowUp'), D = inp.hit('KeyS', 'ArrowDown');
     this.drawEcg(dt);
     if (this.mode === 'check' && this.chk) {
@@ -379,7 +528,7 @@ export class InventoryScreen {
         const k = this.subOpts[this.subSel].k; this.mode = 'list';
         if (k === 'use') { this.audio.se('menu'); this.doUse(); this.render(); }
         else if (k === 'check') { this.audio.se('menu'); this.openCheck().then(() => this.render()); }
-        else { this.audio.se('cancel'); this.setText(T.noCombine()); this.render(); }
+        else { this.audio.se('menu'); this.cmbA = this.sel; this.mode = 'comb'; this.render(); }
       } else if (inp.cancel) { this.mode = 'list'; this.audio.se('cancel'); this.render(); }
       return true;
     }
@@ -388,9 +537,17 @@ export class InventoryScreen {
       else if (D) { this.mode = 'list'; this.menuSel = 3; this.audio.se('cursor'); this.setText(this.curName()); this.render(); }
       else if (inp.action) {
         if (this.menuSel === 3) { this.mode = 'list'; this.audio.se('menu'); this.setText(this.curName()); this.render(); }
-        else if (this.menuSel === 0) { this.audio.se('cancel'); this.show(false); return false; }
+        else if (this.menuSel === 0) { this.audio.se('cancel'); return false; }
         else { this.audio.se('menu'); this.setText(T.noData()); }
-      } else if (inp.cancel || inp.inventory) { this.audio.se('cancel'); this.show(false); return false; }
+      } else if (inp.cancel || inp.inventory) { this.audio.se('cancel'); return false; }
+      return true;
+    }
+    if (this.mode === 'comb') {
+      let d = 0;
+      if (L && this.sel % 2 === 1) d = -1; if (R && this.sel % 2 === 0) d = 1; if (D && this.sel < 6) d = 2; if (U && this.sel >= 2) d = -2;
+      if (d) { this.sel += d; this.audio.se('cursor'); this.setText(this.curName()); this.render(); }
+      else if (inp.action) { const a = this.cmbA; this.mode = 'list'; this.cmbA = -1; this.combine(a, this.sel).then(() => this.render()); this.render(); }
+      else if (inp.cancel) { this.mode = 'list'; this.cmbA = -1; this.audio.se('cancel'); this.render(); }
       return true;
     }
     // item list (2 columns x 4 rows)
@@ -400,7 +557,7 @@ export class InventoryScreen {
     if (U) { if (this.sel >= 2) d = -2; else { this.mode = 'menu'; this.menuSel = 3; this.audio.se('cursor'); this.render(); return true; } }
     if (d) { this.sel += d; this.audio.se('cursor'); this.setText(this.curName()); this.render(); }
     else if (inp.action) { if (this.cur()) { this.openSub(); this.render(); } }
-    else if (inp.cancel || inp.inventory) { this.audio.se('cancel'); this.show(false); return false; }
+    else if (inp.cancel || inp.inventory) { this.audio.se('cancel'); return false; }
     return true;
   }
 }

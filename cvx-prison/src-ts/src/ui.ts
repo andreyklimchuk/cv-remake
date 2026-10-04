@@ -63,6 +63,7 @@ export class MessageBox {
   private resolve?: (v: number) => void;
   private choices: string[] | null = null; private sel = 0;
   active = false;
+  onCursor?: () => void;
   constructor(private el: HTMLElement) {}
   show(text: string | string[], choices?: string[]): Promise<number> {
     this.queue = Array.isArray(text) ? [...text] : pages(text);
@@ -89,7 +90,7 @@ export class MessageBox {
       this.render(); return;
     }
     if (this.queue.length === 0 && this.choices) {
-      if (left || right) { this.sel = (this.sel + (right ? 1 : this.choices.length - 1)) % this.choices.length; this.render(); }
+      if (left || right) { this.onCursor?.(); this.sel = (this.sel + (right ? 1 : this.choices.length - 1)) % this.choices.length; this.render(); }
       if (action) return this.close(this.sel);
       if (cancel) return this.close(this.choices.length - 1);
       return;

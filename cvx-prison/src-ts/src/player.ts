@@ -3,8 +3,12 @@ import { loadGLTF, toLambert } from './assets';
 import type { Input } from './input';
 import type { Room } from './room';
 
-// Original motion clips (pl00 motion bank): 0 walk, 4 run, 11 walk back (Fine), 35 idle (Fine), 46/47 turns.
-const CLIPS: Record<string, string> = { idle: 'm35', walk: 'm00', run: 'm04', back: 'm11', turnL: 'm46', turnR: 'm47' };
+// Original motion clips (pl00 motion bank), per damage level dmlvl (player.c: hp >= 120 -> 0, >= 30 -> 1, else 2).
+// walk / run follow PlMtnAct[0][dmlvl] (walk 0/2/3, run 4/7/8); idle and walk back: the PS3 bank order differs from
+// the PS2 table for these entries, the three variants next to the Fine clip are used (idle 35/36/37, back 11/12/13).
+const CLIPS: Record<string, string[]> = { idle: ['m35', 'm36', 'm37'], walk: ['m00', 'm02', 'm03'], run: ['m04', 'm07', 'm08'], back: ['m11', 'm12', 'm13'], turnL: ['m46'], turnR: ['m47'] };
+/** speed scale of the Danger walk / run: clip duration ratio (m03 39 vs 35 frames, m08 25 vs 19 frames) */
+const DANGER_SPD: Record<string, number> = { walk: 35 / 39, run: 19 / 25 };
 const WALK = 1.05, RUN = 2.6, TURN = 2.6, RADIUS = 0.2;
 // Original knife motions (pl00w02 motion bank, 30 fps): k00 ready the knife; per direction (forward / up / down)
 // k01/k04/k07 slash (24 frames, blade reaches out on frame 8) and k03/k06/k09 the held stance.
@@ -48,8 +52,8 @@ export class Player {
   private skinHandR: THREE.Object3D[] = [];
   private zippoParts: THREE.Object3D[] = [];
   knifeOn = false;
-  /** health (the original uses 200 for Claire; Caution below 120, Danger below 60) */
-  hp = 200;
+  /** health (player.c bhSetPlayer: 160 on Normal; status Fine >= 120, Caution >= 30, Danger below 30) */
+  hp = 160;
   /** externally driven motion (grabbed by an enemy, death): normal control is suspended */
   sync: string | null = null;
   /** knife: aiming (ready stance) and slash timer */
@@ -107,7 +111,9 @@ export class Player {
     for (const h of this.skinHandR) h.visible = !zippo && !knife && !gun;
   }
 
-  play(name: string, fade = 0.18, speed = 1) { this.playId(CLIPS[name], fade, true, speed); }
+  /** damage level of the motions (player.c bhSetPlayer / bhCheckPlayerKegaMotion) */
+  dmlvl() { return this.hp >= 120 ? 0 : this.hp >= 30 ? 1 : 2; }
+  play(name: string, fade = 0.18, speed = 1) { const c = CLIPS[name]; this.playId(c[Math.min(c.length - 1, this.dmlvl())], fade, true, speed); }
   private playId(id: string, fade: number, loop: boolean, speed = 1, restart = false) {
     const a = this.actions.get(id); if (!a) return;
     a.timeScale = speed; if (this.cur === id && !restart) return;
@@ -152,10 +158,13 @@ export class Player {
       if (inp.fwd) speed = inp.run ? RUN : WALK; else if (inp.back) speed = -0.62;
       if (this.aiming) { speed = 0; }
     }
-    this.heading += turn * TURN * dt * (speed > WALK ? 0.8 : 1) * (camYaw !== null ? 0 : 1);
+    const lv = this.dmlvl();
+    if (lv === 2 && speed > 0) speed *= speed > WALK ? DANGER_SPD.run : DANGER_SPD.walk;
+    // bhCPM1_act_bas: rtspd 0.8 at dmlvl 2
+    this.heading += turn * TURN * dt * (speed > WALK ? 0.8 : 1) * (lv === 2 ? 0.8 : 1) * (camYaw !== null ? 0 : 1);
     this.root.rotation.y = this.heading;
     if (this.aiming) this.updateKnife(dt, inp);
-    else if (speed > 0) { this.state = speed > WALK ? 'run' : 'walk'; this.play(this.state); }
+    else if (speed > 0) { this.state = inp.run ? 'run' : 'walk'; this.play(this.state); }
     else if (speed < 0) { this.state = 'back'; this.play('back'); }
     else if (turn !== 0) { this.state = 'turn'; this.play('walk', 0.15, 0.7); }
     else { this.state = 'idle'; this.play('idle', 0.25); }
@@ -176,7 +185,7 @@ export class Player {
   }
   /** PlFootSnd[0]: walk (m00) frames 10 / 28, run (m04) 8 / 18, walk back (m11) 10 / 28; left foot first */
   private footsteps() {
-    const F: Record<string, [number, number, number]> = { m00: [10, 28, 0], m04: [8, 18, 1], m11: [10, 28, 0] };
+    const F: Record<string, [number, number, number]> = { m00: [10, 28, 0], m02: [10, 28, 0], m03: [10, 28, 0], m04: [8, 18, 1], m07: [8, 18, 1], m08: [8, 18, 1], m11: [10, 28, 0], m12: [10, 28, 0], m13: [10, 28, 0] };
     const f = this.state === 'walk' || this.state === 'run' || this.state === 'back' ? F[this.cur] : undefined;
     const a = f && this.actions.get(this.cur);
     if (!f || !a) { this.stepClip = ''; return; }

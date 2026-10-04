@@ -51,6 +51,9 @@ export const RU: Record<string, string> = {
   "You've taken the\n{N}.": "Вы взяли\n{N}.",
   "You can't take any\nmore items.": "Больше нельзя\nвзять предметов.",
   "Use it now?": "Использовать сейчас?",
+  "Mix the herbs?": "Смешать травы?",
+  "It's fully loaded.": "Полностью заряжено.",
+  "The ammos cannot\nbe used alone.": "Патроны нельзя\nиспользовать отдельно.",
   "There's no need to\nuse it now.": "Сейчас в этом\nнет необходимости.",
   "Use an ink ribbon?": "Использовать красящую ленту?",
   "You've taken the prison map.": "Вы взяли карту тюрьмы.",
@@ -75,7 +78,7 @@ export const RU: Record<string, string> = {
 export const ITEM_RU: Record<string, string> = {
   'Combat Knife': 'Боевой нож', 'Map': 'Карта', 'Extinguisher': 'Огнетушитель', 'Eagle Plate': 'Пластина с орлом', 'Handgun Bullets': 'Патроны для пистолета', 'Green Herb': 'Зелёная трава',
   'Ink Ribbon': 'Красящая лента', 'Board Clip': 'Планшет с бумагами', 'Hemostatic': 'Кровоостанавливающее',
-  'Lighter': 'Зажигалка', 'Briefcase': 'Кейс', 'Hawk Emblem': 'Эмблема ястреба', 'Sp. Alloy Emblem': 'Эмблема из спецсплава', 'Memo': 'Записка', 'Lockpick': 'Отмычка', 'Handgun': 'Пистолет', 'F. Aid Spray': 'Аптечка-спрей',
+  'Lighter': 'Зажигалка', 'Briefcase': 'Кейс', 'Hawk Emblem': 'Эмблема ястреба', 'Sp. Alloy Emblem': 'Эмблема из спецсплава', 'Memo': 'Записка', 'Lockpick': 'Отмычка', 'Handgun': 'Пистолет', 'F. Aid Spray': 'Аптечка-спрей', 'Red Herb': 'Красная трава', 'Blue Herb': 'Синяя трава', 'Mixed Herb': 'Смесь трав',
 };
 export let LANG: 'ru' | 'en' = (localStorage.getItem('cvx.lang') as any) || 'ru';
 export function setLang(l: 'ru' | 'en') { LANG = l; localStorage.setItem('cvx.lang', l); }

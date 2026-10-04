@@ -43,6 +43,8 @@ export const Z_CLIP: Record<string, string> = { rise: 'm11', walk: 'm71', idle: 
 export class Zombie extends EnemyModel {
   state: ZState = 'idle';
   t = 0; hp = 8; heading = 0; cool = 0;
+  /** model variant (en01 mdlver, picks the personal add_atk) */
+  mdlver = 0;
   private b00: THREE.Object3D | null = null; private rootRest = new THREE.Vector3();
   constructor(public index: number) { super(); }
   async init(file: string, x: number, y: number, z: number, h: number, lying: boolean) {

@@ -18,10 +18,12 @@ import { Effects } from './effects';
 
 export interface SaveData { hp?: number; room: string; pos?: number; x: number; y: number; z: number; h: number; inv: any[]; eq?: number | null; std?: number | null; evt?: { f: EvtFlags; rcase: number }; t: number }
 /** rooms converted from the PS3 data (room file = rm_<stage><room><case>) */
-const ROOMS = new Set(['rm_0000', 'rm_0010', 'rm_0020', 'rm_0021', 'rm_0030', 'rm_0031', 'rm_0040', 'rm_0050', 'rm_0060', 'rm_0080']);
+const ROOMS = new Set(['rm_0000', 'rm_0010', 'rm_0020', 'rm_0021', 'rm_0030', 'rm_0031', 'rm_0040', 'rm_0050', 'rm_0060', 'rm_0070', 'rm_0080']);
 /** converted zombie models en01aNN (NN = model variant byte of the enemy record) */
 const NPC_MODELS = new Set(['en91a00', 'en93a00', 'en98a00']);
 const ZOMBIE_VARIANTS = new Set([0, 1, 2, 9, 10, 32, 33]);
+/** en01_PersonalType add_atk per model variant */
+const EN01_ADD_ATK: Record<number, number> = { 0: 0, 1: 5, 2: 5, 9: 0, 10: 0, 32: 5, 33: 8 };
 const LIGHTER = 55, KNIFE = 8, HANDGUN = 9, BULLETS = 12, MAG = 15;
 /** WeaponSet numbers used by the scripts (ArmsItemCheck / WeaponSet) */
 const WPN_NO: Record<number, number> = { [LIGHTER]: 1, [KNIFE]: 2, [HANDGUN]: 4 };
@@ -65,6 +67,7 @@ export class Game implements EvtHost {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.ui.stage.prepend(this.renderer.domElement);
     this.msg = new MessageBox(this.ui.msg);
+    this.msg.onCursor = () => this.audio.se('cursor');
     this.vm = new EvtVM(this);
     this.invScreen = new InventoryScreen(this.ui.inv, this.inv, this.input, this.audio, this.player);
     this.invScreen.onEquipChange = () => { this.player.setLighter(this.invScreen.standard === LIGHTER); this.player.setKnife(this.invScreen.equipped === KNIFE); this.player.setGun(this.invScreen.equipped === HANDGUN); };
@@ -95,7 +98,7 @@ export class Game implements EvtHost {
     await this.player.load();
     this.audio.init();
     if (save) {
-      this.player.hp = save.hp ?? 200;
+      this.player.hp = save.hp ?? 160;
       this.inv.slots = save.inv.map((s) => (s ? { ...s } : null));
       this.invScreen.equipped = save.eq ?? null;
       this.invScreen.standard = save.std ?? null;
@@ -163,7 +166,7 @@ export class Game implements EvtHost {
         if (!ZOMBIE_VARIANTS.has(variant)) { console.info(`${this.roomId}: zombie ${i} model en01a${pad(variant, 2)} not converted`); continue; }
         // graveyard zombies (behaviour type 0 in rm_002x) lie in the ground and climb out
         const lying = type === 0 && this.roomId.startsWith('rm_002');
-        const z = new Zombie(i);
+        const z = new Zombie(i); z.mdlver = variant;
         await z.init(`enemies/en01a${pad(variant, 2)}.glb`, e.pos[0], e.pos[1], e.pos[2], lying ? (e.rot[1] ?? 0) : (e.rot[2] ?? 0), lying);
         this.zombies.push(z); this.scene.add(z.root);
         const vm = this.vm;
@@ -292,22 +295,33 @@ export class Game implements EvtHost {
     if (!pg.length) { queueMicrotask(() => this.vm.messageClosed(-1, fromExamine)); return; }
     this.msg.show(pg, ch ? [UI.yes(), UI.no()] : undefined).then((sel) => this.vm.messageClosed(ch ? sel : -1, fromExamine));
   }
-  /** item screen (subscreenmode 8): "Take the X?" -> cb 0x800 */
+  /** item screen (subscreenmode 8, GetItem): the status screen opens in "get" mode with the item model,
+   * "Take the X?" in its message box -> cb 0x800 */
   private async itemScreen() {
-    const vm = this.vm, id = vm.sb_id;
+    const vm = this.vm, id = vm.sb_id, S = this.invScreen;
     const auto = !!(vm.cb & 0x4000); vm.cb &= ~(0x10 | 0x4000);
-    this.dialog = true;
+    this.dialog = true; this.invOpen = true;
     try {
-      if (!auto) { const c = await this.msg.show(pages(SYSMES[157], id), [UI.yes(), UI.no()]); if (c !== 0) { vm.cb &= ~0x8000; return; } }
+      await S.show(true, id);
+      if (!auto) { const c = await S.say(pages(SYSMES[157], id), [UI.yes(), UI.no()]); if (c !== 0) { vm.cb &= ~0x8000; return; } }
       let count = id === BULLETS || id === HANDGUN ? MAG : 1;
       if (vm.cb & 0x8000 && id === HANDGUN) count -= 3;
-      if (!this.inv.add(id, ITEM_NAMES[id] ?? '', count)) { vm.cb &= ~0x8000; await this.msg.show(pages(SYSMES[154])); return; }
+      if (!this.inv.canAdd(id)) {
+        vm.cb &= ~0x8000;
+        // recovery items can be used on the spot (message 153), anything else: 154
+        if (id === 20 || id === 21 || id === 23) {
+          const c = await S.say(pages(SYSMES[153]), [UI.yes(), UI.no()]);
+          if (c === 0) { S.heal(id); vm.cb |= 0x800; S.refresh(); }
+        } else await S.say(pages(SYSMES[154]));
+        return;
+      }
+      this.inv.add(id, ITEM_NAMES[id] ?? '', count);
       vm.cb |= 0x800;
-      this.audio.se('pickup');
-      if (vm.cb & 0x8000 && id === HANDGUN) { this.invScreen.equipped = HANDGUN; this.invScreen.onEquipChange!(); }
+      if (vm.cb & 0x8000 && id === HANDGUN) { S.equipped = HANDGUN; S.onEquipChange!(); }
       vm.cb &= ~0x8000;
-      await this.msg.show(pages(SYSMES[158], id));
-    } finally { this.dialog = false; }
+      S.refresh();
+      await S.say(pages(SYSMES[158], id));
+    } finally { await S.show(false); this.invOpen = false; this.dialog = false; }
   }
   /** bhGetEvtCamLockPosition: point of a character / object (local offset l) the event camera looks at */
   private lockPos(f: number, n: number, l: [number, number, number], ono = 0): THREE.Vector3 | null {
@@ -404,7 +418,7 @@ export class Game implements EvtHost {
   /** bhCheckFloorSound: FLR records (flg 1, type 1) give the floor sound type (prm0) under a point */
   floorSound(p?: THREE.Vector3) {
     if (!p) return 0; let sno = 0;
-    for (const a of this.vm.flr) if (a.flg & 1 && a.type === 1 && !(a.attr & 1) && this.inBox(a, p.x, p.z)) sno = a.prm[0];
+    for (const a of this.vm.flr) if (a.flg & 1 && a.type === 1 && !(a.attr & 1) && this.inBox(a, p.x, p.z) && a.prm[0] <= 4) sno = a.prm[0]; // FootDef has 5 entries (rm_0020 uses 82 near the car)
     return sno;
   }
   /** ObjLinkSet* / PlyItem: linked objects and items follow their bone (MdlPut.c: bone matrix * T(lo) * R(object)) */
@@ -494,7 +508,11 @@ export class Game implements EvtHost {
     const s: SaveData = { hp: this.player.hp, room: this.roomId, pos: this.vm.pos_no, x: p.x, y: p.y, z: p.z, h: this.player.heading, inv: this.inv.slots, eq: this.invScreen.equipped, std: this.invScreen.standard, evt: { f: this.vm.f, rcase: this.vm.rcase }, t: this.playTime };
     localStorage.setItem('cvx.save', JSON.stringify(s));
   }
-  async toggleInv(open: boolean) { this.invOpen = open; await this.invScreen.show(open); }
+  async toggleInv(open: boolean) {
+    if (open) { this.invOpen = true; await this.invScreen.show(true); }
+    else if (this.invScreen.open) { await this.invScreen.show(false); this.invOpen = false; }
+    else this.invOpen = false;
+  }
   toggleCamera() {
     this.cam.mode = this.cam.mode === 'fixed' ? 'behind' : 'fixed';
     localStorage.setItem('cvx.cam', this.cam.mode);
@@ -529,7 +547,7 @@ export class Game implements EvtHost {
   /** dog bite in progress (Claire d00/d05, fatal d03/d04) */
   dogBite: { z: Dog; t: number; front: boolean; dead: boolean } | null = null;
   /** zombie bite in progress (Claire z00/z01 + zombie m00, then z02/z03 push-off) */
-  grab: { z: Zombie; t: number; front: boolean; phase: 'bite' | 'push' | 'dead'; hurt: boolean } | null = null;
+  grab: { z: Zombie; t: number; front: boolean; phase: 'bite' | 'push' | 'dead'; hurt: boolean; hurt2: boolean } | null = null;
   hitZombie(z: Zombie | Dog, dmg: number) {
     z.hit(dmg);
     // the scripts' DieCk turns this into the enemy's ed flag (the enemy stays dead)
@@ -544,14 +562,14 @@ export class Game implements EvtHost {
     const zf = z.forward(); const np = zp.clone().addScaledVector(zf, 0.42); np.y = p.y;
     P.place(np.x, np.y, np.z, front ? z.heading + Math.PI : z.heading);
     P.playSync(front ? 'z00' : 'z01');
-    this.grab = { z, t: 0, front, phase: 'bite', hurt: false };
+    this.grab = { z, t: 0, front, phase: 'bite', hurt: false, hurt2: false };
   }
   private startDogBite(z: Dog) {
     const P = this.player, p = P.root.position, zp = z.root.position;
     const front = P.forward().dot(new THREE.Vector3(zp.x - p.x, 0, zp.z - p.z)) >= 0;
     P.heading = front ? Math.atan2(-(zp.x - p.x), -(zp.z - p.z)) : Math.atan2(-(p.x - zp.x), -(p.z - zp.z));
     P.root.rotation.y = P.heading;
-    this.player.hp -= 30; this.audio.se('bite');
+    this.player.hp -= 12; this.audio.se('bite'); // en04 bite damage 12
     const dead = this.player.hp <= 0;
     P.playSync(dead ? (front ? 'd03' : 'd04') : (front ? 'd00' : 'd05'));
     z.set(dead ? 'idle' : 'recoil');
@@ -565,7 +583,10 @@ export class Game implements EvtHost {
   private updateGrab(dt: number) {
     const g = this.grab!; g.t += dt;
     if (g.phase === 'bite') {
-      if (!g.hurt && g.t > 1.0) { g.hurt = true; this.player.hp -= 40; this.audio.se('bite'); }
+      // en01 grab motion bites at frames 25 and 59.5: 10 + the variant's add_atk each
+      const dmg = 10 + (EN01_ADD_ATK[g.z.mdlver] ?? 0);
+      if (!g.hurt && g.t * 30 >= 25) { g.hurt = true; this.player.hp -= dmg; this.audio.se('bite'); }
+      if (!g.hurt2 && g.t * 30 >= 59.5) { g.hurt2 = true; this.player.hp -= dmg; this.audio.se('bite'); }
       if (g.t >= 2.0) {
         g.t = 0;
         if (this.player.hp <= 0) { g.phase = 'dead'; this.player.playSync(g.front ? 'z10' : 'z11'); g.z.set('idle'); }
@@ -622,7 +643,7 @@ export class Game implements EvtHost {
       this.player.frozen = true;
     } else if (this.invOpen) {
       this.player.frozen = true;
-      if (!this.invScreen.update(dt)) this.invOpen = false;
+      if (!this.invScreen.update(dt)) this.toggleInv(false);
     } else if (this.busy || this.dialog) this.player.frozen = true;
     else if (cine) {
       this.player.frozen = true;

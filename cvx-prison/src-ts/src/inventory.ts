@@ -9,6 +9,8 @@ export class Inventory {
     this.slots[i] = { id, name, count };
     return true;
   }
+  /** room for one more of this item (stacks into an existing slot or a free one) */
+  canAdd(id: number) { return (STACK.has(id) && this.has(id)) || this.slots.some((x) => !x); }
   has(id: number) { return this.slots.some((s) => s?.id === id); }
   take(id: number) { const i = this.slots.findIndex((s) => s?.id === id); if (i < 0) return false; const s = this.slots[i]!; s.count--; if (s.count <= 0) this.slots[i] = null; return true; }
   toJSON() { return this.slots; }
