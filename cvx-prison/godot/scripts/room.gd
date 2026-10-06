@@ -20,12 +20,41 @@ const CELL := 1.0
 # occluders: [{mi, aabb, tris: PackedVector3Array, flip: bool}]
 var _occ: Array = []
 
+## the room layout comes from scenes/rooms/ID.tscn (editable, see RoomScene) when it exists,
+## otherwise directly from the converted data (assets/rooms/ID.json)
 static func load_room(id: String) -> Room:
 	var r := Room.new()
 	r.name = id
 	r.data = Assets.json("rooms/%s.json" % id, {})
-	r._build()
+	var sp := "res://scenes/rooms/%s.tscn" % id
+	if ResourceLoader.exists(sp):
+		r._build_scene((load(sp) as PackedScene).instantiate() as RoomScene)
+	else:
+		r._build()
 	return r
+
+var layout: RoomScene = null
+
+func _build_scene(rs: RoomScene) -> void:
+	layout = rs
+	data = rs.collect(data)
+	add_child(rs)
+	var sc := rs.model()
+	if sc:
+		Assets.to_lambert(sc, "rom")
+		_collect(sc)
+		_find_nodes(sc)
+	for o in rs.objects():
+		var po := o as PlacedObject
+		if po == null or not po.drawn or po.get_child_count() == 0:
+			if po: po.visible = false
+			continue
+		var p := po.position
+		if p.x < bbox.position.x - 0.05 or p.z < bbox.position.z - 0.05 or p.x > bbox.end.x + 0.05 or p.z > bbox.end.z + 0.05:
+			outside[po.get_index()] = true; po.visible = false
+		Assets.to_lambert(po, "obj")
+		obj_meshes[po.get_index()] = po
+	_build_walls()
 
 func _build() -> void:
 	var d := data
@@ -51,7 +80,10 @@ func _build() -> void:
 		o.transform = U.trs(p, U.euler(ob.rot[0], ob.rot[2], ob.rot[1], EULER_ORDER_ZYX), 0.1)
 		o.name = "obj%d_%s" % [i, ob.model]
 		add_child(o); obj_meshes[i] = o
-	var col: Array = d.get("collision", [])
+	_build_walls()
+
+func _build_walls() -> void:
+	var col: Array = data.get("collision", [])
 	wall_shapes = []
 	for c in col:
 		wall_shapes.append(_collider_shape(c))
@@ -191,6 +223,16 @@ func sync_walls(on: Callable) -> void:
 			shapes.append(wall_shapes[i])
 
 func place_items() -> void:
+	if layout:
+		for o in layout.items():
+			var i: int = o.get_index()
+			var ap := Assets.find_type(o, "AnimationPlayer") as AnimationPlayer
+			if ap and ap.get_animation_list().size():
+				ap.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
+				item_players[i] = ap
+			Assets.to_lambert(o, "itm")
+			item_meshes[i] = o
+		return
 	var items: Array = data.get("items", [])
 	for i in items.size():
 		var it: Dictionary = items[i]

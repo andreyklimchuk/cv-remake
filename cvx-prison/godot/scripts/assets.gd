@@ -19,12 +19,18 @@ func exists(p: String) -> bool:
 	return ResourceLoader.exists(ROOT + p) or FileAccess.file_exists(ROOT + p)
 
 ## instantiated copy of a glTF scene (null when missing)
+## A model "dir/name.glb" is loaded from its editable scene res://scenes/models/dir/name.tscn when that exists
+## (tools/build_scenes.gd), otherwise from the imported glb itself.
 func scene(p: String) -> Node3D:
 	var ps: PackedScene = _scenes.get(p)
 	if ps == null:
-		if not ResourceLoader.exists(ROOT + p):
+		var wrap := "res://scenes/models/" + p.get_basename() + ".tscn"
+		if p.ends_with(".glb") and ResourceLoader.exists(wrap):
+			ps = load(wrap)
+		elif ResourceLoader.exists(ROOT + p):
+			ps = load(ROOT + p)
+		else:
 			return null
-		ps = load(ROOT + p)
 		_scenes[p] = ps
 	return ps.instantiate() as Node3D
 
@@ -117,6 +123,9 @@ func to_lambert(root: Node, cat := "chr") -> void:
 			var src: Material = mi.get_surface_override_material(i)
 			if src == null:
 				src = m.surface_get_material(i)
+			# a ShaderMaterial set in the editor (model scene) is kept as it is
+			if src is ShaderMaterial and not src.has_meta("cat") and src.shader != null:
+				continue
 			mi.set_surface_override_material(i, convert_mat(src, cat))
 
 func convert_mat(src: Material, cat: String) -> Material:

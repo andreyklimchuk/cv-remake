@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="PackedScene" path="res://assets/items/it_009.glb" id="1_23uhk"]
+
+[node name="it_009" type="Node3D"]
+
+[node name="glb" type="Node3D" parent="." instance=ExtResource("1_23uhk")]

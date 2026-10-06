@@ -25,6 +25,29 @@
 F / ПКМ — оружие наизготовку, E / Пробел / Enter / ЛКМ — действие/удар, Tab — предметы, Esc — отмена/пропуск, F1 — отладка.
 Сохранение (печатная машинка) — `user://save.json`, настройки — `user://settings.cfg`.
 
+## Сцены (редактируются в Godot)
+Игра собрана из отдельных сцен, которые можно открыть и править в редакторе — игра читает именно их:
+- `scenes/models/<rooms|objects|items|chars|enemies|npc|inv>/<имя>.tscn` — по сцене на каждую модель (комната, объект, предмет, Клэр/NPC, враги, 3D-предметы инвентаря). Внутри — импортированный glb; чтобы менять меши/материалы — «Editable Children». `Assets.scene()` грузит эти сцены вместо glb.
+- `scenes/rooms/rm_XXXX.tscn` — раскладка комнаты (`RoomScene`, скрипты в `scripts/scene/`):
+
+| узел | что это | тип |
+|---|---|---|
+| Model | геометрия комнаты (сцена модели) | instance |
+| Objects/objNN_* | объекты комнаты (позиция/поворот, index, flags, id, ex) | PlacedObject |
+| Items/itemNN_* | предметы на полу (позиция, id предмета, flags) | PlacedItem |
+| Enemies/enemyNN_* | точки появления врагов (id, позиция, поворот) | EnemySpawn |
+| Spawns/spawnN | позиции входа игрока | SpawnPoint |
+| Cameras/camNN | фиксированные камеры (позиция, поворот; прочие параметры — в rec) | RoomCam (Camera3D — можно смотреть через неё в редакторе) |
+| Triggers, Collision, Areas | зоны событий, стены/коллизия, зоны пола/камер | AtrBox (коробка с размером, type/flags в hex) |
+| Lights, EventLights | источники света комнаты | RoomLight |
+
+Двигайте/поворачивайте узлы, меняйте свойства в инспекторе — при загрузке комнаты `RoomScene.collect()` собирает из них данные, которые раньше брались из `assets/rooms/ID.json`. Тексты сообщений, амбиент и скрипты событий остаются в JSON (это байткод оригинала).
+
+Сцены генерируются из ассетов (после `fetch_assets.py`):
+`godot --headless --path . -s tools/build_scenes.gd [-- all|models|rooms [rm_XXXX ...]] [--force]`.
+Существующие сцены комнат не перезаписываются (там ваши правки), `--force` — пересоздать. Если сцены комнаты нет, игра грузит её из JSON как раньше.
+Сцены ссылаются на `res://assets/...` — поэтому сначала `fetch_assets.py`, потом открывать проект.
+
 ## Тесты
 - `godot --headless --path . -s dev/vmtest.gd -- rm_0000 600` — тот же лог VM, что `dev/vmtest.ts` веб-версии (сверено на всех 13 комнатах; отличия только в печати `-0.00`).
 - `godot --headless --path . res://dev/test.tscn -- flow|rooms|ui|cam` — сценарии как dev/t_flow1.js / t_rooms.js;
