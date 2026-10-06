@@ -1,34 +1,34 @@
 [gd_scene load_steps=17 format=3]
 
-[ext_resource type="Script" path="res://scripts/scene/room_scene.gd" id="1_l6t8r"]
-[ext_resource type="PackedScene" path="res://scenes/models/rooms/rm_0060.tscn" id="2_gh0f2"]
-[ext_resource type="Script" path="res://scripts/scene/placed_object.gd" id="3_qxhtf"]
-[ext_resource type="PackedScene" path="res://scenes/models/objects/ob_019.tscn" id="4_72etg"]
-[ext_resource type="PackedScene" path="res://scenes/models/objects/ob_020.tscn" id="5_ql4sb"]
-[ext_resource type="PackedScene" path="res://scenes/models/objects/ob_066.tscn" id="6_et118"]
-[ext_resource type="PackedScene" path="res://scenes/models/objects/ob_021.tscn" id="7_kssss"]
-[ext_resource type="Script" path="res://scripts/scene/placed_item.gd" id="8_5siy1"]
-[ext_resource type="PackedScene" path="res://scenes/models/items/it_012.tscn" id="9_il0rd"]
-[ext_resource type="PackedScene" path="res://scenes/models/items/it_074.tscn" id="10_1flrq"]
-[ext_resource type="PackedScene" path="res://scenes/models/items/it_021.tscn" id="11_54pdq"]
-[ext_resource type="Script" path="res://scripts/scene/enemy_spawn.gd" id="12_7aqlq"]
-[ext_resource type="Script" path="res://scripts/scene/spawn_point.gd" id="13_2iy4o"]
-[ext_resource type="Script" path="res://scripts/scene/room_cam.gd" id="14_wd373"]
-[ext_resource type="Script" path="res://scripts/scene/atr_box.gd" id="15_5qkvl"]
-[ext_resource type="Script" path="res://scripts/scene/room_light.gd" id="16_fi217"]
+[ext_resource type="Script" path="res://scripts/scene/room_scene.gd" id="1_4eola"]
+[ext_resource type="PackedScene" path="res://scenes/models/rooms/rm_0060.tscn" id="2_kx3fd"]
+[ext_resource type="Script" path="res://scripts/scene/placed_object.gd" id="3_6fi5s"]
+[ext_resource type="PackedScene" path="res://scenes/models/objects/ob_019.tscn" id="4_dhgwv"]
+[ext_resource type="PackedScene" path="res://scenes/models/objects/ob_020.tscn" id="5_35xx0"]
+[ext_resource type="PackedScene" path="res://scenes/models/objects/ob_066.tscn" id="6_0ayp3"]
+[ext_resource type="PackedScene" path="res://scenes/models/objects/ob_021.tscn" id="7_0x55e"]
+[ext_resource type="Script" path="res://scripts/scene/placed_item.gd" id="8_utbas"]
+[ext_resource type="PackedScene" path="res://scenes/models/items/it_012.tscn" id="9_n4hbg"]
+[ext_resource type="PackedScene" path="res://scenes/models/items/it_074.tscn" id="10_vsbo3"]
+[ext_resource type="PackedScene" path="res://scenes/models/items/it_021.tscn" id="11_ot2w2"]
+[ext_resource type="Script" path="res://scripts/scene/enemy_spawn.gd" id="12_rf2k7"]
+[ext_resource type="Script" path="res://scripts/scene/spawn_point.gd" id="13_r6v2h"]
+[ext_resource type="Script" path="res://scripts/scene/room_cam.gd" id="14_wunrt"]
+[ext_resource type="Script" path="res://scripts/scene/atr_box.gd" id="15_ghps1"]
+[ext_resource type="Script" path="res://scripts/scene/room_light.gd" id="16_g4cln"]
 
 [node name="rm_0060" type="Node3D"]
-script = ExtResource("1_l6t8r")
+script = ExtResource("1_4eola")
 room_id = "rm_0060"
 
-[node name="Model" type="Node3D" parent="." instance=ExtResource("2_gh0f2")]
+[node name="Model" type="Node3D" parent="." instance=ExtResource("2_kx3fd")]
 transform = Transform3D(0.1, 0, 0, 0, 0.1, 0, 0, 0, 0.1, 0, 0, 0)
 
 [node name="Objects" type="Node3D" parent="."]
 
 [node name="obj00_none" type="Node3D" parent="Objects"]
 transform = Transform3D(0.1, 0, 0, 0, 0.1, 0, 0, 0, 0.1, 0, 0, 0)
-script = ExtResource("3_qxhtf")
+script = ExtResource("3_6fi5s")
 index = 0
 flags = "00000000"
 id = 0
@@ -40,7 +40,7 @@ rot = Vector3(0, 0, 0)
 
 [node name="obj01_none" type="Node3D" parent="Objects"]
 transform = Transform3D(0.1, 0, 0, 0, 0.1, 0, 0, 0, 0.1, 0, 0, 0)
-script = ExtResource("3_qxhtf")
+script = ExtResource("3_6fi5s")
 index = 1
 flags = "00000000"
 id = 0
@@ -52,7 +52,7 @@ rot = Vector3(0, 0, 0)
 
 [node name="obj02_none" type="Node3D" parent="Objects"]
 transform = Transform3D(0.1, 0, 0, 0, 0.1, 0, 0, 0, 0.1, 0, 0, 0)
-script = ExtResource("3_qxhtf")
+script = ExtResource("3_6fi5s")
 index = 2
 flags = "00000000"
 id = 0
@@ -64,7 +64,7 @@ rot = Vector3(0, 0, 0)
 
 [node name="obj03_none" type="Node3D" parent="Objects"]
 transform = Transform3D(0.1, 0, 0, 0, 0.1, 0, 0, 0, 0.1, 0, 0, 0)
-script = ExtResource("3_qxhtf")
+script = ExtResource("3_6fi5s")
 index = 3
 flags = "00000000"
 id = 0
@@ -76,7 +76,7 @@ rot = Vector3(0, 0, 0)
 
 [node name="obj04_ob_019" type="Node3D" parent="Objects"]
 transform = Transform3D(0.1, 0, 0, 0, 0.1, 0, 0, 0, 0.1, 6.02913, 1.99655, 3.83811)
-script = ExtResource("3_qxhtf")
+script = ExtResource("3_6fi5s")
 index = 4
 flags = "40000001"
 id = 19
@@ -86,11 +86,11 @@ ex = "000000000000"
 pos = Vector3(6.02913, 1.99655, 3.83811)
 rot = Vector3(0, 0, 0)
 
-[node name="model" type="Node3D" parent="Objects/obj04_ob_019" instance=ExtResource("4_72etg")]
+[node name="model" type="Node3D" parent="Objects/obj04_ob_019" instance=ExtResource("4_dhgwv")]
 
 [node name="obj05_ob_020" type="Node3D" parent="Objects"]
 transform = Transform3D(0.1, 0, 0, 0, 0.1, 0, 0, 0, 0.1, -0.137395, 2.19714, -0.462322)
-script = ExtResource("3_qxhtf")
+script = ExtResource("3_6fi5s")
 index = 5
 flags = "40000001"
 id = 20
@@ -100,11 +100,11 @@ ex = "000000000000"
 pos = Vector3(-0.137395, 2.19714, -0.462322)
 rot = Vector3(0, 0, 0)
 
-[node name="model" type="Node3D" parent="Objects/obj05_ob_020" instance=ExtResource("5_ql4sb")]
+[node name="model" type="Node3D" parent="Objects/obj05_ob_020" instance=ExtResource("5_35xx0")]
 
 [node name="obj06_ob_066" type="Node3D" parent="Objects"]
 transform = Transform3D(0.1, 0, 0, 0, 0.1, 0, 0, 0, 0.1, 2.9991, 4.78973, 2.9303)
-script = ExtResource("3_qxhtf")
+script = ExtResource("3_6fi5s")
 index = 6
 flags = "40000001"
 id = 66
@@ -114,11 +114,11 @@ ex = "000000000000"
 pos = Vector3(2.9991, 4.78973, 2.9303)
 rot = Vector3(0, 0, 0)
 
-[node name="model" type="Node3D" parent="Objects/obj06_ob_066" instance=ExtResource("6_et118")]
+[node name="model" type="Node3D" parent="Objects/obj06_ob_066" instance=ExtResource("6_0ayp3")]
 
 [node name="obj07_ob_021" type="Node3D" parent="Objects"]
 transform = Transform3D(0.1, 0, 0, 0, 0.1, 0, 0, 0, 0.1, -0.0845216, 2.59903, -0.810972)
-script = ExtResource("3_qxhtf")
+script = ExtResource("3_6fi5s")
 index = 7
 flags = "40000001"
 id = 21
@@ -128,11 +128,11 @@ ex = "000000000000"
 pos = Vector3(-0.0845216, 2.59903, -0.810972)
 rot = Vector3(0, 0, 0)
 
-[node name="model" type="Node3D" parent="Objects/obj07_ob_021" instance=ExtResource("7_kssss")]
+[node name="model" type="Node3D" parent="Objects/obj07_ob_021" instance=ExtResource("7_0x55e")]
 
 [node name="obj08_ob_021" type="Node3D" parent="Objects"]
 transform = Transform3D(0.1, 0, 0, 0, 0.1, 0, 0, 0, 0.1, -0.610412, 2.27796, 9.42473)
-script = ExtResource("3_qxhtf")
+script = ExtResource("3_6fi5s")
 index = 8
 flags = "40000001"
 id = 21
@@ -142,13 +142,13 @@ ex = "000000000000"
 pos = Vector3(-0.610412, 2.27796, 9.42473)
 rot = Vector3(0, 0, 0)
 
-[node name="model" type="Node3D" parent="Objects/obj08_ob_021" instance=ExtResource("7_kssss")]
+[node name="model" type="Node3D" parent="Objects/obj08_ob_021" instance=ExtResource("7_0x55e")]
 
 [node name="Items" type="Node3D" parent="."]
 
 [node name="item00_it_012" type="Node3D" parent="Items"]
 transform = Transform3D(-0.0499557, 0, -0.0866281, 0, 0.1, 0, 0.0866281, 0, -0.0499557, 0.242627, 0.84, 2.98618)
-script = ExtResource("8_5siy1")
+script = ExtResource("8_utbas")
 index = 0
 flags = "00000001"
 id = 12
@@ -157,11 +157,11 @@ item_name = ""
 ex = "000002000000"
 rot = Vector3(0, 0, -2.09388)
 
-[node name="model" type="Node3D" parent="Items/item00_it_012" instance=ExtResource("9_il0rd")]
+[node name="model" type="Node3D" parent="Items/item00_it_012" instance=ExtResource("9_n4hbg")]
 
 [node name="item01_it_074" type="Node3D" parent="Items"]
 transform = Transform3D(3.83453e-05, -0.1, -3.83453e-05, 0, 3.83453e-05, -0.1, 0.1, 3.83453e-05, 1.47036e-08, 1.89067, 1.59749, 8.94533)
-script = ExtResource("8_5siy1")
+script = ExtResource("8_utbas")
 index = 1
 flags = "00000001"
 id = 74
@@ -170,11 +170,11 @@ item_name = ""
 ex = "000000000000"
 rot = Vector3(1.57041, 0, -1.57041)
 
-[node name="model" type="Node3D" parent="Items/item01_it_074" instance=ExtResource("10_1flrq")]
+[node name="model" type="Node3D" parent="Items/item01_it_074" instance=ExtResource("10_vsbo3")]
 
 [node name="item02_it_021" type="Node3D" parent="Items"]
 transform = Transform3D(0.1, 0, 0, 0, 0.1, 0, 0, 0, 0.1, 5.44196, 1.89077, 9.08493)
-script = ExtResource("8_5siy1")
+script = ExtResource("8_utbas")
 index = 2
 flags = "00000001"
 id = 21
@@ -183,13 +183,13 @@ item_name = ""
 ex = "000000000000"
 rot = Vector3(0, 0, 0)
 
-[node name="model" type="Node3D" parent="Items/item02_it_021" instance=ExtResource("11_54pdq")]
+[node name="model" type="Node3D" parent="Items/item02_it_021" instance=ExtResource("11_ot2w2")]
 
 [node name="Enemies" type="Node3D" parent="."]
 
 [node name="enemy00_en01" type="Node3D" parent="Enemies"]
 transform = Transform3D(0.000383453, 0, -1, 0, 1, 0, 1, 0, 0.000383453, 3.11408, 0.8, 7.00582)
-script = ExtResource("12_7aqlq")
+script = ExtResource("12_rf2k7")
 index = 0
 id = 1
 flags = "00000001"
@@ -200,7 +200,7 @@ room_id = "rm_0060"
 
 [node name="enemy01_en01" type="Node3D" parent="Enemies"]
 transform = Transform3D(-0.499557, 0, 0.866281, 0, 1, 0, -0.866281, 0, -0.499557, 5.69676, 0, 1.16742)
-script = ExtResource("12_7aqlq")
+script = ExtResource("12_rf2k7")
 index = 1
 id = 1
 flags = "00000001"
@@ -211,7 +211,7 @@ room_id = "rm_0060"
 
 [node name="enemy02_en01" type="Node3D" parent="Enemies"]
 transform = Transform3D(0.259128, 0, -0.965843, 0, 1, 0, 0.965843, 0, 0.259128, 1.03968, 0, 5.64271)
-script = ExtResource("12_7aqlq")
+script = ExtResource("12_rf2k7")
 index = 2
 id = 1
 flags = "00000001"
@@ -222,7 +222,7 @@ room_id = "rm_0060"
 
 [node name="enemy03_en01" type="Node3D" parent="Enemies"]
 transform = Transform3D(0.000383453, 0, -1, 0, 1, 0, 1, 0, 0.000383453, 1.29721, 0, 0.796178)
-script = ExtResource("12_7aqlq")
+script = ExtResource("12_rf2k7")
 index = 3
 id = 1
 flags = "00000001"
@@ -233,7 +233,7 @@ room_id = "rm_0060"
 
 [node name="enemy04_en67" type="Node3D" parent="Enemies"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.1716, 0, -1.17591)
-script = ExtResource("12_7aqlq")
+script = ExtResource("12_rf2k7")
 index = 4
 id = 67
 flags = "00000001"
@@ -246,12 +246,12 @@ room_id = "rm_0060"
 
 [node name="spawn0" type="Marker3D" parent="Spawns"]
 transform = Transform3D(-0.999861, 0, 0.0166813, 0, 1, 0, -0.0166813, 0, -0.999861, 4.03862, 0, 0.301633)
-script = ExtResource("13_2iy4o")
+script = ExtResource("13_r6v2h")
 raw = 32594
 
 [node name="spawn1" type="Marker3D" parent="Spawns"]
 transform = Transform3D(0.000383453, 0, 1, 0, 1, 0, -1, 0, 0.000383453, 5.70185, 0, 2.55436)
-script = ExtResource("13_2iy4o")
+script = ExtResource("13_r6v2h")
 raw = 16380
 
 [node name="Cameras" type="Node3D" parent="."]
@@ -260,7 +260,7 @@ raw = 16380
 transform = Transform3D(0.627102, 0.25509, -0.735983, 0, 0.944856, 0.327485, 0.778937, -0.205367, 0.592522, 3.1859, 2.28006, 7.75543)
 fov = 46.0
 far = 200.0
-script = ExtResource("14_wd373")
+script = ExtResource("14_wunrt")
 rec = {
 "flags": "01280000",
 "hid": [1075849720, 138568710, 268435468, 4063256576, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -276,7 +276,7 @@ rec = {
 transform = Transform3D(-0.0697395, -0.552945, 0.830294, 0, 0.832321, 0.554294, -0.997565, 0.0386562, -0.0580456, 4.9961, 2.45513, 3.47125)
 fov = 46.0
 far = 200.0
-script = ExtResource("14_wd373")
+script = ExtResource("14_wunrt")
 rec = {
 "flags": "01080032",
 "hid": [1323969192, 478146055, 442779933, 4294565888, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -292,7 +292,7 @@ rec = {
 transform = Transform3D(-0.758085, -0.637466, 0.137637, 0, 0.211049, 0.977475, -0.652156, 0.741009, -0.159993, 1.48402, 4.71568, -1.30196)
 fov = 46.0
 far = 200.0
-script = ExtResource("14_wd373")
+script = ExtResource("14_wunrt")
 rec = {
 "flags": "01080000",
 "hid": [1609105407, 4286578687, 4294967294, 4290764800, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -308,7 +308,7 @@ rec = {
 transform = Transform3D(-0.999257, 0.0207764, -0.0324505, 0, 0.842176, 0.539203, 0.0385317, 0.538803, -0.84155, 0.473229, 3.57429, 4.80263)
 fov = 46.0
 far = 200.0
-script = ExtResource("14_wd373")
+script = ExtResource("14_wunrt")
 rec = {
 "flags": "01280000",
 "hid": [798967303, 4137524209, 3959422963, 231702528, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -324,7 +324,7 @@ rec = {
 transform = Transform3D(-0.683546, 0.336026, -0.647959, 0, 0.887728, 0.460368, 0.729908, 0.314683, -0.606803, 2.43038, 2.10138, 3.94594)
 fov = 46.0
 far = 200.0
-script = ExtResource("14_wd373")
+script = ExtResource("14_wunrt")
 rec = {
 "flags": "01280032",
 "hid": [1637828607, 4137524215, 4026531831, 2379186176, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -340,7 +340,7 @@ rec = {
 
 [node name="trigger00" type="Node3D" parent="Triggers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.3, 0, 5.15)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "trigger"
 size = Vector3(0.499, 0, 0.599)
 type_hex = "101"
@@ -349,7 +349,7 @@ extra = 4278452736
 
 [node name="trigger01" type="Node3D" parent="Triggers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.3, 0.8, 5.85)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "trigger"
 size = Vector3(0.499, 0, 0.599)
 type_hex = "2000101"
@@ -358,7 +358,7 @@ extra = 4278452225
 
 [node name="trigger02" type="Node3D" parent="Triggers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.670545, 0, 9.5039)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "trigger"
 size = Vector3(1.09252, 0, 0.685681)
 type_hex = "301"
@@ -367,7 +367,7 @@ extra = 0
 
 [node name="trigger03" type="Node3D" parent="Triggers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 7.75)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "trigger"
 size = Vector3(0.799, 0, 0.799)
 type_hex = "301"
@@ -376,7 +376,7 @@ extra = 256
 
 [node name="trigger04" type="Node3D" parent="Triggers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.1, 0, 2.6)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "trigger"
 size = Vector3(0.699, 0, 0.799)
 type_hex = "301"
@@ -385,7 +385,7 @@ extra = 0
 
 [node name="trigger05" type="Node3D" parent="Triggers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 6.95)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "trigger"
 size = Vector3(0.799, 0, 0.799)
 type_hex = "301"
@@ -394,7 +394,7 @@ extra = 256
 
 [node name="trigger06" type="Node3D" parent="Triggers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.3, 0.8, 9.1)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "trigger"
 size = Vector3(0.599, 0, 0.699)
 type_hex = "2000401"
@@ -403,7 +403,7 @@ extra = 2
 
 [node name="trigger07" type="Node3D" parent="Triggers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.6, 0, -1.5)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "trigger"
 size = Vector3(0.699, 0, 0.699)
 type_hex = "301"
@@ -412,7 +412,7 @@ extra = 768
 
 [node name="trigger08" type="Node3D" parent="Triggers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.5, 0, -0.5)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "trigger"
 size = Vector3(1.099, 0, 0.699)
 type_hex = "1"
@@ -421,7 +421,7 @@ extra = 83887872
 
 [node name="trigger09" type="Node3D" parent="Triggers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.8, 0, 2)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "trigger"
 size = Vector3(0.699, 0, 1.099)
 type_hex = "1"
@@ -430,7 +430,7 @@ extra = 67241216
 
 [node name="trigger10" type="Node3D" parent="Triggers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.85, 0, 1.4)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "trigger"
 size = Vector3(2.799, 0, 3.199)
 type_hex = "301"
@@ -439,7 +439,7 @@ extra = 1024
 
 [node name="trigger11" type="Node3D" parent="Triggers"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.6, 0, 8.6)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "trigger"
 size = Vector3(0.699, 0, 0.699)
 type_hex = "301"
@@ -450,7 +450,7 @@ extra = 1280
 
 [node name="collision00" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3, 0.8, 7.6)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(3.3, 0.79, 1.9)
 type_hex = "2000101"
@@ -459,7 +459,7 @@ extra = 0
 
 [node name="collision01" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.25, 0, 2.55)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.2, 0.4, 0)
 type_hex = "201"
@@ -468,7 +468,7 @@ extra = 4
 
 [node name="collision02" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3, 1.5, 7.8)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(3.1, 0.1, 1.5)
 type_hex = "3000001"
@@ -477,7 +477,7 @@ extra = 4
 
 [node name="collision03" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.05, 0, 8.9)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.5, 0.4, 0.5)
 type_hex = "1"
@@ -486,7 +486,7 @@ extra = 4
 
 [node name="collision04" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.3, 0, 9.8)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(1.3, 1, 1)
 type_hex = "1"
@@ -495,7 +495,7 @@ extra = 0
 
 [node name="collision05" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.25, 0, 3.3)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.2, 0.4, 0)
 type_hex = "201"
@@ -504,7 +504,7 @@ extra = 4
 
 [node name="collision06" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.25, 0, 1.85)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.2, 0.4, 0)
 type_hex = "201"
@@ -512,7 +512,7 @@ flags_hex = "0"
 extra = 4
 
 [node name="collision07" type="Node3D" parent="Collision"]
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.5, 1.8, 0.7)
 type_hex = "401"
@@ -521,7 +521,7 @@ extra = 4
 
 [node name="collision08" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.95, 0, -1.25)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.2, 0.5, 0)
 type_hex = "201"
@@ -530,7 +530,7 @@ extra = 0
 
 [node name="collision09" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.2, 0, 5.35)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.799, 0.6, 0.899)
 type_hex = "20601"
@@ -539,7 +539,7 @@ extra = 0
 
 [node name="collision10" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.1, 0, 5.55)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(1.3, 0.1, 0.7)
 type_hex = "101"
@@ -548,7 +548,7 @@ extra = 0
 
 [node name="collision11" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.9, 0, 6.25)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.1, 0, 4.55)
 type_hex = "1"
@@ -557,7 +557,7 @@ extra = 0
 
 [node name="collision12" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.9, 0, 6.3)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(4.4, 0.7, 0.1)
 type_hex = "1"
@@ -566,7 +566,7 @@ extra = 4
 
 [node name="collision13" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 0.8, 6.25)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.1, 1, 0.1)
 type_hex = "2000001"
@@ -575,7 +575,7 @@ extra = 4
 
 [node name="collision14" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.97, 0.8, 6.25)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.1, 1, 0.1)
 type_hex = "2000001"
@@ -584,7 +584,7 @@ extra = 4
 
 [node name="collision15" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.98, 0.8, 6.25)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.1, 1, 0.1)
 type_hex = "2000001"
@@ -593,7 +593,7 @@ extra = 4
 
 [node name="collision16" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.9, 0.8, 6.25)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(3.2, 1, 0.1)
 type_hex = "2000101"
@@ -602,7 +602,7 @@ extra = 0
 
 [node name="collision17" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.9, 1.7, 6.25)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(3.2, 0.1, 0.1)
 type_hex = "4000001"
@@ -611,7 +611,7 @@ extra = 4
 
 [node name="collision18" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.45, 0, -2.05)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(6.8, -0.5, 12.8)
 type_hex = "701"
@@ -620,7 +620,7 @@ extra = 2
 
 [node name="collision19" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.3, 0, 2.5)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.7, 0, 1)
 type_hex = "1"
@@ -629,7 +629,7 @@ extra = 4
 
 [node name="collision20" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.1, 0.8, 5.85)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(1.2, 0.1, 0.2)
 type_hex = "2000101"
@@ -638,7 +638,7 @@ extra = 0
 
 [node name="collision21" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.9, 0.8, 6.25)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(4.4, -0.1, 4.55)
 type_hex = "2000701"
@@ -647,7 +647,7 @@ extra = 4
 
 [node name="collision22" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.1, 0, 5.5)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.1, 0.7, 0.8)
 type_hex = "101"
@@ -656,7 +656,7 @@ extra = 0
 
 [node name="collision23" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.3, 3, 8.36)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(6.6, -0.2, 0.2)
 type_hex = "7000701"
@@ -665,7 +665,7 @@ extra = 4
 
 [node name="collision24" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3, 0, 1.85)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.2, 0.4, 0)
 type_hex = "201"
@@ -674,7 +674,7 @@ extra = 4
 
 [node name="collision25" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3, 0, 2.8)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.2, 0.4, 0)
 type_hex = "201"
@@ -683,7 +683,7 @@ extra = 4
 
 [node name="collision26" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3, 0, 3.6)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.2, 0.4, 0)
 type_hex = "201"
@@ -692,7 +692,7 @@ extra = 4
 
 [node name="collision27" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3, 0, 4.15)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.2, 0.4, 0)
 type_hex = "201"
@@ -701,7 +701,7 @@ extra = 4
 
 [node name="collision28" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.5, 0, 4.1)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.2, 0.4, 0)
 type_hex = "201"
@@ -710,7 +710,7 @@ extra = 4
 
 [node name="collision29" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.4, 0, 3.25)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.2, 0.4, 0)
 type_hex = "201"
@@ -719,7 +719,7 @@ extra = 4
 
 [node name="collision30" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.5, 0, 2.5)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.2, 0.4, 0)
 type_hex = "201"
@@ -728,7 +728,7 @@ extra = 4
 
 [node name="collision31" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.5, 0, 2)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.2, 0.4, 0)
 type_hex = "201"
@@ -737,7 +737,7 @@ extra = 4
 
 [node name="collision32" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.3, 0, 10.5)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(6.6, 0, 0.3)
 type_hex = "1"
@@ -746,7 +746,7 @@ extra = 0
 
 [node name="collision33" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.3, 0, -2)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.3, 0, 12.8)
 type_hex = "1"
@@ -755,7 +755,7 @@ extra = 0
 
 [node name="collision34" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.3, 0, -2)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(2.5, 0, 0.3)
 type_hex = "1"
@@ -764,7 +764,7 @@ extra = 0
 
 [node name="collision35" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.9, 0, -2)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.3, 0, 2)
 type_hex = "1"
@@ -773,7 +773,7 @@ extra = 0
 
 [node name="collision36" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.4, 0, -0.2)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.8, 0, 0.2)
 type_hex = "1"
@@ -782,7 +782,7 @@ extra = 0
 
 [node name="collision37" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.3, 0, -0.2)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.8, 0, 0.2)
 type_hex = "1"
@@ -791,7 +791,7 @@ extra = 0
 
 [node name="collision38" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.3, 3, 6.22)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(6.6, -0.2, 0.2)
 type_hex = "7000701"
@@ -800,7 +800,7 @@ extra = 4
 
 [node name="collision39" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.25, 0, 1.9)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.2, 0.4, 0)
 type_hex = "201"
@@ -809,7 +809,7 @@ extra = 4
 
 [node name="collision40" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.25, 0, 2.6)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.2, 0.4, 0)
 type_hex = "201"
@@ -818,7 +818,7 @@ extra = 4
 
 [node name="collision41" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.3, 3, 4.08)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(6.6, -0.2, 0.2)
 type_hex = "7000701"
@@ -827,7 +827,7 @@ extra = 4
 
 [node name="collision42" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.3, 3, 1.95)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(6.6, -0.2, 0.2)
 type_hex = "7000701"
@@ -836,7 +836,7 @@ extra = 4
 
 [node name="collision43" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.9, 0, 0.1)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.360555, 0.1, 0)
 type_hex = "301"
@@ -845,7 +845,7 @@ extra = 0
 
 [node name="collision44" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.8, 0, 0.6)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.141421, 0.3035, 0)
 type_hex = "301"
@@ -854,7 +854,7 @@ extra = 0
 
 [node name="collision45" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 0, -0.3)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.3, 0, 2.4)
 type_hex = "1"
@@ -863,7 +863,7 @@ extra = 0
 
 [node name="collision46" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 0, 6.3)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.3, 0, 4.5)
 type_hex = "1"
@@ -872,7 +872,7 @@ extra = 0
 
 [node name="collision47" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.1, 0, 2)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.3, 0, 1.1)
 type_hex = "1"
@@ -881,7 +881,7 @@ extra = 4
 
 [node name="collision48" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.5, 0, -0.3)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(1.8, 0, 0.3)
 type_hex = "1"
@@ -890,7 +890,7 @@ extra = 0
 
 [node name="collision49" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.5, 0, -0.4)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(1.1, 0, 0.3)
 type_hex = "1"
@@ -899,7 +899,7 @@ extra = 4
 
 [node name="collision50" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.9, 0, -0.3)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(1.7, 0, 0.3)
 type_hex = "1"
@@ -908,7 +908,7 @@ extra = 0
 
 [node name="collision51" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.3, 0, 9.8)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.7, 1, 1)
 type_hex = "1"
@@ -917,7 +917,7 @@ extra = 0
 
 [node name="collision52" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.7, 0, 9.8)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.9, 1, 0.2)
 type_hex = "1"
@@ -926,7 +926,7 @@ extra = 0
 
 [node name="collision53" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.7, 0, 10.3)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.9, 1, 0.2)
 type_hex = "1"
@@ -935,7 +935,7 @@ extra = 0
 
 [node name="collision54" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.3, 0, 9.9)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.7, 0, 0.9)
 type_hex = "1"
@@ -944,7 +944,7 @@ extra = 0
 
 [node name="collision55" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.7, 0, 10.1)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.158114, 1.2555, 0)
 type_hex = "201"
@@ -953,7 +953,7 @@ extra = 3
 
 [node name="collision56" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.4, 3.5, 9.7)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(1.6, -1.001, 0.1)
 type_hex = "8000701"
@@ -962,7 +962,7 @@ extra = 3
 
 [node name="collision57" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.55, 3.5, -0.2)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.8, -1.7, 0.2)
 type_hex = "8000701"
@@ -971,7 +971,7 @@ extra = 0
 
 [node name="collision58" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.6, 2, -0.2)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.9, 0, 0.2)
 type_hex = "5000001"
@@ -980,7 +980,7 @@ extra = 0
 
 [node name="collision59" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.25, 0, 3.25)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.2, 0.4, 0)
 type_hex = "201"
@@ -989,7 +989,7 @@ extra = 4
 
 [node name="collision60" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.25, 0, 4.05)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.2, 0.4, 0)
 type_hex = "201"
@@ -998,7 +998,7 @@ extra = 4
 
 [node name="collision61" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.95, 0, 1.8)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(2.6, 0.4, 2.4)
 type_hex = "101"
@@ -1007,7 +1007,7 @@ extra = 0
 
 [node name="collision62" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.95, 0, 1.5)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.6, 0.4, 3)
 type_hex = "101"
@@ -1016,7 +1016,7 @@ extra = 0
 
 [node name="collision63" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.25, 0, 1.8)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.3, 0.1, 0)
 type_hex = "301"
@@ -1025,7 +1025,7 @@ extra = 0
 
 [node name="collision64" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.25, 0, 1.8)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.3, 0.1, 0)
 type_hex = "301"
@@ -1034,7 +1034,7 @@ extra = 0
 
 [node name="collision65" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.25, 0, 4.2)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.3, 0.1, 0)
 type_hex = "301"
@@ -1043,7 +1043,7 @@ extra = 0
 
 [node name="collision66" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.25, 0, 4.2)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.3, 0.1, 0)
 type_hex = "301"
@@ -1052,7 +1052,7 @@ extra = 0
 
 [node name="collision67" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.25, 0.7, 1.5)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.75, 0.1, 3)
 type_hex = "1000001"
@@ -1061,7 +1061,7 @@ extra = 4
 
 [node name="collision68" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.5, 0.7, 1.5)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.75, 0.171, 3)
 type_hex = "1000001"
@@ -1070,7 +1070,7 @@ extra = 4
 
 [node name="collision69" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 2, 2.1)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.2, 0.0025, 0.9)
 type_hex = "5000001"
@@ -1079,7 +1079,7 @@ extra = 0
 
 [node name="collision70" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.4, 0, 9.8)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(2.4, 0, 1.1)
 type_hex = "101"
@@ -1088,7 +1088,7 @@ extra = 0
 
 [node name="collision71" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 0, 1.9)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.6, 0, 1.3)
 type_hex = "101"
@@ -1097,7 +1097,7 @@ extra = 0
 
 [node name="collision72" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.4, 0, -0.6)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(1.3, 0, 0.6)
 type_hex = "101"
@@ -1106,7 +1106,7 @@ extra = 0
 
 [node name="collision73" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.1, 0.8, 7.1)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.3, 0.4, 0.4)
 type_hex = "2000001"
@@ -1115,7 +1115,7 @@ extra = 0
 
 [node name="collision74" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.3, 0.8, 8.5)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.1, 0.3, 0)
 type_hex = "2000201"
@@ -1124,7 +1124,7 @@ extra = 0
 
 [node name="collision75" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.2, 0.8, 6.75)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.7, 0.2, 2)
 type_hex = "2000001"
@@ -1133,7 +1133,7 @@ extra = 0
 
 [node name="collision76" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.65, 2, -1.85)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.6, 0.7, 0.5)
 type_hex = "5000001"
@@ -1142,7 +1142,7 @@ extra = 0
 
 [node name="collision77" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 2.6, 10.5)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.9, 0.4, -0.9)
 type_hex = "6010401"
@@ -1151,7 +1151,7 @@ extra = 0
 
 [node name="collision78" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 0, 4.5)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.499, 0, 0.999)
 type_hex = "102"
@@ -1160,7 +1160,7 @@ extra = 0
 
 [node name="collision79" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 0, 4.2)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.3, 0, 2.3)
 type_hex = "1"
@@ -1169,7 +1169,7 @@ extra = 0
 
 [node name="collision80" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 0, 3)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.3, 0, 1.3)
 type_hex = "1"
@@ -1178,7 +1178,7 @@ extra = 0
 
 [node name="collision81" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.25, 0, 1.5)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(2, 0.1, 3)
 type_hex = "101"
@@ -1187,7 +1187,7 @@ extra = 0
 
 [node name="collision82" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.3, 0, 6.75)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.8, 1, 1.6)
 type_hex = "101"
@@ -1196,7 +1196,7 @@ extra = 0
 
 [node name="collision83" type="Node3D" parent="Collision"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.05, 0, 7)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "collision"
 size = Vector3(0.4, 0.77, 0.4)
 type_hex = "1"
@@ -1207,7 +1207,7 @@ extra = 0
 
 [node name="area00" type="Node3D" parent="Areas"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 0.8, 6)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "area"
 size = Vector3(3.999, 0, 4.499)
 type_hex = "2000101"
@@ -1216,7 +1216,7 @@ extra = 3
 
 [node name="area01" type="Node3D" parent="Areas"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.1, 0, 5.2)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "area"
 size = Vector3(0.899, 0, 1.199)
 type_hex = "101"
@@ -1225,7 +1225,7 @@ extra = 2
 
 [node name="area02" type="Node3D" parent="Areas"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.1, 0.8, 5.6)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "area"
 size = Vector3(0.899, 0, 0.899)
 type_hex = "2000101"
@@ -1234,7 +1234,7 @@ extra = 2
 
 [node name="area03" type="Node3D" parent="Areas"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.4, 0, 2.1)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "area"
 size = Vector3(0.299, 0, 0.399)
 type_hex = "101"
@@ -1243,7 +1243,7 @@ extra = 1
 
 [node name="area04" type="Node3D" parent="Areas"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 0, 4.7)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "area"
 size = Vector3(1.399, 0, 0.999)
 type_hex = "201"
@@ -1252,7 +1252,7 @@ extra = 1
 
 [node name="area05" type="Node3D" parent="Areas"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 0.8, 5.8)
-script = ExtResource("15_5qkvl")
+script = ExtResource("15_ghps1")
 kind = "area"
 size = Vector3(1.199, 0, 1.199)
 type_hex = "2000201"
@@ -1263,7 +1263,7 @@ extra = 1
 
 [node name="light00" type="Node3D" parent="Lights"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.87188, 1.10334, 5.07169)
-script = ExtResource("16_fi217")
+script = ExtResource("16_g4cln")
 flg = 1
 type = 100
 lsrc = 4
@@ -1285,7 +1285,7 @@ rec = {
 
 [node name="light01" type="Node3D" parent="Lights"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.34041, 1.22984, 8.06203)
-script = ExtResource("16_fi217")
+script = ExtResource("16_g4cln")
 flg = 1
 type = 4
 lsrc = 4
@@ -1306,7 +1306,7 @@ rec = {
 }
 
 [node name="light02" type="Node3D" parent="Lights"]
-script = ExtResource("16_fi217")
+script = ExtResource("16_g4cln")
 flg = 1
 type = 0
 lsrc = 4
@@ -1327,7 +1327,7 @@ rec = {
 }
 
 [node name="light03" type="Node3D" parent="Lights"]
-script = ExtResource("16_fi217")
+script = ExtResource("16_g4cln")
 flg = 1
 type = 0
 lsrc = 4
@@ -1349,7 +1349,7 @@ rec = {
 
 [node name="light04" type="Node3D" parent="Lights"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.18196, 1.24909, 3.74438)
-script = ExtResource("16_fi217")
+script = ExtResource("16_g4cln")
 flg = 3
 type = 0
 lsrc = 4
@@ -1371,7 +1371,7 @@ rec = {
 
 [node name="light05" type="Node3D" parent="Lights"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.63465, 1.98886, 9.33377)
-script = ExtResource("16_fi217")
+script = ExtResource("16_g4cln")
 flg = 3
 type = 0
 lsrc = 4
@@ -1393,7 +1393,7 @@ rec = {
 
 [node name="light06" type="Node3D" parent="Lights"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.108527, 2.07641, 9.31592)
-script = ExtResource("16_fi217")
+script = ExtResource("16_g4cln")
 flg = 3
 type = 0
 lsrc = 4
@@ -1415,7 +1415,7 @@ rec = {
 
 [node name="light07" type="Node3D" parent="Lights"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.46938, 1.40051, 3.47176)
-script = ExtResource("16_fi217")
+script = ExtResource("16_g4cln")
 flg = 3
 type = 0
 lsrc = 4
@@ -1437,7 +1437,7 @@ rec = {
 
 [node name="light08" type="Node3D" parent="Lights"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.32442, 1.21882, 2.04259)
-script = ExtResource("16_fi217")
+script = ExtResource("16_g4cln")
 flg = 3
 type = 0
 lsrc = 4
@@ -1459,7 +1459,7 @@ rec = {
 
 [node name="light09" type="Node3D" parent="Lights"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.31314, 1.22121, 2.89043)
-script = ExtResource("16_fi217")
+script = ExtResource("16_g4cln")
 flg = 3
 type = 0
 lsrc = 4
@@ -1481,7 +1481,7 @@ rec = {
 
 [node name="light10" type="Node3D" parent="Lights"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.15336, 2.28759, 8.92465)
-script = ExtResource("16_fi217")
+script = ExtResource("16_g4cln")
 flg = 3
 type = 0
 lsrc = 4
@@ -1503,7 +1503,7 @@ rec = {
 
 [node name="light11" type="Node3D" parent="Lights"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.0516778, 2.72808, -0.812565)
-script = ExtResource("16_fi217")
+script = ExtResource("16_g4cln")
 flg = 3
 type = 0
 lsrc = 4
@@ -1524,3 +1524,5 @@ rec = {
 }
 
 [node name="EventLights" type="Node3D" parent="."]
+
+[node name="Effects" type="Node3D" parent="."]

@@ -4,7 +4,7 @@ extends Node3D
 ## Editable layout of a room (scenes/rooms/rm_XXXX.tscn), generated from the converted PS3 data by
 ## tools/build_scenes.gd. The game reads everything below from the nodes (move / rotate / add / delete them
 ## in the editor): Model (room model), Objects, Items, Enemies, Spawns, Cameras, Triggers, Collision, Areas,
-## Lights, EventLights. Order of the children = record number used by the event scripts.
+## Lights, EventLights, Effects (EF table: rain, fire, smoke ...). Order of the children = record number used by the event scripts.
 ## Not in the scene (stays in assets/rooms/ID.json and assets/evt/ID.json): messages, ambient table, event scripts.
 
 @export var room_id := ""
@@ -26,6 +26,7 @@ func collect(base: Dictionary) -> Dictionary:
 	d.triggers = _recs("Triggers"); d.collision = _recs("Collision"); d.areas = _recs("Areas")
 	d.spawns = _recs("Spawns"); d.cameras = _recs("Cameras")
 	d.lgt = _recs("Lights"); d.evl = _recs("EventLights")
+	if get_node_or_null("Effects") != null: d.eft = _recs("Effects")
 	d.objects = []; d.items = []; d.enemies = []
 	for c in _group("Objects"): d.objects.append(c.to_record())
 	for c in _group("Items"): d.items.append(c.to_record())

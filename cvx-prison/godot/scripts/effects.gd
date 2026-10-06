@@ -168,6 +168,7 @@ var _tex := {}
 var _index: Variant = null
 var _batches := {}
 var _rain: MeshInstance3D
+var _cam_fov := 60.0
 var _rain_mesh: ImmediateMesh
 var unknown := {}
 ## 2D layer (640x480 of the original) for bhEff2D sprites and the bhDraw021 cinema bars
@@ -182,7 +183,7 @@ func _init() -> void:
 		eff.append(O.new())
 	_rain_mesh = ImmediateMesh.new()
 	_rain = MeshInstance3D.new(); _rain.mesh = _rain_mesh
-	_rain.material_override = _material(null, 8, 10, true)
+	_rain.material_override = _material(null, 8, 10)
 	_rain.visible = false
 	add_child(_rain)
 	layer = Control.new()
@@ -217,10 +218,11 @@ func _material(tex: Texture2D, bls: int, bld: int, lines := false) -> ShaderMate
 	return m
 
 ## bhClearEffect + the room's EF table (bhSetEffectTb for every record; efid[i] = slot i)
-func load_room(room_id: String) -> void:
+func load_room(room_id: String, scene_recs: Variant = null) -> void:
 	for o in eff: o.flg = 0
 	of = [0.0, 0.0, 0.0]; windr = 0; winds = 0.0
-	var recs: Array = Assets.json("eft/%s.json" % room_id, [])
+	# the Effects nodes of scenes/rooms/ID.tscn, otherwise assets/eft/ID.json
+	var recs: Array = scene_recs if scene_recs is Array else Assets.json("eft/%s.json" % room_id, [])
 	for r in recs:
 		var i := _set_tb({"flg": int(r.flg), "id": int(r.id), "type": int(r.type), "flr": int(r.get("flr", 0)), "mdlver": int(r.get("mdlver", 0)), "px": r.p[0], "py": r.p[1], "pz": r.p[2], "sx": r.s[0], "sy": r.s[1], "sz": r.s[2], "ax": r.ax, "ay": r.ay})
 		var lk: String = r.get("lk", "")
@@ -361,6 +363,7 @@ func draw_2d() -> void:
 ## bhControlEffect: one 30 Hz frame
 func update(camera: Camera3D) -> void:
 	_cam_pos = camera.global_position * 10.0
+	_cam_fov = camera.fov
 	_cam_dir = -camera.global_transform.basis.z
 	for op in _fnc:
 		if op.fn == 107:
@@ -787,15 +790,21 @@ func draw(camera: Camera3D) -> void:
 
 func _draw_rain(op: O) -> void:
 	_rain_mesh.clear_surfaces()
-	# col 0x10101010 (+7) / 0x40303030 (-7), additive (8/10)
-	var c0 := Color(8.0 / 128, 8.0 / 128, 8.0 / 128, 8.0 / 128); var c1 := Color(24.0 / 128, 24.0 / 128, 24.0 / 128, 32.0 / 128)
-	_rain_mesh.surface_begin(Mesh.PRIMITIVE_LINES)
+	# col 0x10101010 (+7) / 0x40303030 (-7), additive 8/10 = Cs*As + Cd: untextured GS colour 0..255, As 0x80 = 1.0
+	var c0 := Color(16.0 / 255, 16.0 / 255, 16.0 / 255, 16.0 / 128); var c1 := Color(48.0 / 255, 48.0 / 255, 48.0 / 255, 64.0 / 128)
+	# GS lines are one pixel of the 448-line PS2 frame: drawn as camera-facing strips of that height at any resolution
+	var cp := _cam_pos * 0.1
+	var px := 2.0 * tan(deg_to_rad(_cam_fov) * 0.5) / 448.0
+	_rain_mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
 	for e in op.er:
 		var bs := Basis.from_euler(Vector3(e.ax * ANG, e.ay * ANG, 0), EULER_ORDER_ZYX)
-		var top := bs * Vector3(0, 7, 0); var bot := bs * Vector3(0, -7, 0)
 		var p := Vector3(e.px, e.py, e.pz)
-		_rain_mesh.surface_set_color(c0); _rain_mesh.surface_add_vertex((p + top) * 0.1)
-		_rain_mesh.surface_set_color(c1); _rain_mesh.surface_add_vertex((p + bot) * 0.1)
+		var a: Vector3 = (p + bs * Vector3(0, 7, 0)) * 0.1; var b: Vector3 = (p + bs * Vector3(0, -7, 0)) * 0.1
+		var side := (b - a).cross(((a + b) * 0.5 - cp)).normalized()
+		var wa := side * (0.5 * px * a.distance_to(cp)); var wb := side * (0.5 * px * b.distance_to(cp))
+		var q := [[a - wa, c0], [a + wa, c0], [b - wb, c1], [b + wb, c1]]
+		for k in [0, 2, 1, 1, 2, 3]:
+			_rain_mesh.surface_set_color(q[k][1]); _rain_mesh.surface_add_vertex(q[k][0])
 	_rain_mesh.surface_end()
 
 func _draw_splash(op: O, R: Vector3, Up: Vector3) -> void:

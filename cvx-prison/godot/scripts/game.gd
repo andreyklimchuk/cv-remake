@@ -194,7 +194,7 @@ func enter_room(id: String, pos: int, at: Variant = null, fade := true, min_ms :
 	_sync_player_work()
 	cam.forced = -1; _wall_sig = ""; _hid_sig = ""
 	audio.room(vm.stg, vm.room, vm.rcase); audio.listener = cam.cam
-	fx.floors = vm.flr; fx.load_room(id)
+	fx.floors = vm.flr; fx.load_room(id, r.data.get("eft"))
 	lights.set_room(r.data.get("lgt"), r.data.get("evl"), r.data.get("amb"))
 	vm.init(ev.get("scripts", []))
 	_spawn_enemies(r)
@@ -345,6 +345,8 @@ func _quad_bit() -> int:
 func _floor_check() -> void:
 	var f := player.forward(); var q := _quad_bit(); var P := player.position
 	vm.cb &= ~(0x200 | 0x8000000) & EvtVM.M32
+	# the floor check runs from the player's own control: not while an event drives Claire (bhPlCtr/80 ...)
+	if player.frozen: return
 	for i in vm.flr.size():
 		var a: Dictionary = vm.flr[i]
 		if not (a.flg & 1) or a.type != 0: continue

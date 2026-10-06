@@ -178,4 +178,16 @@ func _room(id: String) -> void:
 			n.flg = int(L.flg); n.type = int(L.type); n.lsrc = int(L.lsrc); n.c = U.v3(L.c); n.nr = float(L.nr); n.fr = float(L.fr)
 			n.position = U.v3(L.p)
 			_add(g, n, root)
+	# effect table (rain, fire, smoke, room sprites ...)
+	g = _group(root, "Effects")
+	var ep := "res://assets/eft/%s.json" % id
+	var ef: Array = JSON.parse_string(FileAccess.get_file_as_string(ep)) if FileAccess.file_exists(ep) else []
+	for i in ef.size():
+		var E: Dictionary = ef[i]
+		var n := Node3D.new(); n.set_script(load("res://scripts/scene/room_effect.gd"))
+		n.name = "eff%02d_%d" % [i, int(E.id)]
+		n.flg = int(E.flg); n.id = int(E.id); n.type = int(E.type); n.flr = int(E.get("flr", 0)); n.mdlver = int(E.get("mdlver", 0))
+		n.s = U.v3(E.s); n.ax = int(E.ax); n.ay = int(E.ay); n.lk = String(E.get("lk", ""))
+		n.position = U.v3(E.p) * 0.1
+		_add(g, n, root)
 	_save(root, path)

@@ -38,6 +38,7 @@ func _ready() -> void:
 		"shot": await shot_rooms()
 		"ui": await ui_test()
 		"cam": await cam_test()
+		"det": await det_test()
 	print("DONE")
 	get_tree().quit()
 
@@ -126,7 +127,9 @@ func flow() -> void:
 	await act(0, "door10"); await wait_free(); await snap("in " + g.room_id)
 
 func rooms() -> void:
-	for id in ["rm_0010", "rm_0020", "rm_0021", "rm_0030", "rm_0031", "rm_0040", "rm_0050", "rm_0060", "rm_0070", "rm_0080", "rm_0090", "rm_0160"]:
+	var ua := OS.get_cmdline_user_args()
+	var ids: Array = ua.slice(1) if ua.size() > 1 else ["rm_0010", "rm_0020", "rm_0021", "rm_0030", "rm_0031", "rm_0040", "rm_0050", "rm_0060", "rm_0070", "rm_0080", "rm_0090", "rm_0160"]
+	for id in ids:
 		await g.enter_room(id, 0, null, false)
 		for k in 6:
 			await sim(1); await sleep(50); await close_msgs()
@@ -165,3 +168,20 @@ func cam_test() -> void:
 			var n := CameraRig.project(cp, b, CameraRig.FOV, q)
 			out.append("n(%.2f,%.2f,%.2f) free %.2f L %.2f" % [n.x, n.y, n.z, g.room.clear_distance(cp, q, c._cut[i]), cp.distance_to(q)])
 		print("cam ", i, " vis ", c.visible(i, P.position, P.head_pos()), " ", out)
+
+func det_test() -> void:
+	g.sim(1); vm.cb |= 0x10000000
+	await wait_free(); g.set_weapon(1)
+	await g.enter_room("rm_0090", 0, null, false)
+	await wait_free(); await snap("det in")
+	for i in vm.flr.size():
+		var a: Dictionary = vm.flr[i]
+		print("flr %d flg %d type %d attr %x x %.2f..%.2f z %.2f..%.2f prm %s" % [i, a.flg, a.type, a.attr, a.x, a.x + a.w, a.z, a.z + a.d, str(a.get("prm", []))])
+	var a := OS.get_cmdline_user_args()
+	P.place(float(a[1]), P.position.y, float(a[2]), float(a[3])); await sim(0.2)
+	for k in 30:
+		await sim(0.5, ["KeyW"] if (k < 6 or (k >= 11 and k < 14)) else [])
+		print("  t", k, " busy ", g.busy, " cine ", g.in_cine, " msg ", g.msg.active, " dlg ", g._dialog, " ", stt())
+		pass
+		if k % 3 == 0 or k > 5: await snap("det%02d" % k)
+	print("ov ", g.cam._override, " busy ", g.busy, " cine ", g.in_cine, " movie ", g.movie_playing())
