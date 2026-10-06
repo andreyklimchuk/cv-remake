@@ -55,7 +55,7 @@ for name in names:
     ogv = os.path.join(OUT, 'movies', name + '.ogv')
     if os.path.exists(ogv): continue
     parts = sorted(glob.glob(os.path.join(SRC, 'data', name + '_*.js')))
-    b = b''.join(base64.b64decode(re.search(r"push\('(.*)'\)", open(f).read()).group(1)) for f in parts)
+    b = b''.join(base64.b64decode(re.search(r"push\('(.*)'\)", open(f, encoding='utf-8').read()).group(1)) for f in parts)
     mp4 = os.path.join(tempfile.gettempdir(), name + '.mp4'); open(mp4, 'wb').write(b)
     if not have_ff: print('ffmpeg missing: movie', name, 'left as', mp4); continue
     print('encoding', name)
@@ -65,7 +65,7 @@ for name in names:
 if have_ff:
     done = set()
     for bj in glob.glob(os.path.join(OUT, 'audio', 'se', '*.json')):
-        bank = json.load(open(bj))
+        bank = json.load(open(bj, encoding='utf-8'))
         for s in bank['samples']:
             lp = s.get('loop')
             if not lp or s['f'] in done or lp[1] >= s['n'] - 16: continue
