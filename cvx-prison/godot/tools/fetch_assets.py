@@ -46,6 +46,11 @@ for k, v in A.items():
     if os.path.exists(p) and os.path.getsize(p) == len(data): continue
     open(p, 'wb').write(data); n += 1
 print('assets:', len(A), 'written:', n)
+# assets converted only for the Godot port (not in the web build): tools/extra_assets/<path under assets>.b64
+for b in glob.glob(os.path.join(HERE, 'extra_assets', '**', '*.b64'), recursive=True):
+    p = os.path.join(OUT, os.path.relpath(b, os.path.join(HERE, 'extra_assets'))[:-4])
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    open(p, 'wb').write(base64.b64decode(open(b).read())); print('extra', os.path.relpath(p, OUT))
 
 have_ff = shutil.which('ffmpeg') is not None
 # movies

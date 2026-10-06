@@ -7,6 +7,10 @@ extends RefCounted
 ## light.c lgttab[1]: the lighter flame (type 4 flicker, linked to the right wrist b09)
 const LIGHTER_TAB := {"flg": 1, "type": 4, "aspd": 30, "lkflg": 1, "lkno": 0, "lkono": 9, "lsrc": 4, "p": [0, 0, 0], "l": [0.3, 0, -1.5], "v": [0, 1, 0], "spc": 0, "dif": 0, "amb": 0, "c": [3.16, 2.06, 0.7], "nr": 0.8, "fr": 40, "ang": [0, 0, 0, 0, 0]}
 
+## owner's request (not in the data): fire lights (flickering types 1..6 incl. the lighter, or hot orange
+## point lights r >= 2) are drawn at this strength
+static var fire_scale := 0.5
+
 var lgt: Array = []
 var evl: Array = []
 var amb := {"idx": [0, 1, 0, 2], "r": [1, 1, 1, 0], "g": [1, 1, 1, 0], "b": [1, 1, 1, 0]}
@@ -154,6 +158,8 @@ func frame() -> void:
 			101:
 				fl = _cos(lp.ct0); r *= fl; g *= fl; b *= fl; lp.ct0 += lp.aspd << 8
 				if lp.ct0 > 16383: lp.flg &= ~2
+		if lp.lsrc == 4 and ((lp.type >= 1 and lp.type <= 6) or (float(lp.c[0]) >= 2.0 and float(lp.c[2]) < 0.5 * float(lp.c[0]))):
+			r *= fire_scale; g *= fire_scale; b *= fire_scale
 		var px: float = lp.px; var py: float = lp.py; var pz: float = lp.pz
 		if lp.lkflg >= 1 and lp.lkflg <= 4:
 			var q: Variant = lock_fn.call(lp.lkflg, lp.lkno, Vector3(float(lp.l[0]) * 0.1, float(lp.l[1]) * 0.1, float(lp.l[2]) * 0.1), lp.lkono) if lock_fn.is_valid() else null

@@ -54,6 +54,8 @@ F / ПКМ — оружие наизготовку, E / Пробел / Enter / �
 - `godot --headless --path . res://dev/test.tscn -- flow|rooms [rm_XXXX ...]|ui|cam|det X Z H` (det — проход Клэр из точки X,Z с курсом H, напр. металлодетектор rm_0090: `det 7.0 13.2 0`) — сценарии как dev/t_flow1.js / t_rooms.js;
   с настоящим рендером (`xvfb-run godot --path . res://dev/test.tscn -- rooms`) пишет скриншоты в `shots/`.
   Скриншоты комнат сверены с веб-версией (Chromium/three.js) — картинка совпадает.
+- Ещё режимы test.tscn: `grab rm_XXXX` (захват/укус зомби), `box` (ящики rm_0090: крышка + экран ящика, предмет кладётся в один ящик и берётся из другого), `cine rm_XXXX ENTRY FLR SECS STEP` (катсцена: снимки каждые STEP с, лог NPC/зомби).
+- Просмотр клипов: `dev/anim_sheet.tscn -- model.glb clip frames yaw`, пары Клэр/зомби: `dev/pair_sheet.tscn -- claireClip zombieClips front frames dist` → `shots/`.
 
 ## Отличия от веб-версии (технические, не геймплейные)
 - Освещение «Ninja easy multi light» — свой spatial-шейдер (assets.gd) с глобальными uniform'ами вместо патча шейдеров three.js; формула та же (амбиент + 3 точечных + 1 направленный, линейный спад nr→fr).

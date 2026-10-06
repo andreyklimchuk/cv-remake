@@ -75,6 +75,8 @@ static func T(k: String, a := "") -> Variant:
 		"equipped": return ("%s: экипировано." % a) if r else ("Equipped the %s." % a)
 		"lit": return "Клэр зажгла зажигалку." if r else "Claire lit the lighter."
 		"unlit": return "Клэр убрала зажигалку." if r else "Claire put the lighter away."
+		"box": return "ЯЩИК" if r else "BOX"
+		"boxHint": return "Enter — переложить · Esc — закрыть" if r else "Enter — move item · Esc — close"
 		"rot": return "Стрелки — вращать · Enter — далее · Esc — назад" if r else "Arrows — rotate · Enter — next · Esc — back"
 	return ""
 
@@ -109,6 +111,15 @@ var _icons := {}
 var _ecg_t := 0.0
 var _chk: Variant = null
 var _icon_busy := false
+## security / item box mode (cb 0x40000): the box contents (shared Array of {id,name,count}), cursor side and slot
+var box: Array = []
+var _bside := "box"
+var _bsel := 0
+var _bscroll := 0
+const BOX_COLS := 5
+const BOX_ROWS := 4
+var box_panel: Deco
+var box_slots: Array = []
 # nodes
 var scr: Control
 var groups := {}
@@ -204,6 +215,10 @@ func _ready() -> void:
 	cond.add_child(fine_l)
 	for y in [223, 353]:
 		var peg := Control.new(); peg.position = Vector2(615, y); peg.size = Vector2(44, 22); peg.draw.connect(_draw_peg.bind(peg)); g2.add_child(peg); stc.append(peg)
+	# box mode: the box contents replace the status panel
+	box_panel = _deco(g2, "black", 75, 176, 538, 268); box_panel.visible = false
+	for i in BOX_COLS * BOX_ROWS:
+		box_slots.append(_slot(box_panel, 19 + (i % BOX_COLS) * 100, 2 + (i / BOX_COLS) * 65.5))
 	chk_box = _deco(g2, "check", 75, 162, 538, 278); chk_box.visible = false; chk_box.clip_contents = true
 	chk_tex = TextureRect.new(); chk_tex.size = Vector2(538, 278); chk_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; chk_tex.stretch_mode = TextureRect.STRETCH_SCALE
 	chk_box.add_child(chk_tex)
@@ -493,11 +508,14 @@ func icon(id: int) -> Texture2D:
 
 # ---------- state ----------
 ## open / close with the original panel animation (8 frames slide, SE 7 when in place, SE 9 on close)
-func show_screen(open: bool, get := -1) -> void:
+func show_screen(open: bool, get := -1, box_mode := false) -> void:
 	if open:
 		is_open = true; visible = true
-		_mode = "get" if get >= 0 else "list"; _menu_sel = 3; _get_id = get; _cmb_a = -1; _ask = null
-		for n in stc: n.visible = get < 0
+		_mode = "get" if get >= 0 else ("box" if box_mode else "list"); _menu_sel = 3; _get_id = get; _cmb_a = -1; _ask = null
+		for n in stc: n.visible = get < 0 and not box_mode
+		lbl.status.visible = get < 0
+		box_panel.visible = box_mode
+		if box_mode: _bside = "box"; _bsel = 0; _bscroll = 0
 		_set_text("" if get >= 0 else _cur_name())
 		audio.se("menu")
 		_anim = {"dir": 1, "f": 0, "wait": 0, "se7": false, "lock": 8 if get >= 0 else 14, "gen": randi()}
@@ -521,6 +539,7 @@ func show_screen(open: bool, get := -1) -> void:
 		await get_tree().process_frame
 	is_open = false; visible = false; _close_check(); _mode = "list"
 	for n in stc: n.visible = true
+	box_panel.visible = false
 	_get_id = -1
 
 ## one 30 Hz frame of the open / close animation
@@ -643,6 +662,8 @@ func _cur() -> Variant:
 	return inv.slots[_sel]
 func _cur_name() -> String:
 	var s: Variant = _cur()
+	if _mode == "box" and _bside == "box": s = box[_bsel] if _bsel < box.size() else null
+	if _mode == "box" and s == null: return T("boxHint")
 	return Text.item_name(s.name) if s != null else ""
 
 func _set_text(t: Variant) -> void:
@@ -661,6 +682,13 @@ func render() -> void:
 	lbl.eq.text = T("equip"); lbl.st.text = T("standard"); lbl.status.text = T("status"); lbl.name.text = T("name")
 	lbl.info.text = T("info"); lbl.cond.text = T("cond"); lbl.list.text = T("list")
 	for k in ["eq", "st", "status", "name", "info", "cond", "list"]: lbl[k].queue_redraw()
+	if _mode == "box":
+		lbl.status.text = T("box")
+		var maxs := maxi(0, (box.size() + 1 + BOX_COLS - 1) / BOX_COLS - BOX_ROWS)
+		_bscroll = clampi(_bscroll, 0, maxs)
+		for i in box_slots.size():
+			var k: int = _bscroll * BOX_COLS + i
+			await _fill_slot(box_slots[i], box[k] if k < box.size() else null, _bside == "box" and k == _bsel, false, false)
 	lbl.i0.text = T("full"); lbl.i1.text = T("height"); lbl.i2.text = T("weight"); lbl.i3.text = T("blood")
 	lbl.r1.text = "169" + T("cm"); lbl.r2.text = "52.4" + T("kg"); lbl.r3.text = T("btype")
 	var st := _cond()
@@ -679,7 +707,7 @@ func render() -> void:
 	for i in 8:
 		var s: Variant = inv.slots[i]
 		var mark: bool = s != null and (s.id == equipped or s.id == standard)
-		await _fill_slot(list_slots[i], s, i == _sel and _mode != "menu" and _mode != "get", _mode == "comb" and i == _cmb_a, mark)
+		await _fill_slot(list_slots[i], s, i == _sel and _mode != "menu" and _mode != "get" and not (_mode == "box" and _bside != "inv"), _mode == "comb" and i == _cmb_a, mark)
 	if _mode == "sub":
 		for c in sub_box.get_children(): c.queue_free()
 		for i in _sub_opts.size():
@@ -811,6 +839,10 @@ func update(dt: float) -> bool:
 	if _ask != null:
 		_update_ask(); return true
 	var L := input.hit(["KeyA", "ArrowLeft"]); var R := input.hit(["KeyD", "ArrowRight"]); var Up := input.hit(["KeyW", "ArrowUp"]); var D := input.hit(["KeyS", "ArrowDown"])
+	if _mode == "box":
+		if input.cancel or input.inventory:
+			audio.se("cancel"); return false
+		_update_box(L, R, Up, D); return true
 	if _mode == "check" and _chk != null:
 		var c: Dictionary = _chk
 		if input.has(["KeyA", "ArrowLeft"]): c.ry -= dt * 2.2
@@ -887,6 +919,54 @@ func update(dt: float) -> bool:
 	elif input.cancel or input.inventory:
 		audio.se("cancel"); return false
 	return true
+
+## box mode: the cursor walks the box grid (left) and the item list (right); the action button moves the item across
+func _update_box(L: bool, R: bool, Up: bool, D: bool) -> void:
+	var moved := false
+	if _bside == "box":
+		var c := _bsel % BOX_COLS
+		if L and c > 0: _bsel -= 1; moved = true
+		elif R:
+			if c < BOX_COLS - 1 and _bsel < box.size(): _bsel += 1
+			else: _bside = "inv"; _sel = clampi(((_bsel / BOX_COLS - _bscroll) / 2) * 2, 0, 6)
+			moved = true
+		elif Up and _bsel >= BOX_COLS: _bsel -= BOX_COLS; moved = true
+		elif D and _bsel + BOX_COLS <= box.size(): _bsel += BOX_COLS; moved = true
+		_bsel = clampi(_bsel, 0, maxi(0, box.size()))
+		if _bsel / BOX_COLS < _bscroll: _bscroll = _bsel / BOX_COLS
+		if _bsel / BOX_COLS >= _bscroll + BOX_ROWS: _bscroll = _bsel / BOX_COLS - BOX_ROWS + 1
+	else:
+		if L:
+			if _sel % 2 == 1: _sel -= 1
+			else: _bside = "box"; _bsel = clampi((_bscroll + _sel / 2) * BOX_COLS + BOX_COLS - 1, 0, box.size())
+			moved = true
+		elif R and _sel % 2 == 0: _sel += 1; moved = true
+		elif Up and _sel >= 2: _sel -= 2; moved = true
+		elif D and _sel < 6: _sel += 2; moved = true
+	if moved:
+		audio.se("cursor"); _set_text(_cur_name()); render(); return
+	if not input.action: return
+	if _bside == "inv":
+		var it: Variant = inv.slots[_sel]
+		if it == null: return
+		inv.slots[_sel] = null
+		var merged := false
+		if Inventory.STACK.has(it.id):
+			for b in box:
+				if b.id == it.id: b.count += it.count; merged = true; break
+		if not merged: box.append(it)
+		if equipped == it.id or standard == it.id:
+			if equipped == it.id: equipped = null
+			if standard == it.id: standard = null
+			if on_equip_change.is_valid(): on_equip_change.call()
+	else:
+		if _bsel >= box.size(): return
+		var it: Dictionary = box[_bsel]
+		if not inv.can_add(it.id):
+			audio.se("cancel"); _set_text(Text.pages(Text.SYSMES.get(154, ""))); render(); return
+		box.remove_at(_bsel)
+		inv.add(it.id, it.name, it.count)
+	audio.se("menu"); _set_text(_cur_name()); render()
 
 func _combine_then_render(a: int, b: int) -> void:
 	await _combine(a, b)

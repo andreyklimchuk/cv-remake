@@ -5,7 +5,7 @@ extends Node3D
 ## rooms converted from the PS3 data (room file = rm_<stage><room><case>)
 const ROOMS := ["rm_0000", "rm_0010", "rm_0020", "rm_0021", "rm_0030", "rm_0031", "rm_0040", "rm_0050", "rm_0060", "rm_0070", "rm_0080", "rm_0090", "rm_0160"]
 ## cutscene character models (enNNaVV)
-const NPC_MODELS := ["en91a00", "en93a00", "en98a00"]
+const NPC_MODELS := ["en91a00", "en93a00", "en98a00", "en62a00"]
 ## converted zombie models en01aNN (NN = model variant byte of the enemy record)
 const ZOMBIE_VARIANTS := [0, 1, 2, 9, 10, 32, 33]
 ## en01_PersonalType add_atk per model variant
@@ -132,6 +132,9 @@ func start(save: Variant = null) -> void:
 				d.id = int(d.id); d.count = int(d.get("count", 1))
 				inv.slots.append(d)
 		while inv.slots.size() < 8: inv.slots.append(null)
+		inv_screen.box.clear()
+		for s in save.get("box", []):
+			var d: Dictionary = s.duplicate(); d.id = int(d.id); d.count = int(d.get("count", 1)); inv_screen.box.append(d)
 		inv_screen.equipped = int(save.eq) if save.get("eq") != null else null
 		inv_screen.standard = int(save.std) if save.get("std") != null else null
 		play_time = float(save.get("t", 0))
@@ -266,6 +269,23 @@ static func _set_rot(o: Node3D, w: EvtVM.Work) -> void:
 	o.rotation_order = EULER_ORDER_ZYX
 	o.rotation = Vector3(w.ax, w.ay, w.az)
 
+## bhCommonCtr part offsets (WORK obj n modelK): node K of the object's model, relative to its rest pose
+static func _apply_parts(o: Node3D, w: EvtVM.Work) -> void:
+	for cno in w.parts:
+		var q: Dictionary = w.parts[cno]
+		var n := Assets.find_name(o, "n%03d" % int(cno)) as Node3D
+		if n == null: continue
+		if not n.has_meta("rest"): n.set_meta("rest", n.transform)
+		var rest: Transform3D = n.get_meta("rest")
+		var t := rest
+		if q.has("ang"):
+			var a: Array = q.ang
+			t.basis = rest.basis * Basis.from_euler(Vector3(a[0], a[1], a[2]), EULER_ORDER_ZYX)
+		if q.has("pos"):
+			var p: Array = q.pos
+			t.origin = rest.origin + Vector3(p[0], p[1], p[2])
+		n.transform = t
+
 ## script-controlled entity state -> scene
 func _apply_works() -> void:
 	var r := room
@@ -301,6 +321,7 @@ func _apply_works() -> void:
 		o.visible = not gone and not w.hidden and (not r.outside.has(i) or w.link != null)
 		if w.pos_set: o.position = Vector3(w.px, w.py, w.pz); w.pos_set = false
 		if w.ang_set: _set_rot(o, w); w.ang_set = false
+		if not w.parts.is_empty(): _apply_parts(o, w)
 	# WORK 4 n: effect works moved by the script (metres here, game units = 0.1 m in O_WRK)
 	for w in vm.works.values():
 		if w.kind == 4 and w.pos_set:
@@ -318,7 +339,8 @@ func _apply_works() -> void:
 		if w == null: continue
 		z.visible = not w.gone and not w.hidden
 		if w.pos_set:
-			if w.px or w.py or w.pz: z.position = Vector3(w.px, w.py, w.pz)
+			# POS 0 0 0 is a real position for a zombie on a room motion (rm_0030: the car zombie's shake ends at 0)
+			if w.px or w.py or w.pz or w.mtn_kind == 1: z.position = Vector3(w.px, w.py, w.pz)
 			w.pos_set = false
 		if w.ang_set: z.heading = w.ay; z.rotation.y = w.ay; w.ang_set = false
 		# room motion (rmt, MOTION kind 1): the clip carries the world placement of the root
@@ -414,6 +436,13 @@ func _item_screen() -> void:
 	await _item_screen_body(id, auto)
 	await S.show_screen(false)
 	inv_open = false; _dialog = false
+
+## item box request (cb 0x40000; the security boxes of rm_0090 add 0x80000 = box A / 0x100000 = box B).
+## Both boxes share one storage, so what is left in box A is taken out of box B past the metal detector.
+func _box_screen() -> void:
+	vm.cb &= ~(0x40000 | 0x80000 | 0x100000) & EvtVM.M32
+	inv_open = true
+	await inv_screen.show_screen(true, -1, true)
 
 func _item_screen_body(id: int, auto: bool) -> void:
 	var S := inv_screen
@@ -531,6 +560,7 @@ func _evt_frame() -> void:
 	_apply_works()
 	_light_frame()
 	if vm.cb & 0x10 and not _dialog: _item_screen()
+	if vm.cb & 0x40000 and not _dialog and not inv_open: _box_screen()
 	if vm.cb & 0x200000:
 		vm.cb &= ~0x200000 & EvtVM.M32; _save_screen()
 
@@ -720,7 +750,7 @@ func _save_screen() -> void:
 
 func save() -> void:
 	var p := player.position
-	var s := {"hp": player.hp, "room": room_id, "pos": vm.pos_no, "x": p.x, "y": p.y, "z": p.z, "h": player.heading, "inv": inv.slots,
+	var s := {"hp": player.hp, "room": room_id, "pos": vm.pos_no, "x": p.x, "y": p.y, "z": p.z, "h": player.heading, "inv": inv.slots, "box": inv_screen.box,
 		"eq": inv_screen.equipped, "std": inv_screen.standard, "evt": {"f": vm.f, "rcase": vm.rcase}, "t": play_time}
 	var fa := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if fa: fa.store_string(JSON.stringify(s)); fa.close()
@@ -819,7 +849,7 @@ func _update_grab(dt: float) -> void:
 		if g.t >= 2.0:
 			g.t = 0.0
 			if player.hp <= 0:
-				g.phase = "dead"; player.play_sync("z10" if g.front else "z11"); g.z.set_state("idle")
+				g.phase = "dead"; player.play_sync("z10" if g.front else "z11"); g.z.set_state("eat")
 			else:
 				g.phase = "push"; player.play_sync("z02" if g.front else "z03"); g.z.set_state("release")
 	elif g.phase == "push":

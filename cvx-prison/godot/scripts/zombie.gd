@@ -1,9 +1,10 @@
 class_name Zombie
 extends EnemyModel
 ## Zombie (en01) driven by the original en01ms motion bank (port of enemy.ts Zombie):
-## m11 get up, m71 shamble, m56 idle sway, m73 lunge, m00 bite (with Claire's z00), m14/m15 flinch, m09/m10 collapse.
+## m11 get up, m71 shamble, m56 idle sway, m73 lunge, m32 bite (with Claire's z00/z01; same 59 frames),
+## m14 shoved off (Claire z02/z03), m43 kneels to feed on her (Claire z10/z11), m15/m16 flinch, m09/m10 collapse.
 
-const Z_CLIP := {"rise": "m11", "walk": "m71", "idle": "m56", "lunge": "m73", "bite": "m00", "release": "m14", "flinch": "m15", "flinch2": "m16", "dieF": "m09", "dieB": "m10", "lie": "m13"}
+const Z_CLIP := {"rise": "m11", "walk": "m71", "idle": "m56", "lunge": "m73", "bite": "m32", "release": "m14", "eat": "m43", "flinch": "m15", "flinch2": "m16", "dieF": "m09", "dieB": "m10", "lie": "m13"}
 
 var state := "idle"
 var t := 0.0
