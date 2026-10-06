@@ -51,6 +51,10 @@ for b in glob.glob(os.path.join(HERE, 'extra_assets', '**', '*.b64'), recursive=
     p = os.path.join(OUT, os.path.relpath(b, os.path.join(HERE, 'extra_assets'))[:-4])
     os.makedirs(os.path.dirname(p), exist_ok=True)
     open(p, 'wb').write(base64.b64decode(open(b).read())); print('extra', os.path.relpath(p, OUT))
+# zombie glbs of the web build pair lower/upper clips off by one -> re-pair (idempotent)
+sys.path.insert(0, HERE); import fix_zombie_clips
+for p in sorted(glob.glob(os.path.join(OUT, 'enemies', 'en01a*.glb'))):
+    if fix_zombie_clips.fix(p): print('zfix', os.path.relpath(p, OUT))
 
 have_ff = shutil.which('ffmpeg') is not None
 # movies

@@ -287,4 +287,5 @@ func cine_test() -> void:
 			var zw: EvtVM.Work = vm.get_work(1, z.index)
 			zs.append("z%d vis %s st %s cur %s pos %s scr %s mk %s mtn %s" % [z.index, z.visible, z.state, z.cur, str(z.position), zw.scripted if zw else "-", zw.mtn_kind if zw else "-", zw.mtn if zw else "-"])
 		print("T%.1f cine %s chars %s zombies %s" % [(k + 1) * float(a[5]), g.in_cine, str(g.chars.map(func(c): return "%d:%s@%s" % [c.index, c.m.visible, str(c.m.global_position)])), " | ".join(zs)])
+		if not vis.is_empty(): print("  links ", " | ".join(vis))
 		await snap("cine_%s_%02d" % [a[1], k])

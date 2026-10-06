@@ -171,11 +171,15 @@ def build(mdlfile,texdir,motfile,dst,name,skin_at=0,S=0.1,lower_n=8,rmtfile=None
         idx=[k for k,(o,r) in enumerate(Bk) if r and r[1]==nbl]; last=idx[-1] if lo else len(Bk)
         up=[r for o,r in Bk[last+1:] if r and r[1]==nbu]
         # extras (upper-only) between lower clips
-        for k in range(min(len(lo),len(up))):
+        # the upper run may start with extra blocks (en01: one 2-frame block) -> pair lower clip k with upper clip k+off,
+        # off = shift with the most equal frame counts
+        off=max(range(3),key=lambda o:sum(1 for k in range(len(lo)) if k+o<len(up) and up[k+o][0]==lo[k][0])) if up else 0
+        for k in range(len(lo) if up else 0):
             N=lo[k][0]; ti=put(np.arange(N,dtype=np.float32)/30,5126,'SCALAR',mm=True)
-            s1,c1=chans(lo[k],0,ti)
-            N2=up[k][0]; ti2=ti if N2==N else put(np.arange(N2,dtype=np.float32)/30,5126,'SCALAR',mm=True)
-            s2,c2=chans(up[k],nbl,ti2)
+            s1,c1=chans(lo[k],0,ti); s2,c2=[],[]
+            if k+off<len(up):
+                N2=up[k+off][0]; ti2=ti if N2==N else put(np.arange(N2,dtype=np.float32)/30,5126,'SCALAR',mm=True)
+                s2,c2=chans(up[k+off],nbl,ti2)
             Ss=s1+s2; Cs=[{'sampler':i,'target':{'node':n_,'path':p_}} for i,(n_,p_) in enumerate(c1+c2)]
             anims.append({'name':'m%02d'%k,'samplers':Ss,'channels':Cs})
         ex=[r for o,r in Bk[:last] if r and r[1]==nbu] if nbu>0 else []

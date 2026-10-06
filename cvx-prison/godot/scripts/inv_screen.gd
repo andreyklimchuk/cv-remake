@@ -46,7 +46,7 @@ static func ru() -> bool: return Text.LANG == "ru"
 static func T(k: String, a := "") -> Variant:
 	var r := ru()
 	match k:
-		"menu": return ["ВЫХОД", "ФАЙЛЫ", "КАРТА", "ПРЕДМЕТЫ"] if r else ["EXIT", "FILE", "MAP", "ITEM"]
+		"menu": return ["ВЫХОД", "ФАЙЛЫ", "КАРТА", "ВЕЩИ"] if r else ["EXIT", "FILE", "MAP", "ITEM"]
 		"equip": return "ЭКИПИРОВКА" if r else "EQUIP"
 		"standard": return "СТАНДАРТ" if r else "STANDARD"
 		"status": return "СТАТУС" if r else "STATUS"
@@ -61,7 +61,7 @@ static func T(k: String, a := "") -> Variant:
 		"btype": return "0" if r else "O"
 		"cond": return "СОСТОЯНИЕ" if r else "CONDITION"
 		"fine": return "Норма" if r else "Fine"
-		"caution": return "Осторожно" if r else "Caution"
+		"caution": return "Внимание" if r else "Caution"
 		"danger": return "Опасно" if r else "Danger"
 		"list": return "СПИСОК" if r else "LIST"
 		"use": return "Использовать" if r else "Use"

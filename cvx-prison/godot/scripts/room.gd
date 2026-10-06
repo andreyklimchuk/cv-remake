@@ -9,6 +9,7 @@ var shapes: Array = []           # active wall shapes {k:box|circle|tri,...}
 var wall_shapes: Array = []      # per collision record (null = no shape)
 var obj_meshes := {}             # object index -> Node3D
 var outside := {}                # object indices placed outside the room bounds
+var player_parts := {}           # empty object rows 0/1 = Claire's right/left hand (bone space, see _add_hands)
 var item_meshes := {}            # item index -> Node3D
 var item_players := {}           # item index -> AnimationPlayer (room motions rm_XXXX_rNN)
 var nodes := {}                  # room model object index (nNNN) -> MeshInstance3D
@@ -54,6 +55,7 @@ func _build_scene(rs: RoomScene) -> void:
 			outside[po.get_index()] = true; po.visible = false
 		Assets.to_lambert(po, "obj")
 		obj_meshes[po.get_index()] = po
+	_add_hands()
 	_build_walls()
 
 func _build() -> void:
@@ -80,7 +82,50 @@ func _build() -> void:
 		o.transform = U.trs(p, U.euler(ob.rot[0], ob.rot[2], ob.rot[1], EULER_ORDER_ZYX), 0.1)
 		o.name = "obj%d_%s" % [i, ob.model]
 		add_child(o); obj_meshes[i] = o
+	_add_hands()
 	_build_walls()
+
+func _add_hands() -> void:
+	# object rows 0/1 without a model of their own: the events link them to Claire's hands (bhObjLinkSetPly bones 9 / 13)
+	# and, in the cutscenes with the NPC Claire en91 (a body without hands), to its wrist bones (bhObjLinkSet 18 / 22,
+	# rm_0020). Those rows are Claire's hand models -> the hand surfaces of claire.glb in their bone space.
+	var objs: Array = data.get("objects", [])
+	for i in 2:
+		if obj_meshes.has(i) or (i < objs.size() and objs[i].get("model") and objs[i].flags != "00000000"): continue
+		var h := _claire_hand("handR" if i == 0 else "handL")
+		if h == null: continue
+		h.name = "obj%d_claire_hand" % i; h.visible = false; h.set_meta("bone_space", true)
+		add_child(h); obj_meshes[i] = h; outside[i] = true; player_parts[i] = true
+
+## Claire's hand surface (material name containing tag) of chars/claire.glb as a static mesh in its bone's space
+static var _hands := {}
+static func _claire_hand(tag: String) -> MeshInstance3D:
+	if not _hands.has(tag):
+		var am: ArrayMesh = null
+		var sc := Assets.scene("chars/claire.glb")
+		if sc:
+			for mi in sc.find_children("*", "MeshInstance3D", true, false):
+				var mesh: Mesh = (mi as MeshInstance3D).mesh; var sk: Skin = (mi as MeshInstance3D).skin
+				if mesh == null or sk == null: continue
+				for si in mesh.get_surface_count():
+					var mat := mesh.surface_get_material(si)
+					if mat == null or not mat.resource_name.contains(tag): continue
+					var arr := mesh.surface_get_arrays(si)
+					var bi: int = (arr[Mesh.ARRAY_BONES] as PackedInt32Array)[0]
+					var bp := sk.get_bind_pose(bi)
+					var vs: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]; var ns: PackedVector3Array = arr[Mesh.ARRAY_NORMAL]
+					for k in vs.size(): vs[k] = bp * vs[k]
+					for k in ns.size(): ns[k] = (bp.basis * ns[k]).normalized()
+					arr[Mesh.ARRAY_VERTEX] = vs; arr[Mesh.ARRAY_NORMAL] = ns
+					arr[Mesh.ARRAY_BONES] = null; arr[Mesh.ARRAY_WEIGHTS] = null
+					if am == null: am = ArrayMesh.new()
+					am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+					am.surface_set_material(am.get_surface_count() - 1, mat)
+			sc.free()
+		_hands[tag] = am
+	if _hands[tag] == null: return null
+	var m := MeshInstance3D.new(); m.mesh = _hands[tag]
+	return m
 
 func _build_walls() -> void:
 	var col: Array = data.get("collision", [])

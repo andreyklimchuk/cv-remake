@@ -10,6 +10,8 @@ const LIGHTER_TAB := {"flg": 1, "type": 4, "aspd": 30, "lkflg": 1, "lkno": 0, "l
 ## owner's request (not in the data): fire lights (flickering types 1..6 incl. the lighter, or hot orange
 ## point lights r >= 2) are drawn at this strength
 static var fire_scale := 0.5
+## rm_0090 alarm lamps (lsrc 4, type 3 pulse): dimmed by the owner's request, not from the data
+static var alarm_scale := 0.3
 
 var lgt: Array = []
 var evl: Array = []
@@ -158,7 +160,9 @@ func frame() -> void:
 			101:
 				fl = _cos(lp.ct0); r *= fl; g *= fl; b *= fl; lp.ct0 += lp.aspd << 8
 				if lp.ct0 > 16383: lp.flg &= ~2
-		if lp.lsrc == 4 and ((lp.type >= 1 and lp.type <= 6) or (float(lp.c[0]) >= 2.0 and float(lp.c[2]) < 0.5 * float(lp.c[0]))):
+		if lp.lsrc == 4 and lp.type == 3:
+			r *= alarm_scale; g *= alarm_scale; b *= alarm_scale
+		elif lp.lsrc == 4 and ((lp.type >= 1 and lp.type <= 6) or (float(lp.c[0]) >= 2.0 and float(lp.c[2]) < 0.5 * float(lp.c[0]))):
 			r *= fire_scale; g *= fire_scale; b *= fire_scale
 		var px: float = lp.px; var py: float = lp.py; var pz: float = lp.pz
 		if lp.lkflg >= 1 and lp.lkflg <= 4:

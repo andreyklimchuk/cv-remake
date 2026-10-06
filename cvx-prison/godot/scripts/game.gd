@@ -181,6 +181,8 @@ func enter_room(id: String, pos: int, at: Variant = null, fade := true, min_ms :
 	for n in actors: n.queue_free()
 	for c in chars: c.m.queue_free()
 	chars = []; zombies = []; dogs = []; npcs = []; actors = []; grab = null; dog_bite = null
+	# a grab / bite motion of the previous room must not carry over
+	if player.sync != null: player.play_sync(null)
 	# player position first (the scripts read it)
 	if at != null: player.place(at.x, at.y, at.z, at.h)
 	else:
@@ -319,6 +321,8 @@ func _apply_works() -> void:
 			var pw: EvtVM.Work = vm.get_work(int(lk.kind), 0 if int(lk.kind) == 0 else int(lk.idx))
 			gone = pw != null and pw.gone
 		o.visible = not gone and not w.hidden and (not r.outside.has(i) or w.link != null)
+		# Claire's hand rows on the player: claire.glb already has its hands in the skin
+		if r.player_parts.has(i) and (w.link == null or int(w.link.kind) == 0): o.visible = false
 		if w.pos_set: o.position = Vector3(w.px, w.py, w.pz); w.pos_set = false
 		if w.ang_set: _set_rot(o, w); w.ang_set = false
 		if not w.parts.is_empty(): _apply_parts(o, w)
@@ -681,10 +685,12 @@ func _update_links() -> void:
 		var base: Transform3D = _link_base[o]
 		var b: Transform3D = bt
 		var lo: Vector3 = lk.lo if lk.lo is Vector3 else U.v3(lk.lo)
-		var M := b * Transform3D(Basis(), lo) * Transform3D(base.basis, Vector3.ZERO)
-		# undo the bone's own scale (models are in metres, the object keeps its 0.1 game-unit scale)
-		var bs := b.basis.get_scale()
-		M = M * Transform3D(Basis.from_scale(Vector3(1.0 / bs.x, 1.0 / bs.y, 1.0 / bs.z)), Vector3.ZERO)
+		var M := b * Transform3D(Basis(), lo)
+		if not o.has_meta("bone_space"):
+			M = M * Transform3D(base.basis, Vector3.ZERO)
+			# undo the bone's own scale (models are in metres, the object keeps its 0.1 game-unit scale)
+			var bs := b.basis.get_scale()
+			M = M * Transform3D(Basis.from_scale(Vector3(1.0 / bs.x, 1.0 / bs.y, 1.0 / bs.z)), Vector3.ZERO)
 		var par := o.get_parent() as Node3D
 		if par: M = par.global_transform.affine_inverse() * M
 		o.transform = M
@@ -806,6 +812,29 @@ func hit_zombie(z: Variant, dmg: float) -> void:
 	# the scripts' DieCk turns this into the enemy's ed flag (the enemy stays dead)
 	if not z.alive: vm.work(1, z.index).dead = true
 
+## zombies do not walk through each other (the en01 AI is not in the decompiled code: simple circle separation)
+const ZOMBIE_R := 0.25
+func _separate_zombies() -> void:
+	var zs: Array = []
+	for z in zombies:
+		var zw: EvtVM.Work = vm.get_work(1, z.index)
+		if zw != null and (zw.gone or zw.hidden or zw.scripted): continue
+		if not z.alive or z.state == "lying": continue
+		zs.append(z)
+	for i in zs.size():
+		for j in range(i + 1, zs.size()):
+			var a: Zombie = zs[i]; var b: Zombie = zs[j]
+			var d := Vector2(b.position.x - a.position.x, b.position.z - a.position.z)
+			var L := d.length()
+			if L >= 2 * ZOMBIE_R: continue
+			var n := d / L if L > 0.0001 else Vector2(1, 0)
+			var push := 2 * ZOMBIE_R - L
+			# the zombie holding Claire stays in place
+			var ga: bool = grab != null and grab.z == a; var gb: bool = grab != null and grab.z == b
+			var ka := 0.0 if ga else (1.0 if gb else 0.5); var kb := 0.0 if gb else (1.0 if ga else 0.5)
+			a.position = room.resolve(a.position - Vector3(n.x, 0, n.y) * push * ka, ZOMBIE_R)
+			b.position = room.resolve(b.position + Vector3(n.x, 0, n.y) * push * kb, ZOMBIE_R)
+
 func _start_grab(z: Zombie) -> void:
 	var p := player.position; var zp := z.position
 	var to_z := Vector3(zp.x - p.x, 0, zp.z - p.z)
@@ -851,9 +880,10 @@ func _update_grab(dt: float) -> void:
 			if player.hp <= 0:
 				g.phase = "dead"; player.play_sync("z10" if g.front else "z11"); g.z.set_state("eat")
 			else:
-				g.phase = "push"; player.play_sync("z02" if g.front else "z03"); g.z.set_state("release")
+				# Claire kicks the zombie off (z08/z09, 36 frames) while it staggers back (m76, 36 frames)
+				g.phase = "push"; player.play_sync("z08" if g.front else "z09"); g.z.set_state("release")
 	elif g.phase == "push":
-		if g.t >= 1.6:
+		if g.t >= 36.0 / 30.0:
 			player.play_sync(null); grab = null
 	elif g.phase == "dead" and g.t >= 2.6:
 		grab = null; game_over()
@@ -904,6 +934,9 @@ func _render_prep() -> void:
 func step(dt: float) -> void:
 	var inp := input
 	play_time += dt
+	# FMV (bhMovieStart): the game waits for the movie
+	if _movie_on:
+		player.frozen = true; return
 	if inp.hit(["F1", "Backquote"]): debug = not debug
 	var cine := in_cine
 	if msg.active:
@@ -949,6 +982,7 @@ func step(dt: float) -> void:
 				if zw != null and zw.scripted: z.update(dt); continue
 				if z.state == "bite" and (grab == null or grab.z != z): z.set_state("walk")
 				if z.tick(dt, player.position, free, room) and grab == null and free: _start_grab(z)
+			_separate_zombies()
 			for z in dogs:
 				var zw: EvtVM.Work = vm.get_work(1, z.index)
 				if zw != null and (zw.gone or zw.hidden): continue
