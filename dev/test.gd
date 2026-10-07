@@ -42,6 +42,8 @@ func _ready() -> void:
 		"grab": await grab_test()
 		"box": await box_test()
 		"cine": await cine_test()
+		"face": await face_test()
+		"zmorph": await zmorph_test()
 	print("DONE")
 	get_tree().quit()
 
@@ -52,7 +54,7 @@ func stt() -> String:
 	if vm == null: return ""
 	var tasks := []
 	for i in vm.tasks.size():
-		if vm.tasks[i].status: tasks.append("%d:e%d" % [i, vm.tasks[i].scr - 2])
+		if vm.tasks[i].status: tasks.append("%d:e%d@%x" % [i, vm.tasks[i].scr - 2, vm.tasks[i].p])
 	var m := "-"
 	if g.msg.active: m = JSON.stringify(ui.msg_text.text.substr(0, 60))
 	return "%s cb %x st %x tasks %s msg %s frozen %s pos %.2f,%.2f cam %d shown %d ov %d mode %s" % [g.room_id, vm.cb, vm.st, " ".join(tasks), m, P.frozen, P.position.x, P.position.z, g.cam.index, g.cam.shown, g.cam._override, g.cam.mode]
@@ -289,3 +291,63 @@ func cine_test() -> void:
 		print("T%.1f cine %s chars %s zombies %s" % [(k + 1) * float(a[5]), g.in_cine, str(g.chars.map(func(c): return "%d:%s@%s" % [c.index, c.m.visible, str(c.m.global_position)])), " | ".join(zs)])
 		if not vis.is_empty(): print("  links ", " | ".join(vis))
 		await snap("cine_%s_%02d" % [a[1], k])
+
+## facial animation of the cutscene NPCs: -- face SECS STEP [room spawn]  (default: the opening cutscene of rm_0000)
+func face_test() -> void:
+	var a := OS.get_cmdline_user_args()
+	if a.size() > 4 and a[3] != "-":
+		await g.enter_room(a[3], int(a[4]), null, false)
+	var n := int(float(a[1]) / float(a[2]))
+	for c in g.chars:
+		if c.has("face"):
+			var fm: FaceMask = c.face
+			print("face %d en%d surfaces %s" % [c.index, fm.id, str(fm._surf.map(func(s): return s.verts.size()))])
+	var prev := ""
+	for k in n:
+		if g.movie_playing(): Input.parse_input_event(_key(KEY_ESCAPE)); await sleep(300)
+		if g.msg.active: g.sim(0.3, ["KeyE"]); await sleep(10)
+		# the opening room: walk onto FLOOR[2] (event 0, Rodrigo opens the cell)
+		if a.size() <= 4 and g.room_id == "rm_0000" and not g.player.frozen and g.vm.flr.size() > 2:
+			var f: Dictionary = g.vm.flr[2]
+			g.player.position = Vector3(f.x + f.w / 2, g.player.position.y, f.z + f.d / 2)
+			if g.weapon() != 1: g.set_weapon(1)   # bhArmsItemCheck 1: the lighter in hand
+		await sim(float(a[2]))
+		var st := []
+		for c in g.chars:
+			if not c.has("face"): continue
+			var fm: FaceMask = c.face
+			var nz := 0
+			for i in 32: if fm.param[i] != 0.0: nz += 1
+			st.append("%d: vis %s fl %x msk %d frm %d/%d lip %d m%d jaw %.1f tr %.2f eye %.2f,%.2f,%.2f tg %.1f,%.1f,%.2f" % [c.index, c.m.visible, fm.flags, fm.msk, fm.frame, fm.last, fm.lp.flag, nz, fm.param[32], fm.param[33], fm.param[34], fm.param[35], fm.param[36], fm.param[37], fm.param[38], fm.param[39]])
+		var line := " | ".join(st)
+		if line != prev: print("T%.1f %s cine %s | %s" % [(k + 1) * float(a[2]), g.room_id, g.in_cine, line])
+		prev = line
+		if a.size() <= 5 or k % int(a[5]) == 0: await snap("face_%03d" % k)
+
+## zombie mouth morph close-up: -- zmorph ROOM
+func zmorph_test() -> void:
+	var a := OS.get_cmdline_user_args()
+	await g.enter_room(a[1] if a.size() > 1 else "rm_0020", 0, null, false)
+	await sim(0.5)
+	g.running = false
+	for z in g.zombies:
+		if z._morph_mi == null: continue
+		z.set_state("idle"); z.update(0.5); z.update(0.5); z.visible = true
+		var cam := Camera3D.new(); add_child(cam)
+		# a mouth vertex of the morph (bind space) carried by its nearest bone
+		var D: Dictionary = Assets.data_json("face/zmorph_en01a%s.json" % U.pad(z.mdlver, 2))
+		var mp := Vector3(D.verts[0][0], D.verts[0][1], D.verts[0][2])
+		var hb := 0
+		for bi in z.skel.get_bone_count():
+			if z.skel.get_bone_global_rest(bi).origin.distance_to(mp) < z.skel.get_bone_global_rest(hb).origin.distance_to(mp): hb = bi
+		var hp: Vector3 = z.skel.global_transform * z.skel.get_bone_global_pose(hb) * z.skel.get_bone_global_rest(hb).affine_inverse() * mp
+		var fw: Vector3 = z.forward()
+		cam.global_position = hp + fw * 0.45 + Vector3(0, 0.05, 0)
+		cam.look_at(hp, Vector3.UP); cam.fov = 40; cam.current = true
+		print("zombie ", z.index, " head ", z.skel.get_bone_name(hb), hp, " pos ", z.global_position)
+		for w in [0.0, 0.5, 1.0]:
+			z._morph_mi.set_blend_shape_value(0, w)
+			await sleep(100)
+			await snap("zmorph_%d_%.1f" % [z.index, w])
+		cam.queue_free()
+		break

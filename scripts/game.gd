@@ -229,7 +229,7 @@ func _spawn_enemies(r: Room) -> void:
 				print("%s: zombie %d model %s not converted" % [room_id, i, mdl]); continue
 			# graveyard zombies (behaviour type 0 in rm_002x) lie in the ground and climb out
 			var lying := type == 0 and room_id.begins_with("rm_002")
-			var z := Zombie.new(i); z.mdlver = variant
+			var z := Zombie.new(i); z.mdlver = variant; z.etype = type
 			z.init("enemies/%s.glb" % mdl, float(e.pos[0]), float(e.pos[1]), float(e.pos[2]), float(rot[1] if lying else rot[2]), lying)
 			zombies.append(z); add_child(z)
 			var idx := i
@@ -246,7 +246,12 @@ func _spawn_enemies(r: Room) -> void:
 			var m := EnemyModel.new(); m.load_model("npc/%s.glb" % mdl)
 			m.position = Vector3(float(e.pos[0]), float(e.pos[1]), float(e.pos[2])); m.rotation.y = float(rot[1])
 			m.visible = not (w != null and (w.gone or w.hidden))
-			chars.append({"index": i, "m": m}); add_child(m)
+			var c := {"index": i, "m": m}
+			# facial animation (bhInitMask: enemy id > 90 with a MASK block)
+			if eid > 90:
+				var fm := FaceMask.new(m, "en%s" % U.pad(eid, 2), eid)
+				if fm.ok: fm.set_room(room_id); c.face = fm
+			chars.append(c); add_child(m)
 		elif eid == 67:
 			# en67: cockroaches (10 sprites of the original non-skinned model at their stored offsets). Their own movement
 			# routine (en67) is not in the decompilation, so they stay at the stored positions.
@@ -475,6 +480,20 @@ func _item_screen_body(id: int, auto: bool) -> void:
 	S.refresh()
 	await S.say(Text.pages(Text.SYSMES.get(158, ""), id))
 
+## face mask commands of the event scripts (event.c bhMaskSet ...): ene = enemy record of the room
+func face_cmd(cmd: String, ene: int, v: int, g: int) -> void:
+	for c in chars:
+		if c.index != ene or not c.has("face"): continue
+		var fm: FaceMask = c.face
+		match cmd:
+			"mask": fm.set_mask(v)
+			"lip": fm.set_lip(g, v)
+			"mstart": fm.mask_start(v == 0)
+			"lstart": fm.lip_start(v == 0)
+			"pause": fm.pause(v == 0)
+			"reset": fm.reset()
+			"rep": fm.repeat(v == 0)
+
 ## world transform of a script bone / object: [Transform3D, valid]
 ## script bone number -> node: the player model uses the original numbering; the cutscene NPC models (27 nodes)
 ## lack the face parts 6..14 (-> head 5) so their bones >= 15 are node - 4 (18 / 22 = wrists)
@@ -562,6 +581,8 @@ func _evt_frame() -> void:
 	fx.update(cam.cam)
 	cam.ev.step()
 	_apply_works()
+	for c in chars:
+		if c.has("face"): c.face.control()
 	_light_frame()
 	if vm.cb & 0x10 and not _dialog: _item_screen()
 	if vm.cb & 0x40000 and not _dialog and not inv_open: _box_screen()

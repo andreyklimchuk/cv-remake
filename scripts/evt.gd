@@ -247,6 +247,9 @@ func _log(m: String) -> void:
 	if host.has_method("log_msg"):
 		host.log_msg(m)
 
+func _face(cmd: String, ene: int, v: int, g := 0) -> void:
+	if host.has_method("face_cmd"): host.face_cmd(cmd, ene, v, g)
+
 func _snd(cmd: String, a: Array, w: Work = null) -> void:
 	host.snd(cmd, a, w)
 
@@ -419,6 +422,14 @@ func _exec() -> int:
 			var w := work(0, 0) if _b(1) == 0 else (work(1, _b(2)) if _b(1) == 1 else work(2, _b(2)))
 			r = 0 if w.frm >= N else 1
 		0x5e: host.movie(_b(1))
+		# face masks of the cutscene NPCs (bhMaskSet / bhLipSet / bhMaskStart / bhLipStart / bhFacePauseSet / bhFaceReSet / bhFaceRep)
+		0x3c: _face("mask", _b(2), _b(3))
+		0x3d: _face("lip", _b(2), _b(3), _b(1))
+		0x3e: _face("mstart", _b(2), _b(3))
+		0x3f: _face("lstart", _b(2), _b(3))
+		0x8f: _face("pause", _b(1), _b(2))
+		0x90: _face("reset", _b(1), 0)
+		0x9a: _face("rep", _b(1), _b(2))
 		# ---- sound (event.c bhBgmOn.. / sdfunc.c); fades in 1/100 s (x10), volumes in driver units (negative)
 		0x19: _snd("voice", [_u16(2), _b(4), _b(5) * 10])
 		0x1a: _snd("voiceOff", [_b(1) * 10])
@@ -485,7 +496,7 @@ func _exec() -> int:
 		0x81:
 			var busy := bool(st & 0x40000) or bool(st & 8)
 			r = (0 if _b(1) else 1) if busy else (1 if _b(1) else 0)
-		0x9b: r = 0 if host.movie_playing() else 1
+		0x9b: r = 1 if host.movie_playing() else 0  # CheckPlayEndMovie = MovieInfo.ExecMovieSystemFlag
 		# lights (light.c): bhLightSet, bhLightTypeSet, bhLightParameterSet, bhLightParameterCSet / Start (FOR interpolation), bhEffAmbSet
 		0x35: host.light("set", [_b(1), _b(2), _b(3)])
 		0x4b: host.light("type", [_b(1), _b(2), _b(3)])
