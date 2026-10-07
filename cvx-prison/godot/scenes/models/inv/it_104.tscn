@@ -1,7 +1,0 @@
-[gd_scene load_steps=2 format=3]
-
-[ext_resource type="PackedScene" path="res://assets/inv/it_104.glb" id="1_rsms6"]
-
-[node name="it_104" type="Node3D"]
-
-[node name="glb" type="Node3D" parent="." instance=ExtResource("1_rsms6")]

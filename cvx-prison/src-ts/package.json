@@ -1,2 +1,0 @@
-{ "name": "cvx-prison", "private": true, "type": "module",
-  "scripts": { "dev": "vite --host 127.0.0.1 --port 5180", "build": "tsc --noEmit && vite build && node scripts/pack.mjs", "split": "node scripts/split.mjs" } }
