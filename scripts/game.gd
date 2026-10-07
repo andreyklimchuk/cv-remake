@@ -9,7 +9,6 @@ const NPC_MODELS := ["en91a00", "en93a00", "en98a00", "en62a00"]
 ## converted zombie models en01aNN (NN = model variant byte of the enemy record)
 const ZOMBIE_VARIANTS := [0, 1, 2, 9, 10, 32, 33]
 ## en01_PersonalType add_atk per model variant
-const EN01_ADD_ATK := {0: 0, 1: 5, 2: 5, 9: 0, 10: 0, 32: 5, 33: 8}
 const LIGHTER := 55
 const KNIFE := 8
 const HANDGUN := 9
@@ -229,7 +228,7 @@ func _spawn_enemies(r: Room) -> void:
 				print("%s: zombie %d model %s not converted" % [room_id, i, mdl]); continue
 			# graveyard zombies (behaviour type 0 in rm_002x) lie in the ground and climb out
 			var lying := type == 0 and room_id.begins_with("rm_002")
-			var z := Zombie.new(i); z.mdlver = variant; z.etype = type
+			var z := Zombie.new(i); z.mdlver = variant; z.etype = type; z.player = player
 			z.init("enemies/%s.glb" % mdl, float(e.pos[0]), float(e.pos[1]), float(e.pos[2]), float(rot[1] if lying else rot[2]), lying)
 			zombies.append(z); add_child(z)
 			var idx := i
@@ -856,16 +855,9 @@ func _separate_zombies() -> void:
 			a.position = room.resolve(a.position - Vector3(n.x, 0, n.y) * push * ka, ZOMBIE_R)
 			b.position = room.resolve(b.position + Vector3(n.x, 0, n.y) * push * kb, ZOMBIE_R)
 
+## a zombie caught Claire: from here its NG00 / PlyDG00 / PlayerLink (zombie.gd) move her and play her motions
 func _start_grab(z: Zombie) -> void:
-	var p := player.position; var zp := z.position
-	var to_z := Vector3(zp.x - p.x, 0, zp.z - p.z)
-	var front := player.forward().dot(to_z) >= 0
-	# line Claire up with the zombie like the synchronised original motions
-	z.heading = atan2(-(p.x - zp.x), -(p.z - zp.z)); z.rotation.y = z.heading
-	var np := zp + z.forward() * 0.42; np.y = p.y
-	player.place(np.x, np.y, np.z, z.heading + PI if front else z.heading)
-	player.play_sync("z00" if front else "z01")
-	grab = {"z": z, "t": 0.0, "front": front, "phase": "bite", "hurt": false, "hurt2": false}
+	grab = {"z": z}
 
 func _start_dog_bite(z: Dog) -> void:
 	var p := player.position; var zp := z.position
@@ -886,28 +878,19 @@ func _update_dog_bite(dt: float) -> void:
 	elif b.dead and b.t >= 2.6:
 		dog_bite = null; game_over()
 
-func _update_grab(dt: float) -> void:
-	var g: Dictionary = grab
-	g.t += dt
-	if g.phase == "bite":
-		# en01 grab motion bites at frames 25 and 59.5: 10 + the variant's add_atk each
-		var dmg: int = 10 + int(EN01_ADD_ATK.get(g.z.mdlver, 0))
-		if not g.hurt and g.t * 30 >= 25:
-			g.hurt = true; player.hp -= dmg; audio.se("bite")
-		if not g.hurt2 and g.t * 30 >= 59.5:
-			g.hurt2 = true; player.hp -= dmg; audio.se("bite")
-		if g.t >= 2.0:
-			g.t = 0.0
-			if player.hp <= 0:
-				g.phase = "dead"; player.play_sync("z10" if g.front else "z11"); g.z.set_state("eat")
-			else:
-				# Claire kicks the zombie off (z08/z09, 36 frames) while it staggers back (m76, 36 frames)
-				g.phase = "push"; player.play_sync("z08" if g.front else "z09"); g.z.set_state("release")
-	elif g.phase == "push":
-		if g.t >= 36.0 / 30.0:
-			player.play_sync(null); grab = null
-	elif g.phase == "dead" and g.t >= 2.6:
+func _update_grab(_dt: float) -> void:
+	var z: Zombie = grab.z
+	# bhEne_LeverCheck (sys->pad_ps): a new direction press 4, a new button press 3
+	z.lever += (4 if _inp_hit_dir() else 0) + (3 if input.hit(["KeyE", "Space", "Enter", "KeyZ", "KeyF", "KeyQ", "Mouse0"]) else 0)
+	for k in z.bit: audio.se("bite")
+	z.bit = 0
+	if z.pl_state == "free" or z.pl_state == "":
+		player.play_sync(null); grab = null
+	elif z.pl_state == "dead":
 		grab = null; game_over()
+
+func _inp_hit_dir() -> bool:
+	return input.hit(["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"])
 
 func game_over() -> void:
 	if _over_shown: return
@@ -1001,8 +984,9 @@ func step(dt: float) -> void:
 				var zw: EvtVM.Work = vm.get_work(1, z.index)
 				if zw != null and (zw.gone or zw.hidden): continue
 				if zw != null and zw.scripted: z.update(dt); continue
-				if z.state == "bite" and (grab == null or grab.z != z): z.set_state("walk")
-				if z.tick(dt, player.position, free, room) and grab == null and free: _start_grab(z)
+				if z.mode0 == 2 and z.pl_state == "held" and (grab == null or grab.z != z): z.set_state("walk")
+				if z.tick(dt, player.position, free, room) and grab == null and free:
+					_start_grab(z); free = false
 			_separate_zombies()
 			for z in dogs:
 				var zw: EvtVM.Work = vm.get_work(1, z.index)

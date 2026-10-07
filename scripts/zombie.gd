@@ -149,12 +149,14 @@ func set_state(s: String) -> void:
 	match s:
 		"walk", "idle":
 			mode0 = 1; mode1 = 1; mode2 = 1; mode3 = 0
+			x40 &= ~0xA4080; pl_state = ""
 		"release":
 			_ng_release()
 		"eat":
 			_ng_eat()
 		"bite":
 			mode0 = 2; mode1 = 0; mode2 = 0; mode3 = 0
+			x40 |= 0x80; pl_state = "held"; _pm3 = 0
 
 func forward() -> Vector3:
 	return Vector3(-sin(heading), 0, -cos(heading))
@@ -437,13 +439,15 @@ func _frame() -> bool:
 		2: _nage()
 		3: _damage()
 		4: _die()
+	if (x40 & 0x20000) and pl_state == "held": _player_control()
+	_set_mtn()
 	flg &= ~4
 	if x2f > 0: x2f -= 1
-	_set_mtn()
 	if _room != null:
-		if mode0 != 4: position = _room.resolve(position, 0.25)
+		if mode0 != 4 and not (x40 & 0x80000): position = _room.resolve(position, 0.25)
 		var y: Variant = _room.floor_at(position.x, position.z, position.y)
 		if y != null and absf(y - position.y) < 0.5: position.y = y
+	if x40 & 0x80000: _player_link()
 	_save_world()
 	return grabbed
 
@@ -524,7 +528,7 @@ func _action_check() -> bool:
 	if walking:
 		if _eat_check(8192, 5.5) and x2f == 0 and (lo.no == 117 or lo.no == 125):
 			mode0 = 2; mode1 = 0; mode2 = 0; mode3 = 0
-			x40 |= 0x80
+			x40 |= 0x80; pl_state = "held"; _pm3 = 0
 			return true
 		if _dist < 11.0 and _ikou3(_pl.x, _pl.z, 16384) != 0 and not (x40 & 0x20000000):
 			mode1 = 0; mode2 = 3; mode3 = 0
@@ -757,7 +761,12 @@ func _mv05() -> bool:
 		var f := lo.frm >> 16
 		if f < 13: _ay = (_ay + _ikou3(_pl.x, _pl.z, 1536)) & 0xFFFF
 		if f >= 8 and f < 13 and _free and _eat_check(3640, 5.5):
-			x40 |= 0x80; x40 |= 0x20000
+			x40 |= 0x80
+			# Claire: mode0 4, mode3 4 (PlyDG00 case 4: the synchronised 408 / 409)
+			pl_state = "held"; _pm3 = 4
+			x40 |= 0x20000
+			if _cdir(_pay(), _ay) == 0: x40 |= 0x4000
+			else: x40 &= ~0x4000
 			_chg(lo, 85, 0, 5); lo.x40 &= ~0x3000000
 			_chg(up, 285, 0, 5); up.x40 &= ~0x3000000
 			_ay = _dir(position.x, position.z, _pl.x, _pl.z) & 0xFFFF
@@ -784,7 +793,7 @@ func _mv06() -> bool:
 	if _free:
 		if _eat_check(4551, 5.5):
 			mode0 = 2; mode1 = 0; mode2 = 0; mode3 = 0
-			x40 |= 0x80
+			x40 |= 0x80; pl_state = "held"; _pm3 = 0
 			return true
 		mode1 = 0; mode2 = 5; mode3 = 0
 	return false
@@ -809,18 +818,44 @@ func _mv07() -> void:
 # ---------------------------------------------------------------- Nage (mode0 2): NG00
 
 func _nage() -> void:
+	# bhEne01_NGType00: facing Claire (0x4000) or behind her
+	if mode3 == 0:
+		if _cdir(_pay(), _ay) == 0: x40 |= 0x4000
+		else: x40 &= ~0x4000
 	match mode3:
 		0:
 			_chg(lo, 8, 0, 0); lo.x40 &= ~0x3000000
 			_chg(up, 208, 0, 0); up.x40 &= ~0x3000000
 			_ay = _dir(position.x, position.z, _pl.x, _pl.z) & 0xFFFF
-			x40 &= ~0xF; x40 |= 5; x40 &= ~0x4000000; x40 |= 0x20000
+			flg &= ~0x40
+			x40 &= ~0xF; x40 |= 5; x40 &= ~0x4000000
+			# Claire: mode0 4, mode2 0, mode3 0 (PlyDG00 case 0)
+			pl_state = "held"; _pm3 = 0
+			# the zombie stands 6.44 (in front of Claire) / 6.29 (behind her) units from her
+			var z := -6.442887 if x40 & 0x4000 else 6.290813
+			var ang := ((_ay + 0x8000) if x40 & 0x4000 else _ay) & 0xFFFF
+			var a := ang * BAMS
+			position = Vector3(_pl.x + z * sin(a) * S, _pl.y, _pl.z + z * cos(a) * S)
+			if hp < 0: hp = 0
+			x40 |= 0x20000
 			mode3 = 1
+			if (lo.frm >> 16) == 20:
+				ct0 = 60; mode3 = 2
 		1:
 			if (lo.frm >> 16) == 20:
 				ct0 = 60; mode3 = 2
 		2:
-			pass   # the bite: Claire's side (damage, length) is run by the game (_update_grab)
+			var f := lo.frm >> 16
+			if f == 25 or f == 60:
+				if player != null: player.hp -= PERSONAL[ptype][4] + 10
+				bit += 1
+			# bhEne_LeverCheck: Claire struggles free sooner
+			ct0 -= lever + 1
+			lever = 0
+			if ct0 <= 0 or (flg & 0x2000000):
+				if player != null and player.hp < 0: _ng_eat()
+				else: _ng_release()
+				flg |= 0x20
 		3:
 			var f := lo.frm >> 16
 			if f > 17 and f < 31:
@@ -832,6 +867,7 @@ func _nage() -> void:
 				_chg(lo, 12, 7 << 16, 0); lo.x40 &= ~0x3000000
 				flg |= 0x40000
 				_chg(up, 212, 7 << 16, 0); up.x40 &= ~0x3000000
+				flg |= 0x40
 				x40 &= ~0xF; x40 |= 6
 				mode3 = 4
 		4:
@@ -843,6 +879,7 @@ func _nage() -> void:
 			if flg & 0x2000000:
 				var w := _obj_pos(0)
 				position.x = w.x; position.z = w.z
+				x40 &= ~0x80000
 				_chg(lo, 111, 0, 0); lo.x40 &= ~0x3000000
 				_chg(up, 311, 0, 0); up.x40 &= ~0x3000000
 				x40 &= ~0xF
@@ -855,6 +892,7 @@ func _ng_release() -> void:
 	flg |= 0x40000
 	_chg(up, 207, 0, 5); up.x40 &= ~0x3000000
 	mode3 = 3
+	_pm3 = 2   # Claire: pl->mode3 2, the push-off 410 / 411
 	x40 &= ~0xF; x40 |= 6
 	ct0 = 0
 	flg |= 0x20
@@ -866,6 +904,113 @@ func _ng_eat() -> void:
 	_chg(up, 234, 0, 0); up.x40 &= ~0x3000000
 	x40 &= ~0xF; x40 |= 5
 	mode3 = 6
+	_pm3 = 6   # Claire: pl->mode0 6, mode3 6, the death 412 / 413
+
+# ---------------------------------------------------------------- Claire in a grab: PlyDG00 / PlayerLink
+
+## Claire (set by the game); bhEne01_PlayerControl drives her while EXP0_I(0x40) 0x20000 is set
+var player: Node3D = null
+## bhEne_LeverCheck points (4 for a new direction press, 3 for a new button press) gathered by the game
+var lever := 0
+## "" / "held" (pl->mode0 4 or 6) / "free" (PlyDG00 case 3 end: mode0 1) / "dead" (case 7 end: flg 2)
+var pl_state := ""
+## bites this frame (the game plays the sound)
+var bit := 0
+var _pm3 := 0      # pl->mode3
+var _pct0 := 0     # pl->ct0
+var _payp := 0     # pl->ayp
+var _waxp := 0     # epw->waxp: Claire's angle against the zombie's
+var _pfrm := 0     # pl->frm_no of her synchronised motion
+var _pnf := 1
+var _link := Vector3.ZERO   # EXP0_F(0x64): Claire's offset in the zombie's frame (units)
+## Claire's motions 400 + N come from the zombie's bank (pl->mnwP = epw->mnwP); claire.glb zNN = bank slots in order
+const PLY_CLIP := {401: "z00", 402: "z01", 404: "z02", 405: "z03", 406: "z04", 407: "z05", 408: "z06", 409: "z07", 410: "z08", 411: "z09", 412: "z10", 413: "z11"}
+const PLY_NF := {401: 60, 402: 60, 404: 50, 405: 50, 406: 68, 407: 68, 408: 70, 409: 70, 410: 36, 411: 36, 412: 71, 413: 71}
+const PLY_OFS := [Vector3(0, 0, -6.326351), Vector3(0, 0, -6.326351)]
+const PLY_OFS2 := [Vector3(0.469302, 0, -5.826981), Vector3(0.469231, 0, -5.499186)]
+
+func _pay() -> int:
+	return int(roundf(player.heading / BAMS)) & 0xFFFF if player != null else ((_ay + 0x8000) & 0xFFFF)
+
+## pl->mtn_no = 400 + n from the zombie bank, frm_no 0, hokan_count
+func _ply_motion(n: int, hokan: int) -> void:
+	var m := 400 + n
+	_pfrm = 0; _pnf = PLY_NF[m]
+	if player != null: player.play_sync(PLY_CLIP[m], false, hokan / 30.0)
+
+## the turn of PlyDG00 cases 0 / 4: Claire turns to face the zombie (0x4000) or its way over 5 frames
+func _ply_turn_start() -> void:
+	var pay := _pay()
+	if x40 & 0x4000:
+		_payp = (_ay + 0x8000 - pay) & 0xFFFF; _waxp = -32768
+	else:
+		_payp = (_ay - pay) & 0xFFFF; _waxp = 0
+	if _payp > 0x8000: _payp = _payp - 0x8000 - 0x8000
+	_waxp -= _payp
+	_payp = int(_payp / 5.0)
+	_pct0 = 0
+
+func _ply_turn() -> void:
+	if _pct0 < 5: _waxp += _payp
+	elif _pct0 == 5: _waxp = -32768 if x40 & 0x4000 else 0
+	_pct0 += 1
+
+## bhEne01_PlyDG00
+func _player_control() -> void:
+	var front := (x40 & 0x4000) != 0
+	_pfrm += 1
+	match _pm3:
+		0:
+			if player != null: player.play_sync(player.cur)   # Claire stops (her control is off)
+			_ply_turn_start()
+			_pm3 = 1
+			_pdg_1(front)
+		1:
+			_pdg_1(front)
+		2:
+			_ply_motion(10 if front else 11, 0)
+			x40 &= ~0x80000
+			_pm3 = 3
+		3:
+			# (bhEne01_EnemyPushChk at frames 14 / 17 is not ported)
+			if _pfrm >= _pnf - 1:
+				pl_state = "free"
+				x40 &= ~0x24080
+		4:
+			_ply_motion(8 if front else 9, 5)
+			_link = PLY_OFS2[0 if front else 1]
+			x40 |= 0x80000
+			_ply_turn_start()
+			_pm3 = 5
+			_ply_turn()
+		5:
+			_ply_turn()
+		6:
+			_ply_motion(12 if front else 13, 0)
+			_pm3 = 7
+		7:
+			if _pfrm >= _pnf - 1:
+				pl_state = "dead"
+				x40 &= ~0xA4080
+
+func _pdg_1(front: bool) -> void:
+	_ply_turn()
+	if (lo.frm >> 16) == 1:
+		_ply_motion(6 if front else 7, 5)
+		_link = PLY_OFS[0 if front else 1]
+		x40 |= 0x80000
+
+## bhEne01_PlayerLink: Claire stands at the offset in the zombie's frame, turned by waxp; a wall in her way pushes both
+func _player_link() -> void:
+	if player == null: return
+	var a := _ay * BAMS
+	var off := Vector3(_link.x * cos(a) + _link.z * sin(a), 0, -_link.x * sin(a) + _link.z * cos(a)) * S
+	var c := Vector3(position.x + off.x, player.position.y, position.z + off.z)
+	if _room != null:
+		var c2 := _room.resolve(c, 0.25)
+		position.x += c2.x - c.x; position.z += c2.z - c.z
+		c = c2
+	player.place(c.x, c.y, c.z, ((_ay + _waxp) & 0xFFFF) * BAMS)
 
 # ---------------------------------------------------------------- Damage (mode0 3) / Die (mode0 4)
 
@@ -933,6 +1078,10 @@ func hit(dmg: float) -> void:
 	var ang := int(atan2(dv.x, dv.z) * 10430.381) & 0xFFFF
 	if ((ang - _ay) & 0xFFFF) <= 0x8000: x44 |= 0x20
 	else: x44 &= ~0x20
+	if x40 & 0x80:
+		# bhEne01_DmgCheck: a zombie holding Claire lets go (she is back in control)
+		x40 &= ~0xA4080
+		if pl_state == "held": pl_state = "free"
 	if (x40 & 0x40000) and mode0 == 1 and mode2 == 4:
 		# lying / getting up (DmgModeJumpCheck chg_mtn_tbl is not ported): only a killing shot counts
 		if hp <= 0:

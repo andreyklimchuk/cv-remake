@@ -215,9 +215,9 @@ func grab_test() -> void:
 		print("z ", z.position, " vis ", z.visible, " in tree ", z.is_inside_tree(), " P ", P.position, " zg ", z.global_position)
 		for k in 8:
 			await sim(0.45)
-			print("  grab%d t%d phase %s z %s %s" % [pass_i, k, str(g.grab.phase) if g.grab != null else "-", z.state, z.cur])
+			print("  grab%d t%d grab %s pl %s/%d P %s %.2f hp %d z m%d/%d mtn %d:%d p %s ay %d" % [pass_i, k, g.grab != null, z.pl_state, z._pm3, str(P.position), P.heading, P.hp, z.mode0, z.mode3, z.lo.no, z.lo.frm >> 16, str(z.position), z._ay])
 			await snap("grab%d_%02d" % [pass_i, k])
-		g.grab = null; P.play_sync(null); P.hp = 200
+		g.grab = null; P.play_sync(null); P.hp = 200; z.set_state("walk")
 
 ## rm_0090 security boxes: lid (object part transform) + box screen, items left in box A come out of box B
 func box_test() -> void:
@@ -345,7 +345,7 @@ func zai_test() -> void:
 			if not z.visible: continue
 			zs.append("z%d m%d/%d/%d/%d mtn %d:%d/%d up %d f%x x40 %x d %.1f p %.2f,%.2f ay %d" % [z.index, z.mode0, z.mode1, z.mode2, z.mode3, z.lo.no, z.lo.frm >> 16, z.lo.nf, z.up.no, z.flg, z.x40, z._dist, z.position.x, z.position.z, z._ay])
 		var zw0: EvtVM.Work = vm.get_work(1, g.zombies[0].index) if g.zombies.size() else null
-		print("T%.1f P %.2f,%.2f hp %d grab %s busy %s cine %s msg %s scr %s | %s" % [(k + 1) * float(a[3]), P.position.x, P.position.z, P.hp, str(g.grab.phase) if g.grab != null else "-", g.busy, g.in_cine, g.msg.active, zw0.scripted if zw0 else "-", " | ".join(zs)])
+		print("T%.1f P %.2f,%.2f hp %d grab %s busy %s cine %s msg %s scr %s | %s" % [(k + 1) * float(a[3]), P.position.x, P.position.z, P.hp, (g.grab.z.pl_state + str(g.grab.z._pm3)) if g.grab != null else "-", g.busy, g.in_cine, g.msg.active, zw0.scripted if zw0 else "-", " | ".join(zs)])
 		if a.size() > 7 and k % int(a[7]) == 0: await snap("zai_%03d" % k)
 
 ## zombie mouth morph close-up: -- zmorph ROOM
