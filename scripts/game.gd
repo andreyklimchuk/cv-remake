@@ -833,7 +833,7 @@ func hit_zombie(z: Variant, dmg: float) -> void:
 	# the scripts' DieCk turns this into the enemy's ed flag (the enemy stays dead)
 	if not z.alive: vm.work(1, z.index).dead = true
 
-## zombies do not walk through each other (the en01 AI is not in the decompiled code: simple circle separation)
+## zombies do not walk through each other (bhEne01_CollCheck is not ported: simple circle separation)
 const ZOMBIE_R := 0.25
 func _separate_zombies() -> void:
 	var zs: Array = []

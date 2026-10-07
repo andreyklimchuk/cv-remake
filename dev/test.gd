@@ -44,6 +44,7 @@ func _ready() -> void:
 		"cine": await cine_test()
 		"face": await face_test()
 		"zmorph": await zmorph_test()
+		"zai": await zai_test()
 	print("DONE")
 	get_tree().quit()
 
@@ -324,6 +325,29 @@ func face_test() -> void:
 		prev = line
 		if a.size() <= 5 or k % int(a[5]) == 0: await snap("face_%03d" % k)
 
+## zombie AI log: -- zai ROOM SECS STEP [x z ang | -] [snap_every]  (Claire placed at x z, or left at the door)
+func zai_test() -> void:
+	var a := OS.get_cmdline_user_args()
+	await g.enter_room(a[1], 0, null, false)
+	await wait_free()
+	if a.size() > 6 and a[4] != "-": P.place(float(a[4]), P.position.y, float(a[5]), float(a[6]))
+	P.hp = 100000
+	var n := int(float(a[2]) / float(a[3]))
+	for k in n:
+		if g.msg.active: g.sim(0.3, ["KeyE"]); await sleep(10)
+		await sim(float(a[3]))
+		# -- zai ... SNAP shoot: one handgun hit per step on every visible AI zombie
+		if a.size() > 8 and a[8] == "shoot":
+			for z in g.zombies:
+				if z.visible and z.hittable: g.hit_zombie(z, 1.5)
+		var zs := []
+		for z in g.zombies:
+			if not z.visible: continue
+			zs.append("z%d m%d/%d/%d/%d mtn %d:%d/%d up %d f%x x40 %x d %.1f p %.2f,%.2f ay %d" % [z.index, z.mode0, z.mode1, z.mode2, z.mode3, z.lo.no, z.lo.frm >> 16, z.lo.nf, z.up.no, z.flg, z.x40, z._dist, z.position.x, z.position.z, z._ay])
+		var zw0: EvtVM.Work = vm.get_work(1, g.zombies[0].index) if g.zombies.size() else null
+		print("T%.1f P %.2f,%.2f hp %d grab %s busy %s cine %s msg %s scr %s | %s" % [(k + 1) * float(a[3]), P.position.x, P.position.z, P.hp, str(g.grab.phase) if g.grab != null else "-", g.busy, g.in_cine, g.msg.active, zw0.scripted if zw0 else "-", " | ".join(zs)])
+		if a.size() > 7 and k % int(a[7]) == 0: await snap("zai_%03d" % k)
+
 ## zombie mouth morph close-up: -- zmorph ROOM
 func zmorph_test() -> void:
 	var a := OS.get_cmdline_user_args()
@@ -332,7 +356,7 @@ func zmorph_test() -> void:
 	g.running = false
 	for z in g.zombies:
 		if z._morph_mi == null: continue
-		z.set_state("idle"); z.update(0.5); z.update(0.5); z.visible = true
+		z.visible = true
 		var cam := Camera3D.new(); add_child(cam)
 		# a mouth vertex of the morph (bind space) carried by its nearest bone
 		var D: Dictionary = Assets.data_json("face/zmorph_en01a%s.json" % U.pad(z.mdlver, 2))
