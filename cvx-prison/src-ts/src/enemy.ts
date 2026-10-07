@@ -35,11 +35,11 @@ export class EnemyModel {
 
 /**
  * Zombie (en01) driven by the original en01ms motion bank:
- * m11 get up from the ground, m00 shamble with arms raised (en01_walk_mtn), m02 stand, m73 lunge,
- * m06 grab/bite (NG00: bites at frames 25 and 60, synchronised with Claire), m14/m15 flinch, m09/m10 collapse.
+ * m11 get up from the ground, m71 shamble with arms raised, m56 idle sway, m73 lunge,
+ * m00 bite (synchronised with Claire's z00), m14/m15 flinch, m09/m10 collapse.
  */
 export type ZState = 'lying' | 'rise' | 'idle' | 'walk' | 'lunge' | 'bite' | 'release' | 'flinch' | 'die' | 'dead';
-export const Z_CLIP: Record<string, string> = { rise: 'm11', walk: 'm00', idle: 'm02', lunge: 'm73', bite: 'm06', release: 'm14', flinch: 'm15', flinch2: 'm16', dieF: 'm09', dieB: 'm10', lie: 'm13' };
+export const Z_CLIP: Record<string, string> = { rise: 'm11', walk: 'm71', idle: 'm56', lunge: 'm73', bite: 'm00', release: 'm14', flinch: 'm15', flinch2: 'm16', dieF: 'm09', dieB: 'm10', lie: 'm13' };
 export class Zombie extends EnemyModel {
   state: ZState = 'idle';
   t = 0; hp = 8; heading = 0; cool = 0;
@@ -115,12 +115,12 @@ export class Zombie extends EnemyModel {
 
 /**
  * Zombie dog (en04) driven by the original en04ms motion bank:
- * m00 stand, m07 trot, m01 gallop, m04 leap, m20 bite (hanging on), m12 damage reaction, m10 knocked back, m44 collapse.
+ * m00 trot, m01 gallop, m04 leap, m07 recoil after a bite, m10 knocked back, m11 collapse.
  * Claire's matching reactions are in the same bank (d00 bitten from the front, d05 from behind,
  * d03/d04 fatal bite).
  */
-export type DState = 'idle' | 'trot' | 'run' | 'leap' | 'bite' | 'recoil' | 'flinch' | 'die' | 'dead';
-export const D_CLIP: Record<string, string> = { idle: 'm00', trot: 'm07', run: 'm01', leap: 'm04', air: 'm08', bite: 'm20', recoil: 'm12', flinch: 'm10', die: 'm44' };
+export type DState = 'idle' | 'trot' | 'run' | 'leap' | 'recoil' | 'flinch' | 'die' | 'dead';
+export const D_CLIP: Record<string, string> = { idle: 'm00', trot: 'm00', run: 'm01', leap: 'm04', recoil: 'm07', flinch: 'm10', die: 'm11' };
 export class Dog extends EnemyModel {
   state: DState = 'idle';
   t = 0; hp = 6; heading = 0; cool = 0;
@@ -140,7 +140,7 @@ export class Dog extends EnemyModel {
   get alive() { return this.hittable; }
   set(s: DState) {
     this.state = s; this.t = 0;
-    const loop = s === 'idle' || s === 'trot' || s === 'run' || s === 'bite';
+    const loop = s === 'idle' || s === 'trot' || s === 'run';
     this.cur = ''; this.play(D_CLIP[s], 0.15, loop, 1);
   }
   get clipLen() { return this.action ? this.action.getClip().duration : 0; }
@@ -166,14 +166,11 @@ export class Dog extends EnemyModel {
         break;
       case 'leap':
         if (this.t < 0.45) move(3.6);
-        if (this.t > 0.15 && this.t < 0.5 && dist < 0.75 && targetFree) { bite = true; this.set('bite'); break; }
-        // the leap misses: the dog has to slow down and circle before it may attack again (en04.c MV07)
-        if (this.t >= this.clipLen) { this.cool = 1.6; this.set('trot'); }
+        if (this.t > 0.15 && this.t < 0.5 && dist < 0.75 && targetFree) { bite = true; break; }
+        if (this.t >= this.clipLen) { this.cool = 0.6; this.set('trot'); }
         break;
-      case 'bite': // hanging on the victim (m20, in place); the game runs the damage and ends the hold
-        break;
-      case 'recoil': if (this.t < 0.4) move(-1.2); if (this.t >= this.clipLen) { this.cool = 2.2; this.set('trot'); } break;
-      case 'flinch': if (this.t < 0.3) move(-1.5); if (this.t >= this.clipLen) { this.cool = 1.2; this.set('trot'); } break;
+      case 'recoil': if (this.t < 0.4) move(-1.2); if (this.t >= this.clipLen) { this.cool = 1.5; this.set('trot'); } break;
+      case 'flinch': if (this.t < 0.3) move(-1.5); if (this.t >= this.clipLen) { this.cool = 0.8; this.set('trot'); } break;
       case 'die': if (this.t >= this.clipLen) this.state = 'dead'; break;
     }
     this.root.rotation.y = this.heading;

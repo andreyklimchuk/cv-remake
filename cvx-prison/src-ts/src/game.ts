@@ -9,7 +9,6 @@ import { InventoryScreen } from './invscreen';
 import { Audio } from './audio';
 import { LANG, UI, pages, hasChoice } from './text';
 import { Zombie, Dog, EnemyModel } from './enemy';
-import { Face } from './face';
 import type { Evc } from './evcam';
 import { EvtVM, atrFrom, newFlags, type EvtFlags, type EvtHost, type Atr } from './evt';
 import { loadJSON, loadGLTF, toLambert } from './assets';
@@ -194,8 +193,7 @@ export class Game implements EvtHost {
         const m = new EnemyModel(); await m.load(`npc/en${pad(e.id, 2)}a${pad(variant, 2)}.glb`);
         m.root.position.set(e.pos[0], e.pos[1], e.pos[2]); m.root.rotation.y = e.rot[1] ?? 0;
         { const w = this.vm.works.get('1:' + i); m.root.visible = !(w && (w.gone || w.hidden)); }
-        const face = new Face(m.bones, 'b');
-        this.chars.push({ index: i, m, face }); this.scene.add(m.root);
+        this.chars.push({ index: i, m }); this.scene.add(m.root);
       } else if (e.id === 67) {
         // en67: cockroaches (10 sprites of the original non-skinned model at their stored offsets). Their own movement
         // routine (en67) is not in the decompilation, so they stay at the stored positions.
@@ -208,7 +206,7 @@ export class Game implements EvtHost {
   }
   actors: THREE.Object3D[] = [];
   /** cutscene characters of the room record (index = enemy record index) */
-  chars: { index: number; m: EnemyModel; face?: Face }[] = [];
+  chars: { index: number; m: EnemyModel }[] = [];
 
   // ---------------------------------------------------------------- event system glue
   private syncPlayerWork() {
@@ -309,9 +307,6 @@ export class Game implements EvtHost {
     if (!(vm.cb & 0x200)) return false;
     const a = vm.flr[vm.flr_idx]; if (!a || !a.prm.includes(id)) return false;
     vm.sb_id = id; vm.cb |= 0x400;
-    // player.c: while an item is used the transient stflg bit 8 (the "acting" state) is set; the room
-    // scripts gate their item reactions on it (e.g. bhUseItemCheck(82) for the extinguisher)
-    vm.st |= 8; this.useT = 0.9;
     this.toggleInv(false);
     return true;
   }
@@ -387,7 +382,6 @@ export class Game implements EvtHost {
   /** one 30 Hz frame of the event system */
   private evtFrame() {
     const vm = this.vm;
-    this.faces(1 / 30);
     this.syncPlayerWork();
     this.floorCheck();
     vm.tick();
@@ -397,13 +391,6 @@ export class Game implements EvtHost {
     this.lightFrame();
     if (vm.cb & 0x10 && !this.dialog) this.itemScreen();
     if (vm.cb & 0x200000) { vm.cb &= ~0x200000; this.saveScreen(); }
-  }
-  /** facial animation: the mouth follows the running voice line, the eyes blink (bhLipSet) */
-  private faces(dt: number) {
-    const v = this.audio.voiceLevel();
-    this.player.talk = v;
-    this.player.pain = this.grab ? 1 : this.dogBite ? 1 : Math.max(0, this.player.pain - dt);
-    for (const c of this.chars) c.face?.update(dt, v);
   }
   /** bhControlLight (30 Hz): event light table while the event camera runs; player.c lights lgtp[1] while the lighter is equipped */
   private lightFrame() {
@@ -609,9 +596,9 @@ export class Game implements EvtHost {
   zombies: Zombie[] = [];
   dogs: Dog[] = [];
   /** dog bite in progress (Claire d00/d05, fatal d03/d04) */
-  dogBite: { z: Dog; t: number; front: boolean; dead: boolean; hurt: boolean } | null = null;
+  dogBite: { z: Dog; t: number; front: boolean; dead: boolean } | null = null;
   /** zombie bite in progress (Claire z00/z01 + zombie m00, then z02/z03 push-off) */
-  grab: { z: Zombie; t: number; front: boolean; phase: 'hold' | 'bite' | 'push' | 'dead'; hurt: boolean; hurt2: boolean } | null = null;
+  grab: { z: Zombie; t: number; front: boolean; phase: 'bite' | 'push' | 'dead'; hurt: boolean; hurt2: boolean } | null = null;
   hitZombie(z: Zombie | Dog, dmg: number) {
     z.hit(dmg);
     // the scripts' DieCk turns this into the enemy's ed flag (the enemy stays dead)
@@ -625,57 +612,41 @@ export class Game implements EvtHost {
     z.heading = Math.atan2(-(p.x - zp.x), -(p.z - zp.z)); z.root.rotation.y = z.heading;
     const zf = z.forward(); const np = zp.clone().addScaledVector(zf, 0.42); np.y = p.y;
     P.place(np.x, np.y, np.z, front ? z.heading + Math.PI : z.heading);
-    // en01.c bhEne01_PlyDG00: case 1 holds Claire (offset+6/+7 = z04/z05), case 2 is the bite
-    // (offset+10/+11 = z08/z09), case 4 the push-off (offset+8/+9 = z06/z07), +12/+13 the fatal one.
-    P.playSync(front ? 'z04' : 'z05');
-    z.set('bite');
-    this.grab = { z, t: 0, front, phase: 'hold', hurt: false, hurt2: false };
+    P.playSync(front ? 'z00' : 'z01');
+    this.grab = { z, t: 0, front, phase: 'bite', hurt: false, hurt2: false };
   }
   private startDogBite(z: Dog) {
     const P = this.player, p = P.root.position, zp = z.root.position;
     const front = P.forward().dot(new THREE.Vector3(zp.x - p.x, 0, zp.z - p.z)) >= 0;
     P.heading = front ? Math.atan2(-(zp.x - p.x), -(zp.z - p.z)) : Math.atan2(-(p.x - zp.x), -(p.z - zp.z));
     P.root.rotation.y = P.heading;
-    // en04.c bhEne04_PlyDG00: case 0 holds Claire (offset+0/+5 = d00/d05), case 1 the bite (offset+1/+6),
-    // case 3 the release (offset+2/+7); PlyDG01 (+3/+4 = d03/d04) is the fatal bite.
-    P.playSync(front ? 'd00' : 'd05');
-    z.set('bite'); // the dog hangs on (m20)
-    this.dogBite = { z, t: 0, front, dead: false, hurt: false };
+    this.player.hp -= 12; this.audio.se('bite'); // en04 bite damage 12
+    const dead = this.player.hp <= 0;
+    P.playSync(dead ? (front ? 'd03' : 'd04') : (front ? 'd00' : 'd05'));
+    z.set(dead ? 'idle' : 'recoil');
+    this.dogBite = { z, t: 0, front, dead };
   }
   private updateDogBite(dt: number) {
     const b = this.dogBite!; b.t += dt;
-    if (!b.hurt && b.t >= 0.4) {
-      // the bite lands (en04.c: motion +1 sprays blood on frame 12)
-      b.hurt = true; this.player.hp -= 12; this.audio.se('bite');
-      if (this.player.hp <= 0) { b.dead = true; this.player.playSync(b.front ? 'd03' : 'd04'); }
-      else this.player.playSync(b.front ? 'd01' : 'd06');
-    }
-    if (!b.dead && b.t >= 1.7) { this.player.playSync(null); b.z.set('recoil'); this.dogBite = null; }
+    if (!b.dead && b.t >= 1.0) { this.player.playSync(null); this.dogBite = null; }
     else if (b.dead && b.t >= 2.6) { this.dogBite = null; this.gameOver(); }
   }
   private updateGrab(dt: number) {
     const g = this.grab!; g.t += dt;
-    if (g.phase === 'hold') {
-      // the zombie's grab motion (m06) reaches out at frame 1: Claire is pulled in, then bitten
-      if (g.t >= 0.35) { g.phase = 'bite'; g.t = 0; this.player.playSync(g.front ? 'z08' : 'z09', true); }
-    } else if (g.phase === 'bite') {
-      // en01.c bhEne01_NG00 case 2: the grab motion bites at frames 25 and 60 (10 + the variant's add_atk each)
+    if (g.phase === 'bite') {
+      // en01 grab motion bites at frames 25 and 59.5: 10 + the variant's add_atk each
       const dmg = 10 + (EN01_ADD_ATK[g.z.mdlver] ?? 0);
       if (!g.hurt && g.t * 30 >= 25) { g.hurt = true; this.player.hp -= dmg; this.audio.se('bite'); }
-      if (!g.hurt2 && g.t * 30 >= 60) { g.hurt2 = true; this.player.hp -= dmg; this.audio.se('bite'); }
-      if (g.t >= this.grabBiteLen) {
+      if (!g.hurt2 && g.t * 30 >= 59.5) { g.hurt2 = true; this.player.hp -= dmg; this.audio.se('bite'); }
+      if (g.t >= 2.0) {
         g.t = 0;
-        if (this.player.hp <= 0) { g.phase = 'dead'; this.player.playSync(g.front ? 'z10' : 'z11'); g.z.set('release'); }
-        else { g.phase = 'push'; this.player.playSync(g.front ? 'z06' : 'z07'); g.z.set('release'); }
+        if (this.player.hp <= 0) { g.phase = 'dead'; this.player.playSync(g.front ? 'z10' : 'z11'); g.z.set('idle'); }
+        else { g.phase = 'push'; this.player.playSync(g.front ? 'z02' : 'z03'); g.z.set('release'); }
       }
     } else if (g.phase === 'push') {
-      if (g.t >= 1.4) { this.player.playSync(null); this.grab = null; }
+      if (g.t >= 1.6) { this.player.playSync(null); this.grab = null; }
     } else if (g.phase === 'dead' && g.t >= 2.6) { this.grab = null; this.gameOver(); }
   }
-  /** length of the zombie's grab motion m06 (68 frames, the second bite is at frame 60) */
-  private grabBiteLen = 2.3;
-  /** remaining time of the "using an item" state (stflg bit 8) */
-  private useT = 0;
   private overShown = false;
   async gameOver() {
     if (this.overShown) return; this.overShown = true; this.busy = true;
@@ -743,7 +714,6 @@ export class Game implements EvtHost {
         while (this.evtAcc >= 1 / 30 && !this.busy) { this.evtAcc -= 1 / 30; this.evtFrame(); }
         this.cam.evSub = this.evtAcc * 30;
       }
-      if (this.useT > 0) { this.useT -= dt; if (this.useT <= 0) this.vm.st &= ~8; }
       if (this.pendingDoor && !this.busy) { const d = this.pendingDoor; this.pendingDoor = null; this.goDoor(d); }
       const sh = this.cam.mode === 'behind';
       if (sh && !this.player.frozen) {
