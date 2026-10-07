@@ -1,74 +1,64 @@
-# Code: Veronica — Web Remake (fan, non-commercial)
+# CVX Prison — порт на Godot 4.3
 
-Браузерный 3D survival-horror в духе RE: Code Veronica с геймплеем RE2 Remake.
-TypeScript + Vite + Three.js. Все ассеты процедурные (без оригинальных ресурсов Capcom).
+Ветка `godot` — только проект Godot (корень ветки = папка проекта). Порт браузерной сборки `cvx-prison` (TypeScript + three.js) на **Godot Engine 4.3** (GDScript, рендерер *Compatibility*).
+Логика перенесена 1:1 по файлам веб-версии — ничего своего не добавлено:
 
-## Запуск
-- Готовая сборка: открыть `dist/play.html` (один файл, работает офлайн, из file://).
-- Разработка: `npm i && npm run dev` → http://localhost:5173
-- Сборка: `npm run build`
-- Параметры URL: `?q=low|medium|ultra`, `?renderer=webgpu` (экспериментально).
+| веб (src-ts/src) | Godot (scripts) |
+|---|---|
+| evt.ts / evtops.ts | evt.gd + data/evtops.json (VM скриптов событий) |
+| game.ts | game.gd (комнаты, EvtHost, осмотр/подбор/двери/сохранение, зомби/собаки, захваты) |
+| main.ts | main.gd + scenes/main.tscn (титульное меню) |
+| room.ts, camera.ts, evcam.ts, light.ts | room.gd, camera_rig.gd, evcam.gd, light.gd |
+| player.ts, enemy.ts | player.gd, enemy_model.gd, zombie.gd, dog.gd |
+| effects.ts | effects.gd (O_WRK, спрайты, дождь, 2D-слой пролога, полосы кино) |
+| audio.ts | game_audio.gd (банки SE/BGM/голоса, панорама/громкость как в оригинале) |
+| ui.ts, invscreen.ts, inventory.ts, movie.ts | ui_root.gd, message_box.gd, inv_screen.gd, deco.gd, inventory.gd, movie.gd |
+| text.ts, sysmes.ts | text.gd + data/text_ru.json, data/sysmes.json |
 
-## Управление
-WASD — движение, Shift — бег, ПКМ — прицел, ЛКМ — выстрел, R — перезарядка,
-Space (удерж.) — стойка с ножом (ЛКМ взмах, ПКМ выпад), F — нож / добивание / контратака при захвате, Q — толчок,
-E — взаимодействие, Tab/I — инвентарь (R — поворот, перетащить на предмет — объединить),
-1–8 / колесо — оружие, Esc — пауза, F3 — debug, F9 — (чит) весь арсенал. Геймпад поддерживается.
+## Как запустить
+1. Ассеты (сконвертированные из PS3-версии) в git не лежат. Распаковать их из `data/*.js` веб-сборки (ветка `cvx-prison`):
+   `python3 tools/fetch_assets.py` (нужен ffmpeg с libtheora/libvorbis — ролики перекодируются в .ogv).
+   Скрипт сам скачает ветку `cvx-prison` с GitHub (или укажите путь к её папке `cvx-prison/` аргументом).
+2. Открыть корень ветки в Godot 4.3 (первый импорт glb занимает пару минут) и запустить (F5).
 
-## Структура
-```
-src/
-  engine/   Web RE-Engine: Renderer (WebGL2 + WebGPU fallback, GTAO/bloom/grade), Materials (PBR, SSS-кожа),
-            VolumetricFX (лучи света, туман, огонь, дождь), Physics (AABB-мир, raycast, LOS),
-            Nav (граф + A*), Streaming (зоны + portal culling), Pools (instanced декали/гильзы/частицы),
-            AudioEngine (процедурный HRTF 3D-звук), Input, Quality, Events
-  game/
-    player/     PlayerController, CameraRig (over-shoulder), ClaireModel (скелет, лицо, хвост), WeaponModels
-    combat/     Weapons (статы), HitZones, WeaponSystem, Projectiles
-    inventory/  Items, Inventory (8x6 Tetris, ItemBox), Crafting
-    ai/         Zombie (FSM + восприятие), ZombieModel (расчленение)
-    world/      Interactables (двери, предметы, скрипты), LevelBuilder (batching), ItemMeshes
-    levels/     PrisonLevel (тестовый уровень)
-    Game.ts, World.ts, Rig.ts, SaveSystem.ts
-  ui/  HUD (ECG), InventoryUI, Menus
-```
+Управление то же, что в вебе: W/S или ↑/↓ — вперёд/назад, A/D или ←/→ — поворот, Shift — бег, C — камера (фиксированная / из-за плеча),
+F / ПКМ — оружие наизготовку, E / Пробел / Enter / ЛКМ — действие/удар, Tab — предметы, Esc — отмена/пропуск, F1 — отладка.
+Сохранение (печатная машинка) — `user://save.json`, настройки — `user://settings.cfg`.
 
-## Детальные модели (Blender)
+## Сцены (редактируются в Godot)
+Игра собрана из отдельных сцен, которые можно открыть и править в редакторе — игра читает именно их:
+- `scenes/models/<rooms|objects|items|chars|enemies|npc|inv>/<имя>.tscn` — по сцене на каждую модель (комната, объект, предмет, Клэр/NPC, враги, 3D-предметы инвентаря). Внутри — импортированный glb; чтобы менять меши/материалы — «Editable Children». `Assets.scene()` грузит эти сцены вместо glb.
+- `scenes/rooms/rm_XXXX.tscn` — раскладка комнаты (`RoomScene`, скрипты в `scripts/scene/`):
 
-Персонажи и оружие теперь — полноценные модели, собранные в Blender (исходники `assets/blender/*.blend`,
-скрипты генерации `tools/blender/`, описание там же). В игру они попадают как GLB (`src/assets/models/`),
-встраиваются прямо в `play.html` и загружаются `src/game/assets/ModelLibrary.ts`.
+| узел | что это | тип |
+|---|---|---|
+| Model | геометрия комнаты (сцена модели) | instance |
+| Objects/objNN_* | объекты комнаты (позиция/поворот, index, flags, id, ex) | PlacedObject |
+| Items/itemNN_* | предметы на полу (позиция, id предмета, flags) | PlacedItem |
+| Enemies/enemyNN_* | точки появления врагов (id, позиция, поворот) | EnemySpawn |
+| Spawns/spawnN | позиции входа игрока | SpawnPoint |
+| Cameras/camNN | фиксированные камеры (позиция, поворот; прочие параметры — в rec) | RoomCam (Camera3D — можно смотреть через неё в редакторе) |
+| Triggers, Collision, Areas | зоны событий, стены/коллизия, зоны пола/камер | AtrBox (коробка с размером, type/flags в hex) |
+| Lights, EventLights | источники света комнаты | RoomLight |
+| Effects/effNN_ID | таблица эффектов комнаты: 100 дождь (в редакторе видно превью капель), 101 брызги, 102 ветер, 103 дым/искры, 116–119 огонь, 154–182 спрайты… | RoomEffect |
 
-* **Клэр** — ~124k треугольников, 4 материала (кожа с SSS, одежда, глаза, волосы-карточки), скелет из 22 костей,
-  shape keys моргания/боли/хвата, физика хвоста на 4 костях, текстуры 2K (albedo / normal / ORM).
-* **Зомби** (заключённый, охранник) — ~37k треугольников, 1 материал / 1 draw call, раны, кровь, рваная одежда;
-  хит-зоны по доминирующей кости, отстрел конечностей с отлетающими кусками меши.
-* **Оружие** — M9F и нож, hard-surface.
-* Просмотрщик моделей: `play.html?viewer=claire&pose=idle|aim|run|pain&shot=full|face|torso|hands|feet&yaw=0`,
-  `play.html?viewer=zombie_prisoner&pose=chase&sever=lArm`.
-* Клэр — готовая модель из *Resident Evil: Survival Unit* (Sketchfab, прислана пользователем; конвертация
-  `tools/import/claire_su.py`). Старая Blender-Клэр: `play.html?classic`. Права на модель принадлежат их владельцам
-  (Capcom / автор загрузки), проект некоммерческий фанатский.
-* Ассеты из других игр Capcom (прислал пользователь, конвертация скриптами `tools/import/*.py`): **HUNK** (охрана в интро),
-  нож, травы и печатная машинка из *RE0*, **Хантер** (*RE: Revelations*) — бег, прыжок через пропасть, удары когтями. Просмотр:
-  `play.html?viewer=hunter&pose=run`.
-* **Стив** — тело из мода RE4R *Steve Burnside Costume* (Mralexmods), голова — прежняя (`tools/import/steve_re4r.py`).
-* Сборка для игры: https://github.com/andreyklimchuk/cv-remake/releases/download/latest/cv-remake-play.zip (автосборка GitHub Actions).
-* Если GLB не загрузился — автоматически используется старая процедурная модель.
+Двигайте/поворачивайте узлы, меняйте свойства в инспекторе — при загрузке комнаты `RoomScene.collect()` собирает из них данные, которые раньше брались из `assets/rooms/ID.json`. Порядок детей в группе = номер записи, на который ссылаются скрипты событий (не переставляйте без нужды). Тексты сообщений, амбиент и скрипты событий остаются в JSON (это байткод оригинала).
 
-## Тестовый уровень: тюрьма острова Рокфорт
-Локации — *Resident Evil Code Veronica Prison* и *Resident Evil Code Veronica 2.0* (Sketchfab, **DPLDS**, CC-BY 4.0),
-соединены дверями. Интро: вертолёт Umbrella (*Bell Huey helicopter*, **Duane's Mind**, CC-BY 4.0) садится у южных
-ворот двора, охрана ведёт Клэр в тюремный блок и запирает в камере; тревога — камера открывается.
-Камера (зажигалка на койке) → караульная (тело охранника: M9F, нож; печатная машинка, сундук) → коридор →
-лестница → двор → дом коменданта (комната сохранения, склад с дробовиком M3, кабинет с картой охраны) →
-калитка на электронном замке → западные ворота (конец демо). Зомби — в основном новые *Realistic Zombie Hitman*
-(**Jungle Jim**, CC-BY 4.0) и *Realistic Female Zombie* (**sxnneh**, CC-BY 4.0), плюс заключённый, охранник и цербер.
-**F10 / ~ — админ-панель**: телепорт, арсенал, бессмертие, спавн врагов, убить всех, Клэр ⇄ Стив, открыть двери,
-скорость времени. Катсцены пропускаются Enter / Esc.
+Сцены генерируются из ассетов (после `fetch_assets.py`):
+`godot --headless --path . -s tools/build_scenes.gd [-- all|models|rooms [rm_XXXX ...]] [--force]`.
+Существующие сцены комнат не перезаписываются (там ваши правки), `--force` — пересоздать. Если сцены комнаты нет, игра грузит её из JSON как раньше.
+Сцены ссылаются на `res://assets/...` — поэтому сначала `fetch_assets.py`, потом открывать проект.
 
-## Честные ограничения прототипа
-- Физика — собственный AABB-мир с интерфейсом `ICollisionWorld`, совместимым для замены на Rapier.
-- WebGPU — экспериментально, без пост-эффектов и кастомных шейдеров.
-- Текстуры генерируются процедурно (вместо KTX2), SSS — wrap-lighting аппроксимация.
-- Nosferatu, Tyrant, Крис, военная база и Антарктида — в роадмапе.
+## Тесты
+- `godot --headless --path . -s dev/vmtest.gd -- rm_0000 600` — тот же лог VM, что `dev/vmtest.ts` веб-версии (сверено на всех 13 комнатах; отличия только в печати `-0.00`).
+- `godot --headless --path . res://dev/test.tscn -- flow|rooms [rm_XXXX ...]|ui|cam|det X Z H` (det — проход Клэр из точки X,Z с курсом H, напр. металлодетектор rm_0090: `det 7.0 13.2 0`) — сценарии как dev/t_flow1.js / t_rooms.js;
+  с настоящим рендером (`xvfb-run godot --path . res://dev/test.tscn -- rooms`) пишет скриншоты в `shots/`.
+  Скриншоты комнат сверены с веб-версией (Chromium/three.js) — картинка совпадает.
+- Ещё режимы test.tscn: `grab rm_XXXX` (захват/укус зомби), `box` (ящики rm_0090: крышка + экран ящика, предмет кладётся в один ящик и берётся из другого), `cine rm_XXXX ENTRY FLR SECS STEP` (катсцена: снимки каждые STEP с, лог NPC/зомби).
+- Просмотр клипов: `dev/anim_sheet.tscn -- model.glb clip frames yaw`, пары Клэр/зомби: `dev/pair_sheet.tscn -- claireClip zombieClips front frames dist` → `shots/`.
+
+## Отличия от веб-версии (технические, не геймплейные)
+- Освещение «Ninja easy multi light» — свой spatial-шейдер (assets.gd) с глобальными uniform'ами вместо патча шейдеров three.js; формула та же (амбиент + 3 точечных + 1 направленный, линейный спад nr→fr).
+- Окклюзия камер (проверка «видна ли Клэр») — собственный перебор треугольников вместо Raycaster (те же правила: только непрозрачные лицевые грани).
+- Анимации комнатных движений (rmt) называются в glb `rm_XXXX_rNN` (импортёр Godot заменяет `/` на `_`).
+- Состояние работ и приближения — в `HANDOFF.md`.

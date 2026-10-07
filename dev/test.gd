@@ -1,0 +1,291 @@
+extends Node
+## Headless test harness (port of dev/t_lib.js): `godot --headless --path . res://dev/test.tscn -- flow`
+## Screenshots (shots/NAME.png) are written when running with a real renderer (xvfb-run, no --headless).
+
+var ui: UIRoot
+var g: Game
+var vm: EvtVM
+var P: Player
+var shots := 0
+
+func _ready() -> void:
+	var args := OS.get_cmdline_user_args()
+	var which: String = args[0] if args.size() else "flow"
+	if which == "title":
+		var m: Node = load("res://scenes/main.tscn").instantiate(); add_child(m)
+		await sleep(1500); await snap("title")
+		if args.size() > 1:
+			if args[1] == "load": Input.parse_input_event(_key(KEY_DOWN)); await sleep(200)
+			Input.parse_input_event(_key(KEY_ENTER)); await sleep(100)
+			var e := _key(KEY_ENTER); e.pressed = false; Input.parse_input_event(e)
+			for k in (int(args[2]) if args.size() > 2 else 12):
+				await sleep(1000)
+				var gm: Game = m.game
+				if gm and gm.movie_playing() and args.size() <= 3: Input.parse_input_event(_key(KEY_ESCAPE))
+				if gm:
+					for op in gm.fx._trs2d: print("2d ", op.tex, " ", op.ani, " p ", op.px, ",", op.py, " s ", op.sx, ",", op.sy, " uv ", op.tv[0].u, ",", op.tv[1].u, ",", op.tv[0].v, ",", op.tv[2].v, " layer ", gm.fx.layer.size)
+				if gm: print("t%d %s busy %s cine %s movie %s msg %s fade %.2f" % [k, gm.room_id, gm.busy, gm.in_cine, gm.movie_playing(), gm.msg.active, m.ui.fade_rect.modulate.a])
+			await snap("after_" + args[1])
+		get_tree().quit(); return
+	ui = UIRoot.new(); add_child(ui)
+	g = Game.new(ui); add_child(g)
+	vm = g.vm; P = g.player; g.debug = true
+	await g.start(null if which != "load" else Game.load_save())
+	g.running = false
+	match which:
+		"flow": await flow()
+		"rooms": await rooms()
+		"shot": await shot_rooms()
+		"ui": await ui_test()
+		"cam": await cam_test()
+		"det": await det_test()
+		"grab": await grab_test()
+		"box": await box_test()
+		"cine": await cine_test()
+	print("DONE")
+	get_tree().quit()
+
+func sleep(ms: float) -> void:
+	await get_tree().create_timer(ms / 1000.0).timeout
+
+func stt() -> String:
+	if vm == null: return ""
+	var tasks := []
+	for i in vm.tasks.size():
+		if vm.tasks[i].status: tasks.append("%d:e%d" % [i, vm.tasks[i].scr - 2])
+	var m := "-"
+	if g.msg.active: m = JSON.stringify(ui.msg_text.text.substr(0, 60))
+	return "%s cb %x st %x tasks %s msg %s frozen %s pos %.2f,%.2f cam %d shown %d ov %d mode %s" % [g.room_id, vm.cb, vm.st, " ".join(tasks), m, P.frozen, P.position.x, P.position.z, g.cam.index, g.cam.shown, g.cam._override, g.cam.mode]
+
+func snap(t: String) -> void:
+	print(t, " ", stt())
+	if DisplayServer.get_name() == "headless": return
+	await RenderingServer.frame_post_draw
+	var img := get_viewport().get_texture().get_image()
+	DirAccess.make_dir_recursive_absolute("res://shots")
+	shots += 1
+	img.save_png("res://shots/%02d_%s.png" % [shots, t.replace(" ", "_").replace("/", "_")])
+
+func sim(s: float, k: Array = []) -> void:
+	g.sim(s, k); await sleep(5)
+
+func close_msgs() -> void:
+	for i in 20:
+		if not (g.msg.active or g._dialog or g.busy): return
+		if g.busy and not g.msg.active:
+			await sleep(200); continue
+		g.sim(0.4, ["KeyE"]); await sleep(10)
+
+func wait_free(mx := 60) -> bool:
+	for i in mx:
+		if g.msg.active or g._dialog:
+			await close_msgs(); continue
+		if g.busy or g.movie_playing():
+			if g.movie_playing(): Input.parse_input_event(_key(KEY_ESCAPE))
+			await sleep(200); continue
+		if not g.in_cine: return true
+		if vm.cb & 4: await sim(0.1, ["Escape"])
+		await sim(1)
+	return false
+
+func _key(k: Key) -> InputEventKey:
+	var e := InputEventKey.new(); e.keycode = k; e.physical_keycode = k; e.pressed = true
+	return e
+
+func act(i: int, label := "") -> bool:
+	var a: Dictionary = vm.etc[i]
+	var cx: float = a.x + a.w / 2; var cz: float = a.z + a.d / 2
+	var d: float = [0.45, 0.075, 0.45, 0.6, 0.2][a.type] if a.type < 5 else 0.45
+	for h in [0.0, PI / 2, PI, -PI / 2]:
+		var f := Vector2(-sin(h), -cos(h))
+		P.place(cx - f.x * d, P.position.y, cz - f.y * d, h)
+		await sim(0.05); g.sim(0.05, ["KeyE"]); await sleep(10); await sim(0.1)
+		if g.msg.active or g._dialog or g.busy or g._pending_door != null:
+			await snap(label if label != "" else "etc%d" % i); await close_msgs(); return true
+	print("no reaction etc%d" % i)
+	return false
+
+func list_etc() -> void:
+	for i in vm.etc.size():
+		var a: Dictionary = vm.etc[i]
+		print("etc %d flg %d type %d attr %x prm %s c %.2f %.2f" % [i, a.flg, a.type, a.attr, str(a.prm), a.x + a.w / 2, a.z + a.d / 2])
+
+func inv() -> void:
+	var a := []
+	for s in g.inv.slots:
+		if s != null: a.append("%d:%d" % [s.id, s.count])
+	print("inv ", a)
+
+func flow() -> void:
+	g.sim(1); vm.cb |= 0x10000000
+	await wait_free(); g.set_weapon(1); await sim(2); await wait_free(); await snap("free")
+	await act(7); await act(4); await act(8); inv()
+	await act(0, "door"); await wait_free(); await snap("in " + g.room_id); list_etc()
+	var its := []
+	for i in (g.room.data.get("items", []) as Array).size():
+		var it: Dictionary = g.room.data.items[i]
+		its.append([i, it.id, it.get("name", ""), g.room.item_meshes[i].visible if g.room.item_meshes.has(i) else null])
+	print("items ", its)
+	await act(2); await act(3); inv(); await act(1, "typewriter"); await act(4, "etc4")
+	await act(0, "door10"); await wait_free(); await snap("in " + g.room_id)
+
+func rooms() -> void:
+	var ua := OS.get_cmdline_user_args()
+	var ids: Array = ua.slice(1) if ua.size() > 1 else ["rm_0010", "rm_0020", "rm_0021", "rm_0030", "rm_0031", "rm_0040", "rm_0050", "rm_0060", "rm_0070", "rm_0080", "rm_0090", "rm_0160"]
+	for id in ids:
+		await g.enter_room(id, 0, null, false)
+		for k in 6:
+			await sim(1); await sleep(50); await close_msgs()
+			if g.movie_playing(): Input.parse_input_event(_key(KEY_ESCAPE)); await sleep(300)
+		await snap("room " + id)
+		print("R ", id, " zombies ", g.zombies.size(), " dogs ", g.dogs.size(), " chars ", g.chars.size(), " msg ", g.msg.active)
+
+func shot_rooms() -> void:
+	await rooms()
+
+func ui_test() -> void:
+	g.running = true
+	g.sim(1); vm.cb |= 0x10000000
+	await wait_free(); g.set_weapon(1); await sim(2); await wait_free(); await snap("free")
+	await act(4, "pickup"); await sleep(600); await snap("pickup2")
+	await close_msgs()
+	g.toggle_inv(true); await sleep(1200); await snap("inventory")
+	g.toggle_inv(false); await sleep(1000)
+	await act(7, "etc7")
+	g.toggle_camera(); await sim(0.5); await snap("behind")
+	await sim(1.5, ["KeyW"]); await snap("behind_walk")
+
+func cam_test() -> void:
+	g.sim(1); vm.cb |= 0x10000000
+	await wait_free()
+	P.place(1.95, P.position.y, 5.6, 0); await sim(0.2)
+	var c := g.cam
+	print("idx ", c.index, " shown ", c.shown, " zone ", c._zone_cam(P.position))
+	for i in c._cams.size():
+		var cd: Dictionary = c._cams[i]
+		var a := c._aim(cd, P.position)
+		var cp := U.v3(cd.pos)
+		var b := CameraRig.cam_basis(a.pitch, a.yaw, float(cd.roll))
+		var out := []
+		for q in [P.position + Vector3(0, 0.9, 0), P.head_pos(), P.position + Vector3(0, 0.3, 0)]:
+			var n := CameraRig.project(cp, b, CameraRig.FOV, q)
+			out.append("n(%.2f,%.2f,%.2f) free %.2f L %.2f" % [n.x, n.y, n.z, g.room.clear_distance(cp, q, c._cut[i]), cp.distance_to(q)])
+		print("cam ", i, " vis ", c.visible(i, P.position, P.head_pos()), " ", out)
+
+func det_test() -> void:
+	g.sim(1); vm.cb |= 0x10000000
+	await wait_free(); g.set_weapon(1)
+	await g.enter_room("rm_0090", 0, null, false)
+	await wait_free(); await snap("det in")
+	for i in vm.flr.size():
+		var a: Dictionary = vm.flr[i]
+		print("flr %d flg %d type %d attr %x x %.2f..%.2f z %.2f..%.2f prm %s" % [i, a.flg, a.type, a.attr, a.x, a.x + a.w, a.z, a.z + a.d, str(a.get("prm", []))])
+	var a := OS.get_cmdline_user_args()
+	P.place(float(a[1]), P.position.y, float(a[2]), float(a[3])); await sim(0.2)
+	for k in 30:
+		await sim(0.5, ["KeyW"] if (k < 6 or (k >= 11 and k < 14)) else [])
+		print("  t", k, " busy ", g.busy, " cine ", g.in_cine, " msg ", g.msg.active, " dlg ", g._dialog, " ", stt())
+		pass
+		if k >= 2 and k <= 13: await snap("det%02d" % k)
+	print("ov ", g.cam._override, " busy ", g.busy, " cine ", g.in_cine, " movie ", g.movie_playing())
+
+## zombie grab: front/back bite, shove-off and the death variant
+func grab_test() -> void:
+	g.sim(1)
+	await wait_free()
+	var a := OS.get_cmdline_user_args()
+	await g.enter_room(a[1] if a.size() > 1 else "rm_0050", 0, null, false)
+	await wait_free()
+	print("zombies ", g.zombies.size())
+	for pass_i in 3:
+		var z: Zombie = null
+		for zz in g.zombies:
+			if zz.alive: z = zz; break
+		if z == null: print("no zombie"); return
+		z.set_state("walk"); var ww = vm.work(1, z.index); ww.hidden = false; ww.gone = false
+		var f := z.forward()
+		var front := pass_i != 1
+		var pp := z.position + f * 0.8
+		P.place(pp.x, P.position.y, pp.z, z.heading + PI if front else z.heading)
+		P.hp = 200 if pass_i < 2 else 1
+		z.set_state("bite"); g._start_grab(z)
+		print("z ", z.position, " vis ", z.visible, " in tree ", z.is_inside_tree(), " P ", P.position, " zg ", z.global_position)
+		for k in 8:
+			await sim(0.45)
+			print("  grab%d t%d phase %s z %s %s" % [pass_i, k, str(g.grab.phase) if g.grab != null else "-", z.state, z.cur])
+			await snap("grab%d_%02d" % [pass_i, k])
+		g.grab = null; P.play_sync(null); P.hp = 200
+
+## rm_0090 security boxes: lid (object part transform) + box screen, items left in box A come out of box B
+func box_test() -> void:
+	g.sim(1); vm.cb |= 0x10000000
+	await wait_free(); g.set_weapon(1)
+	await g.enter_room("rm_0090", 0, null, false)
+	await wait_free()
+	for i in [3, 4]:
+		var a: Dictionary = vm.flr[i]; print("flr %d x %.2f..%.2f z %.2f..%.2f" % [i, a.x, a.x + a.w, a.z, a.z + a.d])
+	for i in [11, 12]:
+		var a: Dictionary = vm.etc[i]; print("etc %d flg %d type %d x %.2f..%.2f z %.2f..%.2f" % [i, a.flg, a.type, a.x, a.x + a.w, a.z, a.z + a.d])
+	g.inv.add(9, "Handgun", 15)
+	print("inv ", g.inv.slots)
+	for side in [3, 4]:
+		var f: Dictionary = vm.flr[side]; var e: Dictionary = vm.etc[8 + side]
+		var cx: float = f.x + f.w / 2; var cz: float = f.z + f.d / 2
+		var ex: float = e.x + e.w / 2; var ez: float = e.z + e.d / 2
+		P.place(cx, P.position.y, cz, atan2(-(ex - cx), -(ez - cz))); await sim(1.5)
+		await wait_free()
+		P.place(cx, P.position.y, cz, atan2(-(ex - cx), -(ez - cz))); await sim(1.5)
+		print("parts ", _parts(14), " ", _parts(5))
+		await snap("box%d_lid" % side)
+		await sim(0.05); g.sim(0.05, ["KeyE"]); await sleep(10)
+		await sim(1.0)
+		print("scr mode ", g.inv_screen._mode, " anim ", g.inv_screen._anim, " open ", g.inv_screen.is_open)
+		print("inv_open ", g.inv_open, " cb ", "%x" % vm.cb, " box ", g.inv_screen.box)
+		await snap("box%d_open" % side)
+		if g.inv_open:
+			# side A: move the first item into the box; side B: take everything back
+			for k in 6:
+				g.sim(0.05, ["ArrowRight"] if (side == 3 and k == 0) else ["KeyE"]); await sleep(10); await sim(0.1)
+				print("  k", k, " side ", g.inv_screen._bside, " sel ", g.inv_screen._sel, " bsel ", g.inv_screen._bsel)
+				if side == 3 and k == 1: break
+			await snap("box%d_moved" % side)
+			print("after: inv ", g.inv.slots, " box ", g.inv_screen.box)
+			g.sim(0.05, ["Escape"]); await sleep(10)
+			await sim(1.5)
+			print("closed inv_open ", g.inv_open, " parts ", _parts(14), " ", _parts(5))
+			await snap("box%d_closed" % side)
+
+func _parts(i: int) -> Variant:
+	var w: EvtVM.Work = vm.get_work(2, i)
+	return w.parts if w != null else null
+
+## cutscene snapshots: -- cine rm_0030 pos flr secs step
+func cine_test() -> void:
+	var a := OS.get_cmdline_user_args()
+	g.sim(1); vm.cb |= 0x10000000
+	await wait_free()
+	vm.cb &= ~0x10000000 & EvtVM.M32
+	if a[1] == "start":
+		g.set_weapon(1); await sim(0.5)
+		var f0: Dictionary = vm.flr[int(a[3])]
+		P.place(f0.x + f0.w / 2, P.position.y, f0.z + f0.d + 0.4, 0); await sim(1); P.place(f0.x + f0.w / 2, P.position.y, f0.z + f0.d / 2, 0)
+	else:
+		await g.enter_room(a[1], int(a[2]), null, false); await sim(0.5)
+		var f: Dictionary = vm.flr[int(a[3])]
+		P.place(f.x + f.w / 2, P.position.y, f.z + f.d / 2, PI)
+	var n := int(float(a[4]) / float(a[5]))
+	for k in n:
+		if g.msg.active: g.sim(0.3, ["KeyE"]); await sleep(10)
+		await sim(float(a[5]))
+		var vis := []
+		for i in g.room.obj_meshes:
+			var o: Node3D = g.room.obj_meshes[i]
+			var w: EvtVM.Work = vm.get_work(2, i)
+			if w != null and w.link != null: vis.append("o%d:%s link %s %s s%.3f" % [i, o.visible, str(w.link.kind) + "/" + str(w.link.idx) + "/" + str(w.link.bone), str(o.global_position), o.global_transform.basis.get_scale().x])
+		var zs := []
+		for z in g.zombies:
+			var zw: EvtVM.Work = vm.get_work(1, z.index)
+			zs.append("z%d vis %s st %s cur %s pos %s scr %s mk %s mtn %s" % [z.index, z.visible, z.state, z.cur, str(z.position), zw.scripted if zw else "-", zw.mtn_kind if zw else "-", zw.mtn if zw else "-"])
+		print("T%.1f cine %s chars %s zombies %s" % [(k + 1) * float(a[5]), g.in_cine, str(g.chars.map(func(c): return "%d:%s@%s" % [c.index, c.m.visible, str(c.m.global_position)])), " | ".join(zs)])
+		if not vis.is_empty(): print("  links ", " | ".join(vis))
+		await snap("cine_%s_%02d" % [a[1], k])

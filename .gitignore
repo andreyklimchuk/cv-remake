@@ -1,6 +1,5 @@
-node_modules/
-dist/assets/
+.godot/
+assets/
 shots/
-.backup/
-.backup-state*.json
-*.blend1
+*.import
+export/
