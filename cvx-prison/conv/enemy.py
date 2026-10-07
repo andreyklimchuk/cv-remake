@@ -170,13 +170,28 @@ def build(mdlfile,texdir,motfile,dst,name,skin_at=0,S=0.1,lower_n=8,rmtfile=None
         # upper list = trailing run of nbu-bone clips that follows the last lower clip
         idx=[k for k,(o,r) in enumerate(Bk) if r and r[1]==nbl]; last=idx[-1] if lo else len(Bk)
         up=[r for o,r in Bk[last+1:] if r and r[1]==nbu]
-        # extras (upper-only) between lower clips
-        for k in range(min(len(lo),len(up))):
-            N=lo[k][0]; ti=put(np.arange(N,dtype=np.float32)/30,5126,'SCALAR',mm=True)
-            s1,c1=chans(lo[k],0,ti)
-            N2=up[k][0]; ti2=ti if N2==N else put(np.arange(N2,dtype=np.float32)/30,5126,'SCALAR',mm=True)
-            s2,c2=chans(up[k],nbl,ti2)
-            Ss=s1+s2; Cs=[{'sampler':i,'target':{'node':n_,'path':p_}} for i,(n_,p_) in enumerate(c1+c2)]
+        # pair every lower-body clip with the upper-body clip of the SAME motion: the two lists are not
+        # index-aligned in the bank (the upper list starts one motion earlier), so match them by frame count
+        # in file order (the lower/upper halves of one motion always have the same number of frames).
+        pairs=[]; ui=0
+        for k,r in enumerate(lo):
+            pick=None
+            for j in range(ui,len(up)):
+                if up[j][0]==r[0]: pick=j; break
+            if pick is None:
+                for j in range(len(up)):
+                    if up[j][0]==r[0]: pick=j; break
+            if pick is None and ui<len(up): pick=ui
+            if pick is not None: ui=pick+1
+            pairs.append((r, up[pick] if pick is not None else None))
+        for k,(rl,ru) in enumerate(pairs):
+            N=rl[0]; ti=put(np.arange(N,dtype=np.float32)/30,5126,'SCALAR',mm=True)
+            s1,c1=chans(rl,0,ti)
+            Ss=s1; Cs=[{'sampler':i,'target':{'node':n_,'path':p_}} for i,(n_,p_) in enumerate(c1)]
+            if ru is not None:
+                N2=ru[0]; ti2=ti if N2==N else put(np.arange(N2,dtype=np.float32)/30,5126,'SCALAR',mm=True)
+                s2,c2=chans(ru,nbl,ti2)
+                off=len(Ss); Ss=Ss+s2; Cs=Cs+[{'sampler':off+i,'target':{'node':n_,'path':p_}} for i,(n_,p_) in enumerate(c2)]
             anims.append({'name':'m%02d'%k,'samplers':Ss,'channels':Cs})
         ex=[r for o,r in Bk[:last] if r and r[1]==nbu] if nbu>0 else []
         for k,r in enumerate(ex):

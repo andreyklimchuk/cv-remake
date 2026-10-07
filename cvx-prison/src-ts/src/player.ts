@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { loadGLTF, toLambert } from './assets';
+import { Face } from './face';
 import type { Input } from './input';
 import type { Room } from './room';
 
@@ -37,6 +38,12 @@ export class Player {
   private sway = new THREE.Vector2(); private swayV = new THREE.Vector2();
   private lastPos = new THREE.Vector3(); private lastHead = 0;
   bones: Record<string, THREE.Object3D> = {};
+  /** facial animation (blinking + mouth) */
+  face = new Face({}, 'f');
+  /** mouth opening driven from outside (voice level while a line plays) */
+  talk = 0;
+  /** pain expression 0..1 (grabbed / bitten) */
+  pain = 0;
   // lighter held in the right hand
   lighterOn = false;
   /** original weapon hand models (pl00w01_R: hand holding the Zippo, pl00w02_R: hand with the combat knife) */
@@ -67,8 +74,9 @@ export class Player {
   async load() {
     const g = await loadGLTF('chars/claire.glb');
     this.model = g.scene; toLambert(this.model);
-    this.model.traverse((o) => { if ((o as THREE.Mesh).isMesh) { o.castShadow = false; o.frustumCulled = false; } if (/^b\d\d$|^pt\d$/.test(o.name)) this.bones[o.name] = o; });
+    this.model.traverse((o) => { if ((o as THREE.Mesh).isMesh) { o.castShadow = false; o.frustumCulled = false; } if (/^b\d\d$|^f\d\d$|^pt\d$/.test(o.name)) this.bones[o.name] = o; });
     this.root.add(this.model);
+    this.face = new Face(this.bones, 'f');
     this.mixer = new THREE.AnimationMixer(this.model);
     for (const c of g.animations) this.actions.set(c.name, this.mixer.clipAction(c));
     this.play('idle', 0);
@@ -131,7 +139,7 @@ export class Player {
 
   playSync(id: string | null, loop = false, fade = 0.08) { this.sync = id; this.aiming = false; this.kState = 'none'; if (id) this.playId(id, fade, loop); else this.play('idle', 0.25); }
   update(dt: number, inp: Input, room: Room, camYaw: number | null = null) {
-    if (this.sync) { this.state = 'sync'; this.root.rotation.y = this.heading; this.mixer.update(dt); this.updateTail(dt); this.updateLighter(dt); this.updateHands(); return; }
+    if (this.sync) { this.state = 'sync'; this.root.rotation.y = this.heading; this.mixer.update(dt); this.face.update(dt, this.talk); this.updateTail(dt); this.updateLighter(dt); this.updateHands(); return; }
     let speed = 0, turn = 0;
     // knife: hold the aim button to ready the knife, attack button to slash (like the original R1 + X)
     const canAim = (this.knifeOn || this.gunOn) && !this.lighterOn && !this.frozen;
@@ -178,6 +186,7 @@ export class Player {
       if (y !== null) this.root.position.y = y;
     }
     this.mixer.update(dt);
+    this.face.update(dt, this.talk);
     this.footsteps();
     this.updateTail(dt);
     this.updateLighter(dt);

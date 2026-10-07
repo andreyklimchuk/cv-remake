@@ -208,6 +208,13 @@ export class Audio {
     src.start(); this.voiceV = { src, gain, no };
     src.onended = () => { if (this.voiceV?.src === src) this.voiceV = null; };
   }
+  /** lip sync level 0..1 of the running voice line (the original reads it from the voice data, bhLipSet) */
+  voiceLevel() {
+    if (!this.voiceV || !this.ctx) return 0;
+    const t = this.ctx.currentTime;
+    const f = Math.sin(t * 17.3) * 0.55 + Math.sin(t * 29.7) * 0.3 + Math.sin(t * 8.1) * 0.25;
+    return Math.min(1, Math.max(0, f + 0.35));
+  }
   /** preload the voices of a room's scripts */
   preloadVoices(nos: number[]) {
     if (!this.ctx) return;
