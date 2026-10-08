@@ -64,7 +64,7 @@ var way := 0
 var ayp := 0
 var _ay := 0
 var flg := 0          # epw->flg: 0x40000 foot lock, 0x80000 idle foot, 0x2000000 motion wrapped
-var x40 := 0          # EXP0_I(0x40): 0x400 sees Claire, 0x2000 hit from behind, 0x8000000 hit twist, 0x20000000 blocked
+var x40 := 0          # EXP0_I(0x40): 0x400 sees Claire, 0x2000 shot from the front, 0x8000000 hit twist, 0x20000000 blocked
 var x44 := 0
 var x94 := 0
 var x98 := 0
@@ -1070,10 +1070,10 @@ func hit(dmg: float) -> void:
 	hp -= dmg
 	flg |= 4; _hit_flg = true
 	x40 |= 0x200400; x48 = 0
-	# from behind (comb_flg 4 -> EXP0_I(0x40) 0x2000) and the side of the hit (EXP0_I(0x44) 0x20)
+	# bhEne_DGDirCheck: a shot from in front of the zombie (comb_flg 4 -> EXP0_I(0x40) 0x2000) and the side of the hit (EXP0_I(0x44) 0x20)
 	var dv := position - _pl
 	var behind := forward().dot(Vector3(dv.x, 0, dv.z)) > 0
-	if behind: x40 |= 0x2000
+	if not behind: x40 |= 0x2000
 	else: x40 &= ~0x2000
 	var ang := int(atan2(dv.x, dv.z) * 10430.381) & 0xFFFF
 	if ((ang - _ay) & 0xFFFF) <= 0x8000: x44 |= 0x20

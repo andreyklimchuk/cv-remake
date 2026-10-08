@@ -328,6 +328,9 @@ func face_test() -> void:
 ## zombie AI log: -- zai ROOM SECS STEP [x z ang | -] [snap_every]  (Claire placed at x z, or left at the door)
 func zai_test() -> void:
 	var a := OS.get_cmdline_user_args()
+	# ZAI_FLAGS="1:117 ..." sets event flags (type:index) before the room loads (rm_0050's dogs need 1:117 from rm_0080)
+	for fs in OS.get_environment("ZAI_FLAGS").split(" ", false):
+		vm.set_flag(int(fs.get_slice(":", 0)), int(fs.get_slice(":", 1)), true)
 	await g.enter_room(a[1], 0, null, false)
 	await wait_free()
 	if a.size() > 6 and a[4] != "-": P.place(float(a[4]), P.position.y, float(a[5]), float(a[6]))
@@ -340,10 +343,18 @@ func zai_test() -> void:
 		if a.size() > 8 and a[8] == "shoot":
 			for z in g.zombies:
 				if z.visible and z.hittable: g.hit_zombie(z, 1.5)
+			for z in g.dogs:
+				if z.visible and z.hittable: g.hit_zombie(z, 1.5)
 		var zs := []
 		for z in g.zombies:
 			if not z.visible: continue
 			zs.append("z%d m%d/%d/%d/%d mtn %d:%d/%d up %d f%x x40 %x d %.1f p %.2f,%.2f ay %d" % [z.index, z.mode0, z.mode1, z.mode2, z.mode3, z.lo.no, z.lo.frm >> 16, z.lo.nf, z.up.no, z.flg, z.x40, z._dist, z.position.x, z.position.z, z._ay])
+		for z in g.dogs:
+			var dw: EvtVM.Work = vm.get_work(1, z.index)
+			if not z.visible: zs.append("dog%d hidden gone %s hid %s scr %s" % [z.index, dw.gone if dw else "-", dw.hidden if dw else "-", dw.scripted if dw else "-"]); continue
+			zs.append("dog%d t%d m%d/%d/%d/%d mtn %d:%d/%d x10 %x f%x d %.1f p %.2f,%.2f,%.2f ay %d hp %.1f pl %s%d" % [z.index, z.etype, z.mode0, z.mode1, z.mode2, z.mode3, z.w.no, z.w.frm >> 16, z.w.nf, z.x10, z.flg, z._dist, z.position.x, z.position.y, z.position.z, z._ay, z.hp, z.pl_state, z._pm3])
+		if g.dog_bite != null: zs.append("BITE")
+		if g.dog_hurt > 0: zs.append("HURT %s" % P.sync)
 		var zw0: EvtVM.Work = vm.get_work(1, g.zombies[0].index) if g.zombies.size() else null
 		print("T%.1f P %.2f,%.2f hp %d grab %s busy %s cine %s msg %s scr %s | %s" % [(k + 1) * float(a[3]), P.position.x, P.position.z, P.hp, (g.grab.z.pl_state + str(g.grab.z._pm3)) if g.grab != null else "-", g.busy, g.in_cine, g.msg.active, zw0.scripted if zw0 else "-", " | ".join(zs)])
 		if a.size() > 7 and k % int(a[7]) == 0: await snap("zai_%03d" % k)

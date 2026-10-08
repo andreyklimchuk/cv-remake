@@ -62,8 +62,10 @@ var chars: Array = []
 var npcs: Array = []
 var zombies: Array = []
 var dogs: Array = []
-## dog bite in progress (Claire d00/d05, fatal d03/d04)
+## a dog holds Claire (its PlyDG00 d00-d02 / PlyDG01 d03-d04)
 var dog_bite: Variant = null
+## Claire's knock-down by a dog (seconds left)
+var dog_hurt := 0.0
 ## zombie bite in progress (Claire z00/z01 + zombie m00, then z02/z03 push-off)
 var grab: Variant = null
 
@@ -179,7 +181,7 @@ func enter_room(id: String, pos: int, at: Variant = null, fade := true, min_ms :
 	for z in zombies + dogs: z.queue_free()
 	for n in actors: n.queue_free()
 	for c in chars: c.m.queue_free()
-	chars = []; zombies = []; dogs = []; npcs = []; actors = []; grab = null; dog_bite = null
+	chars = []; zombies = []; dogs = []; npcs = []; actors = []; grab = null; dog_bite = null; dog_hurt = 0.0
 	# a grab / bite motion of the previous room must not carry over
 	if player.sync != null: player.play_sync(null)
 	# player position first (the scripts read it)
@@ -237,7 +239,8 @@ func _spawn_enemies(r: Room) -> void:
 				return z.visible and z.hittable and not (ww != null and ww.scripted), "hit": func() -> void: hit_zombie(z, 1)})
 		elif eid == 4:
 			var d := Dog.new(i)
-			d.init("enemies/en04a00.glb", float(e.pos[0]), float(e.pos[1]), float(e.pos[2]), float(rot[2]))
+			d.player = player; d.flr = vm.flr; d.on_rm_flag = func(b: int) -> void: vm.rm |= b
+			d.init("enemies/en04a00.glb", float(e.pos[0]), float(e.pos[1]), float(e.pos[2]), float(rot[2]), type)
 			dogs.append(d); add_child(d)
 			npcs.append({"root": d, "hittable": func() -> bool: return d.visible and d.hittable, "hit": func() -> void: hit_zombie(d, 1)})
 		elif NPC_MODELS.has(mdl):
@@ -859,23 +862,22 @@ func _separate_zombies() -> void:
 func _start_grab(z: Zombie) -> void:
 	grab = {"z": z}
 
-func _start_dog_bite(z: Dog) -> void:
-	var p := player.position; var zp := z.position
-	var front := player.forward().dot(Vector3(zp.x - p.x, 0, zp.z - p.z)) >= 0
-	player.heading = atan2(-(zp.x - p.x), -(zp.z - p.z)) if front else atan2(-(p.x - zp.x), -(p.z - zp.z))
-	player.rotation.y = player.heading
-	player.hp -= 12; audio.se("bite")   # en04 bite damage 12
-	var dead := player.hp <= 0
-	player.play_sync(("d03" if front else "d04") if dead else ("d00" if front else "d05"))
-	z.set_state("idle" if dead else "recoil")
-	dog_bite = {"z": z, "t": 0.0, "front": front, "dead": dead}
+## a dog's jaws knocked Claire down (bhEne04_PlyDamageCheck type 1 -> her damage mode2 1: m48 from the front, m49 behind, 12 frames)
+func _start_dog_hurt(z: Dog) -> void:
+	var front := z.pl_hurt == 1
+	z.pl_hurt = 0
+	player.play_sync("m48" if front else "m49", false, 4 / 30.0)
+	dog_hurt = 12 / 30.0
 
-func _update_dog_bite(dt: float) -> void:
-	var b: Dictionary = dog_bite
-	b.t += dt
-	if not b.dead and b.t >= 1.0:
+## a dog holds Claire: its NG00 / PlyDG00 / PlayerLink (dog.gd) move her and play her motions
+func _update_dog_bite(_dt: float) -> void:
+	var z: Dog = dog_bite.z
+	z.lever += (4 if _inp_hit_dir() else 0) + (3 if input.hit(["KeyE", "Space", "Enter", "KeyZ", "KeyF", "KeyQ", "Mouse0"]) else 0)
+	for k in z.bit: audio.se("bite")
+	z.bit = 0
+	if z.pl_state == "free" or z.pl_state == "":
 		player.play_sync(null); dog_bite = null
-	elif b.dead and b.t >= 2.6:
+	elif z.pl_state == "dead":
 		dog_bite = null; game_over()
 
 func _update_grab(_dt: float) -> void:
@@ -979,6 +981,12 @@ func step(dt: float) -> void:
 		if not msg.active and not inv_open and not in_cine and not (busy and grab == null):
 			if grab != null: _update_grab(dt)
 			if dog_bite != null: _update_dog_bite(dt)
+			if dog_hurt > 0.0:
+				dog_hurt -= dt
+				if dog_hurt <= 0.0:
+					dog_hurt = 0.0
+					if player.hp <= 0: game_over()
+					else: player.play_sync(null)
 			var free := grab == null and dog_bite == null and player.sync == null and player.hp > 0
 			for z in zombies:
 				var zw: EvtVM.Work = vm.get_work(1, z.index)
@@ -992,7 +1000,11 @@ func step(dt: float) -> void:
 				var zw: EvtVM.Work = vm.get_work(1, z.index)
 				if zw != null and (zw.gone or zw.hidden): continue
 				if zw != null and zw.scripted: z.update(dt); continue
-				if z.tick(dt, player.position, free and grab == null and dog_bite == null, room) and grab == null and dog_bite == null and free: _start_dog_bite(z)
+				z.tick(dt, player.position, free, room)
+				if z.pl_state == "held" and dog_bite == null and grab == null: dog_bite = {"z": z}; free = false
+				if z.pl_hurt != 0:
+					if dog_bite == null and grab == null and dog_hurt <= 0.0: _start_dog_hurt(z); free = false
+					else: z.pl_hurt = 0
 		cam.cam.position -= _shake; _shake = Vector3.ZERO
 		cam.update(player.position, player.head_pos(), player.heading, false, dt)
 		_update_links()
