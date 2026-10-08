@@ -66,6 +66,8 @@ var dogs: Array = []
 var dog_bite: Variant = null
 ## Claire's knock-down by a dog (seconds left)
 var dog_hurt := 0.0
+## event frames until ItemTaskCheck clears st 8 after the subscreen
+var _st8_frames := 0
 ## zombie bite in progress (Claire z00/z01 + zombie m00, then z02/z03 push-off)
 var grab: Variant = null
 
@@ -88,7 +90,7 @@ func _ready() -> void:
 	ui.add_layer(inv_screen, false)
 	inv_screen.visible = false
 	inv_screen.on_equip_change = _equip_changed
-	inv_screen.on_use_item = func(id: int) -> bool: return use_item(id)
+	inv_screen.on_use_item = func(id: int) -> int: return use_item(id)
 	lights.lock_fn = func(f: int, n: int, l: Vector3, o: int) -> Variant: return lock_pos(f, n, l, o)
 	var cfg := ConfigFile.new()
 	if cfg.load(SETTINGS) == OK and cfg.get_value("game", "cam", "fixed") == "behind":
@@ -411,15 +413,24 @@ func _examine() -> bool:
 		return true
 	return false
 
-## item use from the inventory (ItemUse / Use_05): only inside a floor area that accepts the item
-func use_item(id: int) -> bool:
-	if not (vm.cb & 0x200): return false
-	if vm.flr_idx >= vm.flr.size(): return false
-	var a: Dictionary = vm.flr[vm.flr_idx]
-	if not (a.prm as Array).has(id): return false
+## item use from the inventory (sub1.c ItemUse / Use_05): -1 = used (the subscreen closes), else the system message
+## to show. ItemUse always sets sb_id and cb 0x400 (only bhUseItemClear / a room change clear it); the room's main
+## script sees the use in the frames after the subscreen returns, while st 8 is still set (see _evt_frame)
+func use_item(id: int) -> int:
 	vm.sb_id = id; vm.cb |= 0x400
+	if not (vm.cb & 0x200) or vm.flr_idx >= vm.flr.size(): return 161
+	var a: Dictionary = vm.flr[vm.flr_idx]
+	var prm: Array = a.prm
+	if not prm.has(id):
+		if vm.st & 0x200: return -2
+		if int(prm[0]) == 59: return 175 if id == 85 else 174
+		if int(prm[0]) == 85: return 176 if id == 59 else 174
+		return 161
+	# the extinguisher's charge (ItemUse: bullet-- on a successful use; the empty one stays, sb_id 82 keeps its slot)
+	var it: Variant = inv.find(id)
+	if id == 82 and it != null and int(it.count) > 0: it.count = int(it.count) - 1
 	toggle_inv(false)
-	return true
+	return -1
 
 func _room_message(idx: int) -> String:
 	var m: Array = room.data.get("messages", []) if room else []
@@ -580,6 +591,9 @@ func _evt_frame() -> void:
 	_sync_player_work()
 	_floor_check()
 	vm.tick()
+	if _st8_frames > 0:
+		_st8_frames -= 1
+		if _st8_frames == 0: vm.st &= ~8 & EvtVM.M32
 	fx.update(cam.cam)
 	cam.ev.step()
 	_apply_works()
@@ -788,13 +802,16 @@ static func load_save() -> Variant:
 	if not FileAccess.file_exists(SAVE_PATH): return null
 	return JSON.parse_string(FileAccess.get_file_as_string(SAVE_PATH))
 
+## st 8: set when the subscreen opens (system.c) and again when it returns; ItemTaskCheck clears it once the game
+## runs again -> one event frame after the close
 func toggle_inv(open: bool) -> void:
 	if open:
+		vm.st |= 8
 		inv_open = true; await inv_screen.show_screen(true)
 	elif inv_screen.is_open:
-		await inv_screen.show_screen(false); inv_open = false
+		await inv_screen.show_screen(false); inv_open = false; _st8_frames = 1
 	else:
-		inv_open = false
+		inv_open = false; _st8_frames = 1
 
 func toggle_camera() -> void:
 	cam.mode = "behind" if cam.mode == "fixed" else "fixed"

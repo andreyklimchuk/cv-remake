@@ -51,6 +51,14 @@ for b in glob.glob(os.path.join(HERE, 'extra_assets', '**', '*.b64'), recursive=
     p = os.path.join(OUT, os.path.relpath(b, os.path.join(HERE, 'extra_assets'))[:-4])
     os.makedirs(os.path.dirname(p), exist_ok=True)
     open(p, 'wb').write(base64.b64decode(open(b).read())); print('extra', os.path.relpath(p, OUT))
+# extra effect textures (system textures, tools/conv/syseff.py): add their counts to effects/index.json
+ix = os.path.join(OUT, 'effects', 'index.json')
+if os.path.exists(ix):
+    c = json.load(open(ix))
+    for b in glob.glob(os.path.join(HERE, 'extra_assets', 'effects', 'ef_*_*.png.b64')):
+        m = re.match(r'ef_(\d+)_(\d+)\.png', os.path.basename(b))
+        c[str(int(m.group(1)))] = max(int(c.get(str(int(m.group(1))), 0)), int(m.group(2)) + 1)
+    json.dump(dict(sorted(c.items(), key=lambda x: int(x[0]))), open(ix, 'w'))
 # zombie glbs of the web build pair lower/upper clips off by one -> re-pair (idempotent)
 sys.path.insert(0, HERE); import fix_zombie_clips
 for p in sorted(glob.glob(os.path.join(OUT, 'enemies', 'en01a*.glb'))):

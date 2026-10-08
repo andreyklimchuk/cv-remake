@@ -88,7 +88,7 @@ var is_open := false
 var equipped: Variant = null   # weapon box (item id or null)
 var standard: Variant = null   # standard box (lighter)
 var on_equip_change: Callable
-var on_use_item: Callable
+var on_use_item: Callable   # (id) -> int: -1 used, -2 nothing, else a system message
 var inv: Inventory
 var input: GameInput
 var audio: GameAudio
@@ -760,10 +760,14 @@ func _do_use() -> void:
 		if CUREDATA[s.id - 20] == 0:
 			_set_text(Text.pages(Text.SYSMES[161])); return
 		heal(s.id); inv.take(s.id); _set_text(_cur_name())
-	elif on_use_item.is_valid() and on_use_item.call(s.id):
-		return
+	elif AMMO.has(s.id):
+		_set_text(Text.pages(Text.SYSMES[160]))
+	elif on_use_item.is_valid():
+		# Use_05: -1 used (the screen closes), -2 nothing (a message is up), else the system message
+		var r: int = on_use_item.call(s.id)
+		if r >= 0: _set_text(Text.pages(Text.SYSMES[r]))
 	else:
-		_set_text(Text.pages(Text.SYSMES[160 if AMMO.has(s.id) else 161]))
+		_set_text(Text.pages(Text.SYSMES[161]))
 
 ## Combi_00 / herb mixing: item in slot a is combined into slot b
 func _combine(a: int, b: int) -> void:

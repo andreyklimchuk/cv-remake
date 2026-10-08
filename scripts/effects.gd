@@ -53,6 +53,7 @@ var OIL: Array
 var OILH: Array
 var SPLASH: Array
 var EFF218: Array
+var F018: Dictionary
 
 func _init_tables() -> void:
 	HIBANA = [
@@ -89,6 +90,14 @@ func _init_tables() -> void:
 	var F06 := _cells(_row(0, 112, 48, 5) + _row(0, 168, 48, 5)); var F08 := _cells(_row(0, 0, 48, 5) + _row(0, 48, 48, 5)); var F05 := _cells(_row(0, 96, 48, 5) + _row(0, 144, 48, 5))
 	var F09 := _cells(_row(0, 0, 56, 4) + _row(0, 56, 56, 4) + _row(0, 112, 56, 2)); var F11 := _cells(_row(0, 0, 56, 4) + _row(0, 56, 56, 4) + _row(0, 112, 56, 4))
 	var F12 := _cells(_row(0, 0, 32, 7) + _row(0, 32, 32, 7)); var F00 := _cells(_row(0, 64, 56, 4) + _row(0, 120, 56, 4)); var F15 := _cells(_row(0, 0, 40, 6) + _row(0, 40, 40, 6))
+	# bhEff018 uvinfo_fl / fst / fl2s / fs / fed (u, v, xs, ys; terminated by u = -1)
+	F018 = {
+		"fl": _uvs([[0, 0, S6, .25], [S6, 0, S6, .25], [.375, 0, S6, .25], [.5625, 0, S6, .25], [.75, 0, S6, .25], [0, .25, S6, S7], [S6, .25, S6, S7], [.375, .25, S6, S7], [.5625, .25, S6, S7], [0, .46875, S6, S7], END]),
+		"fst": _uvs([[0, .6875, .125, .125], [.125, .6875, .125, .125], [0, .8125, S6, S6], [S6, .8125, S6, S6], [.375, .8125, S6, S6], [.5625, .75, S6, .25], [.75, .75, S6, .25], END]),
+		"fs": _uvs([[.75, .53125, S6, S5], [0, .6875, S6, S5], [S6, .6875, S6, S5], [.375, .6875, S6, S5], [.5625, .6875, S6, S5], [.75, .6875, S6, S5], [0, .6875, S6, S5], [S6, .6875, S6, S5], END]),
+		"fl2s": _uvs([[S6, .46875, S6, S7], [.375, .46875, S6, S7], [.5625, .46875, S6, S7], END]),
+		"fed": _uvs([[.375, .6875, S6, S5], [.5625, .6875, S6, S5], [.75, .6875, S6, S5], END]),
+	}
 	EFF218 = [
 		[70, F13, 40, 40], [70, F16, 40, 40], [70, F14, 40, 40], [71, F02, 56, 56], [71, F04, 24, 24], [71, F07, 48, 48], [72, F02, 56, 56], [72, F06, 48, 56],
 		[73, F08, 48, 48], [73, F05, 48, 48], [74, F09, 56, 56], [75, F13, 40, 40], [76, F08, 48, 48], [77, F11, 56, 56], [78, F12, 32, 32], [78, F00, 56, 56], [79, F15, 40, 40],
@@ -402,7 +411,9 @@ func _run(op: O) -> void:
 		181: _e181(op)
 		182: _e182(op)
 		201: _e201(op)
+		18: _e018(op)
 		218: _e218(op)
+		234: _e234(op)
 		_:
 			# not ported (camera filters 90..99, other rooms' effects): left alive but not drawn
 			if not unknown.has(op.id):
@@ -716,6 +727,75 @@ func _e218(op: O) -> void:
 	op.tex = T[0]; op.ani = 0
 	var cu: float = cells[op.ct0][0]; var cv: float = cells[op.ct0][1]
 	_uv4(op, cu / 256.0, (cv + 1 if cv else cv) / 256.0, (cu + T[2] - 1) / 256.0, (cv + T[3]) / 256.0)
+	_trs.append(op)
+
+# ---- bhEff018 (effsub1.c): floor fire; system texture 18 (type 1 starts on texture 3 ani 3).
+# Types 10/11 (falling flames spawned by other effects, bhGetGroundPosition) are not ported.
+func _e018(op: O) -> void:
+	if op.mode0 == 0:
+		if op.type >= 10:
+			if not unknown.has(18): unknown[18] = true; print("effect 18 type ", op.type, " not ported")
+			op.flg |= 0x1000000; return
+		op.tex = 18; op.flg |= 0x4100000
+		var t := op.tv
+		t[0].x = -1.0; t[0].y = -2.0; t[1].x = 1.0; t[1].y = -2.0; t[2].x = -1.0; t[2].y = 0.0; t[3].x = 1.0; t[3].y = 0.0
+		for v in t: v.col = 0xFFE0E0E0
+		op.bls = 8; op.bld = 6; op.ani = 0; op.ct0 = 0
+		match op.type:
+			0: op.exp = F018.fl
+			1: op.tex = 3; op.ani = 3; op.exp = F018.fst
+			2: op.exp = F018.fl2s
+			3: op.exp = F018.fs
+			4: op.exp = F018.fed
+			_: op.exp = F018.fl   # the original leaves exp0 unset for other types
+		op.mode0 = 1
+	if op.mode1 != 0:
+		match op.mode1 & 0xffff:
+			1: op.type = 2; op.exp = F018.fl2s; op.ct0 = 0
+			2: op.type = 4; op.exp = F018.fed; op.ct0 = 0
+		op.mode1 = 0
+	var uv: Dictionary = op.exp[op.ct0]
+	if uv.u == -1.0:
+		match op.type:
+			1: op.tex = 18; op.ani = 0; op.exp = F018.fl
+			2: op.exp = F018.fs; op.type = 3
+			4:
+				op.flg = 0; return
+		op.ct0 = 0
+		uv = op.exp[0]
+	op.sx = 4.0 * (op.sxb * uv.w); op.sy = 4.0 * (op.syb * uv.h)
+	_uv4(op, uv.u, uv.v, uv.u + uv.w, uv.v + uv.h)
+	op.ct0 += 1
+	_trs.append(op)
+
+# ---- bhEff234 (effsub5.c): smoke over the fire (texture 413 ani 1, 48-px cells); mode1 1 = dissipate (13 cells x sz frames)
+const E234A := [[[0, 0], [48, 0], [96, 0], [144, 0], [192, 0], [0, 48]], [[48, 48], [96, 48], [144, 48], [192, 48], [0, 96], [48, 96]]]
+const E234B := [[96, 96], [144, 96], [192, 96], [0, 144], [48, 144], [96, 144], [144, 144], [192, 144], [0, 192], [48, 192], [96, 192], [144, 192], [192, 192]]
+func _e234(op: O) -> void:
+	if op.type == 0 and op.mode1 != 0: op.type = op.mode1
+	if op.type == 0:
+		op.flg |= 0x1000000; return
+	op.flg &= ~0x1000000
+	var c: Array
+	match op.mode0:
+		0:
+			op.flg |= 0x4180000; op.tex = 413; op.ani = 1; op.bls = 8; op.bld = 6
+			for v in op.tv: v.col = 0xFFFFFFFF
+			op.ct0 = 0; c = E234A[(op.type - 1) % 2][0]; op.mode0 = 1
+		1:
+			if op.mode1 == 1:
+				op.ct0 = 0; c = E234B[0]; op.mode0 = 2
+			else:
+				op.ct0 += 1
+				if op.ct0 >= 6: op.ct0 = 0
+				c = E234A[(op.type - 1) % 2][op.ct0]
+		_:
+			op.ct0 += 1
+			var n := maxi(1, int(op.sz))   # sz 0 would divide by zero in the original
+			if n * 13 <= op.ct0:
+				op.flg = 0; return
+			c = E234B[op.ct0 / n]
+	_uv4(op, c[0] / 256.0, c[1] / 256.0, (c[0] + 47) / 256.0, (c[1] + 47) / 256.0)
 	_trs.append(op)
 
 # ---------------------------------------------------------------- drawing (bhDrawEffect)

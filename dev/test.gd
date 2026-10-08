@@ -45,6 +45,7 @@ func _ready() -> void:
 		"face": await face_test()
 		"zmorph": await zmorph_test()
 		"zai": await zai_test()
+		"use": await use_test()
 	print("DONE")
 	get_tree().quit()
 
@@ -386,3 +387,59 @@ func zmorph_test() -> void:
 			await snap("zmorph_%d_%.1f" % [z.index, w])
 		cam.queue_free()
 		break
+
+## item use: -- use ROOM x z ang ITEM SECS [snap_every] [trace]  (Claire placed in an area, the item used from the inventory)
+func use_test() -> void:
+	var a := OS.get_cmdline_user_args()
+	for fs in OS.get_environment("ZAI_FLAGS").split(" ", false):
+		vm.set_flag(int(fs.get_slice(":", 0)), int(fs.get_slice(":", 1)), true)
+	await g.enter_room(a[1], 0, null, false)
+	await wait_free()
+	P.place(float(a[2]), P.position.y, float(a[3]), float(a[4]))
+	var id := int(a[5])
+	g.inv.add(id, Text.ITEM_NAMES.get(id, ""))
+	await sim(0.3)
+	print("before ", stt(), " flr ", vm.flr_idx)
+	if a.size() > 8 and a[8] == "trace": vm.trace = true
+	vm.st |= 8   # the subscreen is open
+	print("use ", g.use_item(id))
+	var n := int(float(a[6]) / 0.25)
+	for k in n:
+		if g.msg.active: print("MSG ", stt()); g.sim(0.3, ["KeyE"]); await sleep(10)
+		await sim(0.25)
+		if a.size() > 7 and k % int(a[7]) == 0: await snap("use_%03d" % k)
+		elif k % 4 == 0: print("T%.2f %s" % [(k + 1) * 0.25, stt()])
+	# EX1="x z ang secs": the action button there before the USE2 steps (messages answered with the default choice)
+	var ex1 := OS.get_environment("EX1").split(" ", false)
+	if ex1.size() > 3:
+		P.place(float(ex1[0]), P.position.y, float(ex1[1]), float(ex1[2]))
+		await sim(0.2)
+		g.sim(0.1, ["KeyE"]); await sleep(10)
+		for k in int(float(ex1[3]) / 0.25):
+			if g.msg.active: print("MSG ", stt()); g.sim(0.3, ["KeyE"]); await sleep(10)
+			await sim(0.25)
+			if k % 4 == 0: print("X%.2f %s" % [(k + 1) * 0.25, stt()])
+		print("flags 7b ", vm.flag(1, 0x7b), " 7c ", vm.flag(1, 0x7c), " 7d ", vm.flag(1, 0x7d), " rm %x" % vm.rm)
+	# USE2="x z ang id secs; ..." more item uses after the first (multi-step machines like rm_0090's cutter)
+	for st_ in OS.get_environment("USE2").split(";", false):
+		var u := st_.strip_edges().split(" ", false)
+		P.place(float(u[0]), P.position.y, float(u[1]), float(u[2]))
+		g.inv.add(int(u[3]), Text.ITEM_NAMES.get(int(u[3]), ""))
+		await sim(0.3)
+		vm.st |= 8
+		print("use2 ", u[3], " flr ", vm.flr_idx if vm.cb & 0x200 else -1, " -> ", g.use_item(int(u[3])))
+		for k in int(float(u[4]) / 0.25):
+			if g.msg.active: print("MSG ", stt()); g.sim(0.3, ["KeyE"]); await sleep(10)
+			await sim(0.25)
+			if k % 4 == 0: print("U%.2f %s" % [(k + 1) * 0.25, stt()])
+	# -- use ... SNAP trace|- ex X Z ANG: then the action button there (the item screen / message it opens)
+	if a.size() > 12 and a[9] == "ex":
+		P.place(float(a[10]), P.position.y, float(a[11]), float(a[12]))
+		await sim(0.2)
+		if a.size() > 13: await sim(float(a[13]), ["KeyW"]); await sim(0.3); print("walked to ", P.position)
+		g.sim(0.1, ["KeyE"]); await sleep(10)
+		for k in 12:
+			if g.msg.active: print("MSG ", stt()); g.sim(0.3, ["KeyE"]); await sleep(10)
+			await sim(0.25)
+			print("E%.2f inv_open %s dialog %s %s" % [(k + 1) * 0.25, g.inv_open, g._dialog, stt()])
+	print("inv ", g.inv.has(id), " slots ", g.inv.slots.map(func(x): return x.id if x else -1))

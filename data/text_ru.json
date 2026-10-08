@@ -71,7 +71,12 @@
   "The outdoor shutter\nis already open.": "Наружная ставня\nуже открыта.",
   "The lock has already\nbeen released.": "Блокировка\nуже снята.",
   "Perhaps I can open it\nwith the switch on the left...": "Может, её можно открыть\nпереключателем слева...",
-  "An outdoor shutter.": "Наружная ставня."
+  "An outdoor shutter.": "Наружная ставня.",
+  "It's too big\nin size.\nIt cannot be set.": "Он слишком\nбольшой.\nЕго не установить.",
+  "It's material\nthat's ready to\nbe processed.": "Это материал,\nготовый\nк обработке.",
+  "It is useless to\nuse it here.": "Здесь его\nиспользовать\nбесполезно.",
+  "It's not material\nthat's ready to\nbe processed.": "Это не материал\nдля обработки.",
+  "It only works when\nfilled with\nextinguishant.": "Он работает, только\nесли заправлен\nогнегасящим составом."
  },
  "ITEM_RU": {
   "Combat Knife": "Боевой нож",
