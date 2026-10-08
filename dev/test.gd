@@ -46,6 +46,7 @@ func _ready() -> void:
 		"zmorph": await zmorph_test()
 		"zai": await zai_test()
 		"use": await use_test()
+		"file": await file_test()
 	print("DONE")
 	get_tree().quit()
 
@@ -443,3 +444,71 @@ func use_test() -> void:
 			await sim(0.25)
 			print("E%.2f inv_open %s dialog %s %s" % [(k + 1) * 0.25, g.inv_open, g._dialog, stt()])
 	print("inv ", g.inv.has(id), " slots ", g.inv.slots.map(func(x): return x.id if x else -1))
+
+## file ROOM POS [get | menu MASK]: pick up the room's document (etc type 4, attr 0x10) / the FILE command
+func _fsim(sec: float, k: Array, shot := "") -> void:
+	await sim(sec, k); await sleep(20)
+	if shot != "": await snap(shot)
+	print("  fv ", g.file_view.phase, " act ", g.file_view.active, " page ", g.file_view.page, " exit ", g.file_view.exit_vis, "/", g.file_view.exit_dim, " sel ", g.file_view.filecsr, ":", g.file_view.tag, " z ", g.file_view.z, " ang ", g.file_view.child_ang, " inv ", g.inv_screen._mode, " cb %x" % vm.cb)
+
+func file_test() -> void:
+	var a := OS.get_cmdline_user_args()
+	await g.enter_room(a[1], int(a[2]), null, false)
+	await wait_free()
+	if a[3] == "act":
+		for i in vm.etc.size():
+			var e0: Dictionary = vm.etc[i]
+			print("etc ", i, " type ", e0.type, " flg ", e0.flg, " attr %x" % e0.attr, " prm ", e0.prm)
+		var e1: Dictionary = vm.etc[int(a[4])]
+		var cx1: float = e1.x + e1.w / 2; var cz1: float = e1.z + e1.d / 2
+		for h in [0.0, PI / 2, PI, -PI / 2]:
+			var f := Vector2(-sin(h), -cos(h))
+			P.place(cx1 - f.x * 0.4, P.position.y, cz1 - f.y * 0.4, h)
+			await sim(0.05); g.sim(0.05, ["KeyE"]); await sleep(10)
+			if g.msg.active or g._dialog or g.file_view.active: break
+		for k in 30:
+			if g.msg.active: print("MSG ", stt()); g.sim(0.1, ["KeyE"]); await sleep(10)
+			await _fsim(0.25, [], "act_%02d" % k if k % 6 == 3 else "")
+			if g.file_view.active and g.file_view.phase == "read": g.sim(0.1, ["KeyD"]); await sleep(10)
+			if g.file_view.exit_vis: g.sim(0.1, ["KeyD"]); g.sim(0.1, []); g.sim(0.1, ["KeyE"]); await sleep(10)
+			if g.file_view.phase == "filed": await _fsim(0.3, [], "act_filed"); g.sim(0.1, ["KeyE"]); await sleep(10)
+		print("owned %x" % g.file_view.owned)
+		return
+	if a[3] == "get":
+		var idx := -1
+		for i in vm.etc.size():
+			var e: Dictionary = vm.etc[i]
+			if e.flg & 1 and e.type == 4: print("etc ", i, " attr %x" % e.attr, " prm ", e.prm)
+			if e.flg & 1 and e.type == 4 and e.attr & 0x10: idx = i
+		if idx < 0: print("no document"); return
+		var e: Dictionary = vm.etc[idx]
+		var cx: float = e.x + e.w / 2; var cz: float = e.z + e.d / 2
+		for h in [0.0, PI / 2, PI, -PI / 2]:
+			var f := Vector2(-sin(h), -cos(h))
+			P.place(cx - f.x * 0.2, P.position.y, cz - f.y * 0.2, h)
+			await sim(0.05); g.sim(0.05, ["KeyE"]); await sleep(10)
+			if g.file_view.active: break
+		await _fsim(0.2, [], "get_slide")
+		await _fsim(1.0, [], "get_page0")
+		for k in 8:
+			await _fsim(0.1, ["KeyD"]); await _fsim(1.2, [], "get_page%d" % (k + 1))
+			if g.file_view.exit_vis: break
+		await _fsim(0.1, ["KeyD"], "get_exitlit")
+		await _fsim(0.1, ["KeyE"]); await _fsim(0.5, [], "get_filed")
+		await _fsim(0.1, ["KeyE"]); await _fsim(0.5, [])
+		print("owned %x" % g.file_view.owned, " inv ", g.inv.slots.map(func(x): return x.id if x else -1), " ", stt())
+		return
+	g.file_view.owned = int(a[4]) if a.size() > 4 else 1
+	g.toggle_inv(true)
+	await _fsim(1.0, [])
+	g.inv_screen._mode = "menu"; g.inv_screen._menu_sel = 1; g.inv_screen.render()
+	await _fsim(0.1, ["KeyE"]); await _fsim(0.5, [], "menu_binders")
+	await _fsim(0.2, ["KeyA"]); await _fsim(0.5, [], "menu_rot1")
+	await _fsim(0.2, ["KeyD"]); await _fsim(0.5, [], "menu_rot0")
+	await _fsim(0.1, ["KeyE"]); await _fsim(0.15, [], "menu_spread")
+	await _fsim(0.6, [], "menu_tag")
+	await _fsim(0.1, ["KeyS"]); await _fsim(0.3, [], "menu_tag2")
+	await _fsim(0.1, ["KeyE"]); await _fsim(1.0, [], "menu_read")
+	await _fsim(0.1, ["Escape"]); await _fsim(0.5, [], "menu_back")
+	await _fsim(0.1, ["Escape"]); await _fsim(0.8, [], "menu_untag")
+	await _fsim(0.1, ["Escape"]); await _fsim(0.5, [], "menu_top")

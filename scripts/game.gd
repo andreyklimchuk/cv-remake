@@ -37,6 +37,7 @@ var room_id := ""
 var busy := false
 var inv_open := false
 var inv_screen: InventoryScreen
+var file_view: FileView
 var debug := false
 var audio := GameAudio.new()
 var play_time := 0.0
@@ -91,6 +92,10 @@ func _ready() -> void:
 	inv_screen.visible = false
 	inv_screen.on_equip_change = _equip_changed
 	inv_screen.on_use_item = func(id: int) -> int: return use_item(id)
+	file_view = FileView.new(); file_view.audio = audio; file_view.input = input
+	file_view.ev_flag = func(n: int) -> bool: return vm.flag(1, n)
+	ui.add_layer(file_view, false)
+	inv_screen.fileview = file_view
 	lights.lock_fn = func(f: int, n: int, l: Vector3, o: int) -> Variant: return lock_pos(f, n, l, o)
 	var cfg := ConfigFile.new()
 	if cfg.load(SETTINGS) == OK and cfg.get_value("game", "cam", "fixed") == "behind":
@@ -140,6 +145,7 @@ func start(save: Variant = null) -> void:
 			var d: Dictionary = s.duplicate(); d.id = int(d.id); d.count = int(d.get("count", 1)); inv_screen.box.append(d)
 		inv_screen.equipped = int(save.eq) if save.get("eq") != null else null
 		inv_screen.standard = int(save.std) if save.get("std") != null else null
+		file_view.owned = int(save.get("files", 1)) | 1
 		play_time = float(save.get("t", 0))
 		if save.get("evt") != null:
 			vm.f = _int_flags(save.evt.f); vm.rcase = int(save.evt.rcase)
@@ -409,6 +415,8 @@ func _examine() -> bool:
 			var items: Array = room.data.get("items", [])
 			var w: EvtVM.Work = vm.get_work(3, k)
 			if k < items.size() and not (w != null and w.gone):
+				# attr 0x10: a document (GetFile, cb 0x20000)
+				if a.attr & 0x10: vm.cb |= 0x20000
 				vm.sb_id = int(items[k].id); _item_screen()
 		return true
 	return false
@@ -451,12 +459,24 @@ func _show_message(idx: int, from_examine: bool) -> void:
 ## "Take the X?" in its message box -> cb 0x800
 func _item_screen() -> void:
 	var id := vm.sb_id
+	if vm.cb & 0x20000:
+		await _file_screen(id); return
 	var S := inv_screen
 	var auto := bool(vm.cb & 0x4000); vm.cb &= ~(0x10 | 0x4000) & EvtVM.M32
 	_dialog = true; inv_open = true
 	await S.show_screen(true, id)
 	await _item_screen_body(id, auto)
 	await S.show_screen(false)
+	inv_open = false; _dialog = false
+
+## a document picked up (subscreenmode 8 with cb 0x20000 -> FileViewInit with the GetFile flag): the reader opens on
+## the file of FileNumberSwitch, then "You've filed the X." -> cb 0x800
+func _file_screen(id: int) -> void:
+	vm.cb &= ~(0x10 | 0x4000) & EvtVM.M32
+	_dialog = true; inv_open = true
+	var m := room_id.substr(3).to_int()   # rm_SRRV: stage S, room RR
+	await file_view.read(FileView.number(m / 1000, (m / 10) % 100, id), true)
+	vm.cb |= 0x800; vm.cb &= ~0x20000 & EvtVM.M32
 	inv_open = false; _dialog = false
 
 ## item box request (cb 0x40000; the security boxes of rm_0090 add 0x80000 = box A / 0x100000 = box B).
@@ -794,7 +814,7 @@ func _save_screen() -> void:
 func save() -> void:
 	var p := player.position
 	var s := {"hp": player.hp, "room": room_id, "pos": vm.pos_no, "x": p.x, "y": p.y, "z": p.z, "h": player.heading, "inv": inv.slots, "box": inv_screen.box,
-		"eq": inv_screen.equipped, "std": inv_screen.standard, "evt": {"f": vm.f, "rcase": vm.rcase}, "t": play_time}
+		"eq": inv_screen.equipped, "std": inv_screen.standard, "files": file_view.owned, "evt": {"f": vm.f, "rcase": vm.rcase}, "t": play_time}
 	var fa := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if fa: fa.store_string(JSON.stringify(s)); fa.close()
 
@@ -965,6 +985,8 @@ func step(dt: float) -> void:
 	if msg.active:
 		msg.update(dt, inp.action, inp.hit(["KeyA", "ArrowLeft"]), inp.hit(["KeyD", "ArrowRight"]), inp.cancel)
 		player.frozen = true
+	elif file_view.active:
+		player.frozen = true; file_view.update(dt)
 	elif inv_open:
 		player.frozen = true
 		if not inv_screen.update(dt): toggle_inv(false)

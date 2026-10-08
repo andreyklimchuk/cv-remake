@@ -76,7 +76,8 @@
   "It's material\nthat's ready to\nbe processed.": "Это материал,\nготовый\nк обработке.",
   "It is useless to\nuse it here.": "Здесь его\nиспользовать\nбесполезно.",
   "It's not material\nthat's ready to\nbe processed.": "Это не материал\nдля обработки.",
-  "It only works when\nfilled with\nextinguishant.": "Он работает, только\nесли заправлен\nогнегасящим составом."
+  "It only works when\nfilled with\nextinguishant.": "Он работает, только\nесли заправлен\nогнегасящим составом.",
+  "You've filed the\n{N}.": "Документ «{N}»\nподшит в папку."
  },
  "ITEM_RU": {
   "Combat Knife": "Боевой нож",
@@ -98,6 +99,12 @@
   "F. Aid Spray": "Аптечка-спрей",
   "Red Herb": "Красная трава",
   "Blue Herb": "Синяя трава",
-  "Mixed Herb": "Смесь трав"
+  "Mixed Herb": "Смесь трав",
+  "Playing Manual": "Руководство игрока",
+  "Facility Ent. Fax": "Факс о допуске",
+  "TG-01 Product Des.": "Описание TG-01",
+  "Users' Manual": "Руководство пользователя",
+  "Prisoner's Diary": "Дневник заключённого",
+  "Anatomist's Note": "Записки анатома"
  }
 }

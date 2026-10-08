@@ -45,7 +45,7 @@ func pages(msg: String, sb := 0) -> PackedStringArray:
 		m += msg.substr(last, r.get_start() - last)
 		var h := r.get_string(1)
 		var id := sb if h == "ffff" else h.hex_to_int()
-		names.append(ITEM_NAMES.get(id, ""))
+		names.append(String(ITEM_NAMES.get(id, "")).replace("{0d}", "-"))
 		m += "\u0001"
 		last = r.get_end()
 	m += msg.substr(last)

@@ -88,6 +88,9 @@ var is_open := false
 var equipped: Variant = null   # weapon box (item id or null)
 var standard: Variant = null   # standard box (lighter)
 var on_equip_change: Callable
+var fileview: FileView      # the FILE command (fileview.c)
+var _facc := 0.0
+var _fkeys := {}
 var on_use_item: Callable   # (id) -> int: -1 used, -2 nothing, else a system message
 var inv: Inventory
 var input: GameInput
@@ -538,6 +541,7 @@ func show_screen(open: bool, get := -1, box_mode := false) -> void:
 	while _anim != null and _anim.gen == g2:
 		await get_tree().process_frame
 	is_open = false; visible = false; _close_check(); _mode = "list"
+	if fileview != null: fileview.end_select()
 	for n in stc: n.visible = true
 	box_panel.visible = false
 	_get_id = -1
@@ -676,7 +680,7 @@ func render() -> void:
 	for i in 4:
 		var b: Deco = menu_btns[i]
 		b.text = names[i]
-		b.on = (i == 3 and _mode != "menu") or (_mode == "menu" and i == _menu_sel)
+		b.on = (i == 3 and _mode != "menu" and not _mode.begins_with("file")) or (_mode == "menu" and i == _menu_sel) or (i == 1 and _mode.begins_with("file"))
 		b.sel = _mode == "menu" and i == _menu_sel
 		b.queue_redraw()
 	lbl.eq.text = T("equip"); lbl.st.text = T("standard"); lbl.status.text = T("status"); lbl.name.text = T("name")
@@ -813,6 +817,38 @@ func _open_check() -> void:
 	_set_text(item_desc(s.id))
 	_mode = "check"
 
+## FILE: the binders are drawn in the model window (DrawSubItem rdid 139), the name of the tag in the message box
+const FILE_CAM := Vector3(0, 0, 8.0)
+func _start_file() -> void:
+	_mode = "file"; _facc = 0; _fkeys = {}
+	chk_box.visible = true; chk_hint.text = ""
+	var holder := _clear_holder(chk_vp)
+	var cam: Camera3D = chk_vp.get_node("cam")
+	cam.transform = Transform3D(Basis(), FILE_CAM)
+	chk_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	fileview.begin_select(holder)
+	_set_text(""); render()
+
+func _update_file(dt: float) -> void:
+	# pad_ps (pressed) is latched until the next 30 Hz frame; left / right are pad_on (held)
+	if input.hit(["KeyW", "ArrowUp"]): _fkeys.U = true
+	if input.hit(["KeyS", "ArrowDown"]): _fkeys.D = true
+	if input.action: _fkeys.act = true
+	if input.cancel or input.inventory: _fkeys.can = true
+	_facc += dt
+	if _facc < 1.0 / 30.0: return
+	_facc = minf(_facc - 1.0 / 30.0, 1.0 / 30.0)
+	var k := _fkeys; _fkeys = {}
+	var res := fileview.select_frame(input.has(["KeyA", "ArrowLeft"]), input.has(["KeyD", "ArrowRight"]), k.get("U", false), k.get("D", false), k.get("act", false), k.get("can", false))
+	var t := fileview.select_title()
+	if t != _text: _set_text(t)
+	if res == "menu":
+		fileview.end_select(); _close_check(); _mode = "menu"; _menu_sel = 1; _set_text(""); render()
+	elif res == "read":
+		_mode = "file_read"
+		await fileview.read(fileview.filenum, false)
+		_mode = "file"; _facc = 0; _fkeys = {}
+
 func _close_check() -> void:
 	_chk = null
 	if chk_box: chk_box.visible = false
@@ -827,6 +863,8 @@ func _spin_get(dt: float) -> void:
 func update(dt: float) -> bool:
 	if not is_open:
 		return false
+	if fileview != null and fileview.active:
+		fileview.update(dt); return true
 	_ecg_t += dt
 	ecg.queue_redraw()
 	_acc += dt
@@ -843,6 +881,9 @@ func update(dt: float) -> bool:
 	if _ask != null:
 		_update_ask(); return true
 	var L := input.hit(["KeyA", "ArrowLeft"]); var R := input.hit(["KeyD", "ArrowRight"]); var Up := input.hit(["KeyW", "ArrowUp"]); var D := input.hit(["KeyS", "ArrowDown"])
+	if _mode == "file":
+		_update_file(dt); return true
+	if _mode == "file_read": return true
 	if _mode == "box":
 		if input.cancel or input.inventory:
 			audio.se("cancel"); return false
@@ -887,6 +928,8 @@ func update(dt: float) -> bool:
 				_mode = "list"; audio.se("menu"); _set_text(_cur_name()); render()
 			elif _menu_sel == 0:
 				audio.se("cancel"); return false
+			elif _menu_sel == 1 and fileview != null:
+				audio.sys(3); _start_file()
 			else:
 				audio.se("menu"); _set_text(T("noData"))
 		elif input.cancel or input.inventory:
