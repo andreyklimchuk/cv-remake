@@ -30,6 +30,8 @@ class Work:
 	var add := 0x10000
 	var mtn := -1
 	var mtn_kind := -1
+	## bank motions of the event (kind 4): hokan_count of the switch (ct2 6 -> 0, else 8)
+	var hokan := 0
 	## mode3 == 4 (bhMotionPauseSet / bhInitMotionPause): motion frame frozen
 	var paused := false
 	## stflg 0x1000000: not present; mdflg 0x1: not drawn
@@ -615,6 +617,9 @@ func _common(t: Task) -> void:
 			if sub == 0x18 or sub == 0x22:
 				w.paused = false; w.mtn_kind = _b(3); w.mtn = _b(4); w.frm = 0
 				if sub == 0x22: w.frm = _u16(8) << 16
+			elif _b(3) == 1:
+				# 0x19 / 0x23 with 1: the enemy's own motion bank (mnwP = sys->emtp[id], mtn_no = mode1, frm_no 0) -> kind 4
+				w.paused = false; w.mtn_kind = 4; w.mtn = _b(4); w.frm = 0; w.hokan = 0 if _b(7) == 6 else 8
 		0x1a: t.ips[_b(2)] = [sg.call(_u16(4) / 1000.0, _b(3) & 1), sg.call(_u16(6) / 1000.0, _b(3) & 2), sg.call(_u16(8) / 1000.0, _b(3) & 4)]
 		0x1b: t.ian[_b(2)] = [sg.call(_b(4), _b(3) & 1), sg.call(_b(5), _b(3) & 2), sg.call(_b(6), _b(3) & 4)]
 		0x1e, 0x1f, 0x1c, 0x2b, 0x2c, 0x2d:

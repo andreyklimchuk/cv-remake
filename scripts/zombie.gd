@@ -472,7 +472,36 @@ func _resume_ai() -> void:
 ## scripted zombies (event MOTION / room motions) are played by the game on the AnimationPlayer
 func update(dt: float) -> void:
 	_scripted = true
+	if ev_no >= 0: return
 	super.update(dt)
+	_update_morph()
+
+## bank motion set by an event (bhCommonCtr 0x19 / 0x23 with emtp: mode0 5, bhEne_Event -> mv00_subpl2_0: mtn_no = mode1,
+## hokan 0, spd 0; the linked upper body gets mtn_no + 200). bhSetMotion plays it at the work's frame (the scripts
+## wait on frm_no); the script places and turns the zombie, the root keeps its rest x / z like the AI's own motions.
+var ev_no := -1
+var ev_frm := 0
+var ev_hokan := 0
+func event_motion() -> void:
+	if lo.no != ev_no or ap.is_playing():
+		if ap.is_playing() or cur != "":
+			# take over the pose of the AnimationPlayer
+			for o in 18:
+				var bi := _bi[o]
+				if bi < 0: continue
+				_P[o] = skel.get_bone_pose_position(bi); _Q[o] = skel.get_bone_pose_rotation(bi)
+			ap.stop(true); cur = ""
+		lo.no = -1; up.no = -1
+		_chg(lo, ev_no, 0, ev_hokan); _chg(up, ev_no + 200, 0, ev_hokan)
+	lo.frm = ev_frm % (lo.nf << 16); up.frm = ev_frm % (up.nf << 16)
+	_set_motion(lo, 0, 8, FLIP)
+	_P[0].x = _rest_P[0].x; _P[0].z = _rest_P[0].z
+	_set_motion(up, 8, 10, FLIP2)
+	for o in 18:
+		var bi := _bi[o]
+		if bi < 0: continue
+		skel.set_bone_pose_position(bi, _P[o]); skel.set_bone_pose_rotation(bi, _Q[o])
+	lo.frm = ev_frm
 	_update_morph()
 
 # ---------------------------------------------------------------- Move (mode0 1)
@@ -1109,7 +1138,7 @@ func _update_morph() -> void:
 	if etype != 10:
 		var no := lo.no
 		var frm := lo.frm >> 16
-		if _scripted:
+		if _scripted and ev_no < 0:
 			no = -1
 			var c := cur
 			if c.length() >= 3 and c[0] == "m" and c.substr(1).is_valid_int():

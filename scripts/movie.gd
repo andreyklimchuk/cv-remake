@@ -28,9 +28,17 @@ static func play(parent: Node, name_: String) -> void:
 	v.play()
 	var tree := parent.get_tree()
 	var t := 0.0
+	var fitted := false
 	while not st.done and is_instance_valid(v):
 		await tree.process_frame
 		t += parent.get_process_delta_time()
+		# keep the movie's aspect (the PAMF movies are 640x320): letterboxed like object-fit: contain
+		var tex := v.get_video_texture()
+		if not fitted and tex != null and tex.get_width() > 0 and tex.get_height() > 0:
+			fitted = true
+			var k := minf(1024.0 / tex.get_width(), 768.0 / tex.get_height())
+			v.size = Vector2(tex.get_width(), tex.get_height()) * k
+			v.position = (Vector2(1024, 768) - v.size) / 2
 		if t > 4.0: info.visible = false
 		if not v.is_playing() and t > 1.0: st.done = true
 	layer.queue_free()

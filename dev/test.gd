@@ -281,6 +281,8 @@ func cine_test() -> void:
 	var n := int(float(a[4]) / float(a[5]))
 	for k in n:
 		if g.msg.active: g.sim(0.3, ["KeyE"]); await sleep(10)
+		if OS.get_environment("SKIPMV") != "" and g.movie_playing():
+			Input.parse_input_event(_key(KEY_ESCAPE)); await sleep(100)
 		await sim(float(a[5]))
 		var vis := []
 		for i in g.room.obj_meshes:
@@ -293,6 +295,8 @@ func cine_test() -> void:
 			zs.append("z%d vis %s st %s cur %s pos %s scr %s mk %s mtn %s" % [z.index, z.visible, z.state, z.cur, str(z.position), zw.scripted if zw else "-", zw.mtn_kind if zw else "-", zw.mtn if zw else "-"])
 		print("T%.1f cine %s chars %s zombies %s" % [(k + 1) * float(a[5]), g.in_cine, str(g.chars.map(func(c): return "%d:%s@%s" % [c.index, c.m.visible, str(c.m.global_position)])), " | ".join(zs)])
 		if not vis.is_empty(): print("  links ", " | ".join(vis))
+		var w4: EvtVM.Work = vm.get_work(1, 4)
+		print("  movie ", g.movie_playing(), " ", stt(), " e4 frm ", (w4.frm >> 16) if w4 else -1, " mtn ", w4.mtn if w4 else -1, " kind ", w4.mtn_kind if w4 else -1)
 		await snap("cine_%s_%02d" % [a[1], k])
 
 ## facial animation of the cutscene NPCs: -- face SECS STEP [room spawn]  (default: the opening cutscene of rm_0000)

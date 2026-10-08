@@ -362,6 +362,10 @@ func _apply_works() -> void:
 			if w.px or w.py or w.pz or w.mtn_kind == 1: z.position = Vector3(w.px, w.py, w.pz)
 			w.pos_set = false
 		if w.ang_set: z.heading = w.ay; z.rotation.y = w.ay; w.ang_set = false
+		if z is Zombie:
+			(z as Zombie).ev_no = w.mtn if w.mtn_kind == 4 and w.scripted else -1
+			(z as Zombie).ev_frm = w.frm; (z as Zombie).ev_hokan = w.hokan
+			if (z as Zombie).ev_no >= 0: (z as Zombie).event_motion()
 		# room motion (rmt, MOTION kind 1): the clip carries the world placement of the root
 		if w.mtn_kind == 1 and w.mtn >= 0:
 			var c := "%s_r%s" % [room_id, U.pad(w.mtn, 2)]
