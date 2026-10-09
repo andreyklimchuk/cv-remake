@@ -361,7 +361,7 @@ func zai_test() -> void:
 		var zs := []
 		for z in g.zombies:
 			if not z.visible: continue
-			zs.append("z%d m%d/%d/%d/%d mtn %d:%d/%d up %d f%x x40 %x d %.1f p %.2f,%.2f ay %d" % [z.index, z.mode0, z.mode1, z.mode2, z.mode3, z.lo.no, z.lo.frm >> 16, z.lo.nf, z.up.no, z.flg, z.x40, z._dist, z.position.x, z.position.z, z._ay])
+			zs.append(("[%s %.2f %s] " % [z.cur, z.ap.current_animation_position if z.cur != "" else -1.0, _maxbone(z) if z.skel else ""]) + "z%d m%d/%d/%d/%d mtn %d:%d/%d up %d f%x x40 %x d %.1f p %.2f,%.2f ay %d" % [z.index, z.mode0, z.mode1, z.mode2, z.mode3, z.lo.no, z.lo.frm >> 16, z.lo.nf, z.up.no, z.flg, z.x40, z._dist, z.position.x, z.position.z, z._ay])
 		for z in g.dogs:
 			var dw: EvtVM.Work = vm.get_work(1, z.index)
 			if not z.visible: zs.append("dog%d hidden gone %s hid %s scr %s" % [z.index, dw.gone if dw else "-", dw.hidden if dw else "-", dw.scripted if dw else "-"]); continue
@@ -639,3 +639,16 @@ func cams_test() -> void:
 		P.place(float(v[0]), float(v[2]), float(v[1]), 0.0)
 		await sim(0.1, [])
 		print("at %s cut %d shown %d zone(old) %d flr %d" % [q, g.cam.index, g.cam.shown, g.cam._zone_cam(P.position), g.cam.flr])
+		var hid := []
+		for i in g.room.nodes.keys():
+			for m in g.room.own_meshes(i):
+				if (m as MeshInstance3D).layers == 0: hid.append(i)
+		hid.sort()
+		print("  hidden nodes ", hid)
+
+## world positions of a few zombie bones (pelvis, chest, head, legs) for the zai log
+func _maxbone(z) -> String:
+	var o := ""
+	for b in ["b01", "b09", "b10", "b05", "b07"]:
+		if z.bones.has(b): o += "%s %s " % [b, z.bone_xform(z.bones[b]).origin.snapped(Vector3.ONE * 0.01)]
+	return o
