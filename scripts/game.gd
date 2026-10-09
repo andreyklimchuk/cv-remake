@@ -218,6 +218,7 @@ func enter_room(id: String, pos: int, at: Variant = null, fade := true, min_ms :
 	add_child(r)
 	_apply_works()
 	cam.set_room(r); cam.ev.set_room(ev.get("evc", [])); cam.ev.lock = func(f: int, n: int, o: int, l: Vector3) -> Variant: return lock_pos(f, n, l, o)
+	_cam_floor()
 	cam.update(player.position, player.head_pos(), player.heading, true)
 	var wait := min_ms - (Time.get_ticks_msec() - t0)
 	if wait > 0: await get_tree().create_timer(wait / 1000.0).timeout
@@ -453,6 +454,22 @@ func _examine() -> bool:
 				vm.sb_id = int(items[k].id); _item_screen()
 		return true
 	return false
+
+## bhCamInfoSet (event command 0x39)
+func cut_flag(v0: int, no: int) -> void:
+	cam.set_cut(no, v0 == 0)
+
+## camera cut inputs: the player's floor number (kdd sets the lower floor at its start) and plp->gpx/gpz
+## (the root object while on the stairs, cut.c bhCheckCut)
+func _cam_floor() -> void:
+	if room == null: return
+	var k: Dictionary = player.kdn
+	if not k.is_empty():
+		var a: Dictionary = k.a
+		cam.flr = room.floor_num(float(a.y) - 0.2 * int(a.prm[2])) if not k.up and int(k.m3) >= 5 else room.floor_num(player.position.y)
+		cam.zone_p = player.bone_pos("b00")
+	else:
+		cam.flr = room.floor_num(player.position.y); cam.zone_p = null
 
 ## bhSetUseKaidanFlag / bhClrUseKaidanFlag: attr 0x400000 on the stairs record and its pair (prm3 0xFF = the next
 ## record for the lower end, the previous one for the upper end; otherwise record prm3)
@@ -882,6 +899,7 @@ func toggle_camera() -> void:
 	if cam.mode == "behind": cam.reset_yaw(player.heading)
 	else: Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	ui.toast(Text.cam_fixed() if cam.mode == "fixed" else Text.cam_behind())
+	_cam_floor()
 	cam.update(player.position, player.head_pos(), player.heading, true)
 
 ## knife hit: enemies within reach of the blade
@@ -1092,6 +1110,7 @@ func step(dt: float) -> void:
 					if dog_bite == null and grab == null and dog_hurt <= 0.0: _start_dog_hurt(z); free = false
 					else: z.pl_hurt = 0
 		cam.cam.position -= _shake; _shake = Vector3.ZERO
+		_cam_floor()
 		cam.update(player.position, player.head_pos(), player.heading, false, dt)
 		_update_links()
 	ui.hud.visible = debug

@@ -52,6 +52,7 @@ func _ready() -> void:
 		"floor": await floor_test()
 		"walk": await walk_test()
 		"stairs": await stairs_test()
+		"cams": await cams_test()
 		"spawnwalk": await spawnwalk_test()
 	print("DONE")
 	get_tree().quit()
@@ -626,3 +627,15 @@ func spawnwalk_test() -> void:
 		var p0 := P.position
 		await sim(1.5, ["KeyW"])
 		print("%s moved %.2f y %.2f flr %d inside %s" % [r, p0.distance_to(P.position), P.position.y, g.room.floor_num(P.position.y), g.room.resolve_pl(p0, P.AR, g.room.floor_num(p0.y), P.AH).distance_to(p0) > 0.001])
+
+## -- cams ROOM x,z,y ...: camera cut chosen at each point (bhCheckCutArea) vs the old zone rule
+func cams_test() -> void:
+	var a := OS.get_cmdline_user_args()
+	await g.enter_room(a[1], 0, null, false)
+	await wait_free()
+	print("cut_on ", g.cam.cut_on)
+	for q in a.slice(2):
+		var v: PackedStringArray = q.split(",")
+		P.place(float(v[0]), float(v[2]), float(v[1]), 0.0)
+		await sim(0.1, [])
+		print("at %s cut %d shown %d zone(old) %d flr %d" % [q, g.cam.index, g.cam.shown, g.cam._zone_cam(P.position), g.cam.flr])

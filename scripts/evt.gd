@@ -282,6 +282,9 @@ func _exec() -> int:
 	match op:
 		0x00:
 			_ifel = 0; return 0
+		0x39:
+			# bhCamInfoSet: cut v1 on (v0 == 0) / off
+			if host.has_method("cut_flag"): host.cut_flag(_b(1), _b(2))
 		0x01:
 			_gsp.append(_p + 2 + _b(1)); _ifel += 1; _p += 2; return 1
 		0x02:

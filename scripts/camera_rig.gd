@@ -26,6 +26,13 @@ var _fpos := Vector3.ZERO
 var _flook := Vector3.ZERO
 var _finit := false
 var _cut: Array = []
+## cut.c: CUT_WORK flg bit 0 (bhCamInfoSet) and the cuttp areas [[attr, flr_no, atr_tp, minx, minz, maxx, maxz]...]
+## per cut (data/room_cuts.json); flr = the player's floor number, zone_p = plp->gpx/gpz (root object on the stairs)
+var cuts: Array = []
+var cut_on: Array = []
+var flr := 0
+var zone_p: Variant = null
+static var _cut_db: Dictionary = {}
 ## shoulder camera
 var yaw := 0.0
 var pitch := 0.08
@@ -39,6 +46,13 @@ func _init() -> void:
 func set_room(room: Room) -> void:
 	_room = room; ev.stop(); forced = -1; _cams = room.data.get("cameras", [])
 	_cut = []
+	if _cut_db.is_empty():
+		var f := FileAccess.open("res://data/room_cuts.json", FileAccess.READ)
+		if f: _cut_db = JSON.parse_string(f.get_as_text())
+	cuts = _cut_db.get(String(room.data.get("id", "")), [])
+	if cuts.size() != _cams.size(): cuts = []
+	cut_on = []
+	for c in cuts: cut_on.append(bool(int(c[0]) & 1))
 	for c in _cams:
 		_cut.append(room.hidden_meshes(c.get("hid")))
 	index = -1; _override = -2; _finit = false; _track_yaw = null
@@ -46,6 +60,47 @@ func set_room(room: Room) -> void:
 func _inside(c: Dictionary, x: float, z: float, m := 0.0) -> bool:
 	var zn: Array = c.zone
 	return x >= minf(zn[0], zn[2]) - m and x <= maxf(zn[0], zn[2]) + m and z >= minf(zn[1], zn[3]) - m and z <= maxf(zn[1], zn[3]) + m
+
+## bhCamInfoSet: v0 == 0 enables the cut, otherwise disables it
+func set_cut(no: int, on: bool) -> void:
+	if no >= 0 and no < cut_on.size(): cut_on[no] = on
+
+## bhCheckCutArea: first enabled cut with an area of the floor containing (px, pz)
+func cut_area(px: float, pz: float, f: int) -> int:
+	for i in cuts.size():
+		if not cut_on[i]: continue
+		for t in cuts[i][2]:
+			if int(t[1]) != f: continue
+			if int(t[2]) == 0:
+				if t[3] <= px and t[5] > px and t[4] <= pz and t[6] > pz: return i
+			elif _in_cut_tri(px, pz, t): return i
+	return -1
+
+## bhCheckCutAreaInnerTriangle
+static func _in_cut_tri(px: float, pz: float, t: Array) -> bool:
+	var minx: float = t[3]; var minz: float = t[4]; var maxx: float = t[5]; var maxz: float = t[6]
+	if px < minx or px > maxx or pz < minz or pz > maxz: return false
+	var p0 := Vector2(maxx, maxz); var p1 := Vector2(minx, minz)
+	match int(t[2]):
+		2: p0 = Vector2(minx, maxz); p1 = Vector2(maxx, minz)
+		3: p0 = Vector2(minx, minz); p1 = Vector2(maxx, maxz)
+		4: p0 = Vector2(maxx, minz); p1 = Vector2(minx, maxz)
+	var d := p1.y - p0.y
+	var p2x := px - p0.x
+	var p2z := absf(d / ((p1.x - p0.x) / p2x)) if p2x != 0.0 else 0.0
+	return not (absf((p0.y + d) - pz) <= p2z)
+
+## bhCheckCut: on entry the cut of the position; afterwards a new cut is taken only when none of the four points
+## 1 unit (0.1 m) around the position is still in the current one
+func _cut_cam(p: Vector3, snap: bool) -> int:
+	var q: Vector3 = zone_p if zone_p != null else p
+	var pp := cut_area(p.x, p.z, flr)
+	if snap or index < 0:
+		return pp if pp != -1 else maxi(index, 0)
+	if pp != -1 and pp != index:
+		if cut_area(q.x, q.z - 0.1, flr) != index and cut_area(q.x, q.z + 0.1, flr) != index and cut_area(q.x - 0.1, q.z, flr) != index and cut_area(q.x + 0.1, q.z, flr) != index:
+			return pp
+	return index
 
 func _zone_cam(p: Vector3) -> int:
 	var cur: Variant = _cams[index] if index >= 0 and index < _cams.size() else null
@@ -120,10 +175,11 @@ func update(p: Vector3, head: Vector3, heading: float, snap := false, dt := 1.0 
 	if mode == "behind":
 		_update_shoulder(p, head, snap, dt); return false
 	var fc := forced if forced >= 0 and forced < _cams.size() else -1
-	var idx := fc if fc >= 0 else _zone_cam(p)
+	var idx := fc if fc >= 0 else (_cut_cam(p, snap) if cuts.size() else _zone_cam(p))
 	index = idx
 	_vis_t -= dt
-	if fc >= 0:
+	if fc >= 0 or cuts.size():
+		# the original has no visibility fallback: the cut areas decide (the fallback stays for rooms without data)
 		_override = -2
 	elif snap or _vis_t <= 0 or idx != prev_idx:
 		_vis_t = 0.2
