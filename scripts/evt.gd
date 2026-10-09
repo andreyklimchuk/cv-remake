@@ -315,7 +315,7 @@ func _exec() -> int:
 				4: w[1].call(v & ~mm)
 				5: w[1].call(v ^ mm)
 		0x06:
-			var vars := {0: stg, 1: room, 15: pos_no, 8: sb_id, 17: wpnl, 21: rcase, 23: 0, 24: 0, 25: 0}
+			var vars := {0: stg, 1: room, 2: host.cam_ncut() if host.has_method("cam_ncut") else 0, 15: pos_no, 8: sb_id, 17: wpnl, 21: rcase, 23: 0, 24: 0, 25: 0}
 			r = _cmp(vars.get(_b(1), 0), _b(2), _b(3))
 		0x07:
 			var v := 0
@@ -329,6 +329,7 @@ func _exec() -> int:
 			match _b(1):
 				0: stg = v
 				1: room = v
+				2: if host.has_method("set_cam_ncut"): host.set_cam_ncut(v)
 				8: sb_id = v
 				15: pos_no = v
 				18: host.set_weapon(v)

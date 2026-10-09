@@ -456,6 +456,8 @@ func _examine() -> bool:
 	return false
 
 ## bhCamInfoSet (event command 0x39)
+func cam_ncut() -> int: return cam.ncut
+func set_cam_ncut(v: int) -> void: cam.ncut = v
 func cut_flag(v0: int, no: int) -> void:
 	cam.set_cut(no, v0 == 0)
 
@@ -523,26 +525,30 @@ func _item_screen() -> void:
 		await _file_screen(id); return
 	var S := inv_screen
 	var auto := bool(vm.cb & 0x4000); vm.cb &= ~(0x10 | 0x4000) & EvtVM.M32
+	# system.c: a subscreen request (cb 0x64010: get item / file / box) sets st 8 like the pad's; see toggle_inv
+	vm.st |= 8
 	_dialog = true; inv_open = true
 	await S.show_screen(true, id)
 	await _item_screen_body(id, auto)
 	await S.show_screen(false)
-	inv_open = false; _dialog = false
+	inv_open = false; _dialog = false; _st8_frames = 1
 
 ## a document picked up (subscreenmode 8 with cb 0x20000 -> FileViewInit with the GetFile flag): the reader opens on
 ## the file of FileNumberSwitch, then "You've filed the X." -> cb 0x800
 func _file_screen(id: int) -> void:
 	vm.cb &= ~(0x10 | 0x4000) & EvtVM.M32
+	vm.st |= 8
 	_dialog = true; inv_open = true
 	var m := room_id.substr(3).to_int()   # rm_SRRV: stage S, room RR
 	await file_view.read(FileView.number(m / 1000, (m / 10) % 100, id), true)
 	vm.cb |= 0x800; vm.cb &= ~0x20000 & EvtVM.M32
-	inv_open = false; _dialog = false
+	inv_open = false; _dialog = false; _st8_frames = 1
 
 ## item box request (cb 0x40000; the security boxes of rm_0090 add 0x80000 = box A / 0x100000 = box B).
 ## Both boxes share one storage, so what is left in box A is taken out of box B past the metal detector.
 func _box_screen() -> void:
 	vm.cb &= ~(0x40000 | 0x80000 | 0x100000) & EvtVM.M32
+	vm.st |= 8
 	inv_open = true
 	await inv_screen.show_screen(true, -1, true)
 
@@ -933,29 +939,6 @@ func hit_zombie(z: Variant, dmg: float) -> void:
 	# the scripts' DieCk turns this into the enemy's ed flag (the enemy stays dead)
 	if not z.alive: vm.work(1, z.index).dead = true
 
-## zombies do not walk through each other (bhEne01_CollCheck is not ported: simple circle separation)
-const ZOMBIE_R := 0.25
-func _separate_zombies() -> void:
-	var zs: Array = []
-	for z in zombies:
-		var zw: EvtVM.Work = vm.get_work(1, z.index)
-		if zw != null and (zw.gone or zw.hidden or zw.scripted): continue
-		if not z.alive or z.state == "lying": continue
-		zs.append(z)
-	for i in zs.size():
-		for j in range(i + 1, zs.size()):
-			var a: Zombie = zs[i]; var b: Zombie = zs[j]
-			var d := Vector2(b.position.x - a.position.x, b.position.z - a.position.z)
-			var L := d.length()
-			if L >= 2 * ZOMBIE_R: continue
-			var n := d / L if L > 0.0001 else Vector2(1, 0)
-			var push := 2 * ZOMBIE_R - L
-			# the zombie holding Claire stays in place
-			var ga: bool = grab != null and grab.z == a; var gb: bool = grab != null and grab.z == b
-			var ka := 0.0 if ga else (1.0 if gb else 0.5); var kb := 0.0 if gb else (1.0 if ga else 0.5)
-			a.position = room.resolve(a.position - Vector3(n.x, 0, n.y) * push * ka, ZOMBIE_R)
-			b.position = room.resolve(b.position + Vector3(n.x, 0, n.y) * push * kb, ZOMBIE_R)
-
 ## a zombie caught Claire: from here its NG00 / PlyDG00 / PlayerLink (zombie.gd) move her and play her motions
 func _start_grab(z: Zombie) -> void:
 	grab = {"z": z}
@@ -1092,6 +1075,7 @@ func step(dt: float) -> void:
 					if player.hp <= 0: game_over()
 					else: player.play_sync(null)
 			var free := grab == null and dog_bite == null and player.sync == null and player.hp > 0 and player.kdn.is_empty()
+			Zombie.others = dogs
 			for z in zombies:
 				var zw: EvtVM.Work = vm.get_work(1, z.index)
 				if zw != null and (zw.gone or zw.hidden): continue
@@ -1099,7 +1083,6 @@ func step(dt: float) -> void:
 				if z.mode0 == 2 and z.pl_state == "held" and (grab == null or grab.z != z): z.set_state("walk")
 				if z.tick(dt, player.position, free, room) and grab == null and free:
 					_start_grab(z); free = false
-			_separate_zombies()
 			for z in dogs:
 				var zw: EvtVM.Work = vm.get_work(1, z.index)
 				if zw != null and (zw.gone or zw.hidden): continue

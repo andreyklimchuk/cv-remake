@@ -20,7 +20,8 @@ func _ready() -> void:
 	var t: Dictionary = Assets.data_json("text_ru.json")
 	RU = t.RU; ITEM_RU = t.ITEM_RU
 	var s: Dictionary = Assets.data_json("sysmes.json")
-	for k in s.ITEM_NAMES: ITEM_NAMES[int(k)] = s.ITEM_NAMES[k]
+	# {0d} = the hyphen glyph of the original font (TG{0d}01 -> TG-01)
+	for k in s.ITEM_NAMES: ITEM_NAMES[int(k)] = String(s.ITEM_NAMES[k]).replace("{0d}", "-")
 	for k in s.SYSMES: SYSMES[int(k)] = s.SYSMES[k]
 
 func set_lang(l: String) -> void:

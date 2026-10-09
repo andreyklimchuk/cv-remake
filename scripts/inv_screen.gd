@@ -437,12 +437,36 @@ func _draw_ecg() -> void:
 		x += 2
 
 # ---------- 3D ----------
+## MdlEvalflagsSet (itemview.c): itemflg[dsptbl[id].hide][0] for the items with parts hidden in the item view
+## (e.g. 85 TG-01 is the disc inside the open case model: the case halves are hidden)
+const HIDE_EL := {18: 4, 19: 28, 21: 4, 22: 4, 23: 4, 30: 28, 35: 48, 44: 4, 46: 4, 60: 4, 79: 60, 85: 28, 89: 12, 101: 28, 105: 12, 108: 4, 118: 60, 122: 28, 123: 20, 124: 16}
+
+## MdlHideCheck: chk doubles along every child and sibling link of the Ninja object tree; evalflags |= 8 hides
+## only the object's own model, not its children
+static func _hide_check(op: Node, el: int, chk: int) -> void:
+	if el & chk:
+		if op is MeshInstance3D: (op as MeshInstance3D).mesh = null
+		el &= ~chk
+	if el == 0: return
+	var c := (chk * 2) & 0xff
+	if c == 0: return
+	# the Godot children of a node are the Ninja child and its sibling chain
+	var kids := op.get_children().filter(func(x): return x is Node3D and String(x.name).begins_with("n"))
+	var k := c
+	for x in kids:
+		_hide_check(x, el, k)
+		k = (k * 2) & 0xff
+		if k == 0: break
+
 func _model(id: int) -> Node3D:
 	var n := "it_%s.glb" % U.pad(id, 3)
 	var o := Assets.scene("inv/" + n)
 	if o == null: o = Assets.scene("items/" + n)
 	if o == null:
 		return null
+	if HIDE_EL.has(id):
+		var root := _find_node(o, "n000")
+		if root != null: _hide_check(root, HIDE_EL[id], 1)
 	Assets.to_lambert(o, "inv")
 	var box := _aabb(o, o)
 	var s := box.size.length()

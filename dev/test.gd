@@ -54,6 +54,8 @@ func _ready() -> void:
 		"stairs": await stairs_test()
 		"cams": await cams_test()
 		"spawnwalk": await spawnwalk_test()
+		"snd": await snd_test()
+		"knock": await knock_test()
 	print("DONE")
 	get_tree().quit()
 
@@ -67,7 +69,11 @@ func stt() -> String:
 		if vm.tasks[i].status: tasks.append("%d:e%d@%x" % [i, vm.tasks[i].scr - 2, vm.tasks[i].p])
 	var m := "-"
 	if g.msg.active: m = JSON.stringify(ui.msg_text.text.substr(0, 60))
-	return "%s cb %x st %x tasks %s msg %s frozen %s pos %.2f,%.2f cam %d shown %d ov %d mode %s" % [g.room_id, vm.cb, vm.st, " ".join(tasks), m, P.frozen, P.position.x, P.position.z, g.cam.index, g.cam.shown, g.cam._override, g.cam.mode]
+	if OS.get_environment("WFRM") != "":
+		for wi in 4:
+			var ww = vm.get_work(1, wi)
+			if ww: m += " e%d:%d/%d/%d" % [wi, ww.frm >> 16, ww.mtn_kind, ww.mtn]
+	return "%s snd %s cb %x st %x tasks %s msg %s frozen %s pos %.2f,%.2f cam %d shown %d ov %d mode %s" % [g.room_id, g.audio._slots.keys().filter(func(x): return not String(x).begins_with("ene")), vm.cb, vm.st, " ".join(tasks), m, P.frozen, P.position.x, P.position.z, g.cam.index, g.cam.shown, g.cam._override, g.cam.mode]
 
 func snap(t: String) -> void:
 	print(t, " ", stt())
@@ -351,6 +357,9 @@ func zai_test() -> void:
 	var n := int(float(a[2]) / float(a[3]))
 	for k in n:
 		if g.msg.active: g.sim(0.3, ["KeyE"]); await sleep(10)
+		if g.inv_open and g.inv_screen._mode == "get": print("GET"); g.sim(0.1, ["KeyE"]); await sleep(10); g.sim(0.1, []); await sleep(10)
+		# ZKEY="k": the action button at step k (examine / pick up)
+		if OS.get_environment("ZKEY") == str(k): print("KEY ", g._quad_bit(), " ", P.forward(), " ", vm.etc.map(func(e): return "%d:%x:%x" % [e.type, e.attr, e.flg])); g.sim(0.1, ["KeyE"]); await sleep(10)
 		await sim(float(a[3]))
 		# -- zai ... SNAP shoot: one handgun hit per step on every visible AI zombie
 		if a.size() > 8 and a[8] == "shoot":
@@ -370,6 +379,7 @@ func zai_test() -> void:
 		if g.dog_hurt > 0: zs.append("HURT %s" % P.sync)
 		var zw0: EvtVM.Work = vm.get_work(1, g.zombies[0].index) if g.zombies.size() else null
 		print("T%.1f P %.2f,%.2f hp %d grab %s busy %s cine %s msg %s scr %s | %s" % [(k + 1) * float(a[3]), P.position.x, P.position.z, P.hp, (g.grab.z.pl_state + str(g.grab.z._pm3)) if g.grab != null else "-", g.busy, g.in_cine, g.msg.active, zw0.scripted if zw0 else "-", " | ".join(zs)])
+		if OS.get_environment("WFRM") != "": print("   ", stt())
 		if a.size() > 7 and k % int(a[7]) == 0: await snap("zai_%03d" % k)
 
 ## zombie mouth morph close-up: -- zmorph ROOM
@@ -418,6 +428,7 @@ func use_test() -> void:
 	var n := int(float(a[6]) / 0.25)
 	for k in n:
 		if g.msg.active: print("MSG ", stt()); g.sim(0.3, ["KeyE"]); await sleep(10)
+		elif g.inv_open and g.inv_screen._mode == "get": print("GET ", stt()); g.sim(0.1, ["KeyE"]); await sleep(10); g.sim(0.1, []); await sleep(10)
 		await sim(0.25)
 		if a.size() > 7 and k % int(a[7]) == 0: await snap("use_%03d" % k)
 		elif k % 4 == 0: print("T%.2f %s" % [(k + 1) * 0.25, stt()])
@@ -429,6 +440,7 @@ func use_test() -> void:
 		g.sim(0.1, ["KeyE"]); await sleep(10)
 		for k in int(float(ex1[3]) / 0.25):
 			if g.msg.active: print("MSG ", stt()); g.sim(0.3, ["KeyE"]); await sleep(10)
+			elif g.inv_open and g.inv_screen._mode == "get": print("GET ", stt()); g.sim(0.1, ["KeyE"]); await sleep(10); g.sim(0.1, []); await sleep(10)
 			await sim(0.25)
 			if k % 4 == 0: print("X%.2f %s" % [(k + 1) * 0.25, stt()])
 		print("flags 7b ", vm.flag(1, 0x7b), " 7c ", vm.flag(1, 0x7c), " 7d ", vm.flag(1, 0x7d), " rm %x" % vm.rm)
@@ -570,6 +582,10 @@ func case_test() -> void:
 		await sleep(100); await sim(0.03)
 		if k % 5 == 0: print("t", k, " mode ", S._mode, " fv ", g.file_view.active, " slots ", g.inv.slots.map(func(x): return x.id if x else -1))
 	print("owned %x" % g.file_view.owned)
+	for i in 8:
+		var ls: Control = S.list_slots[i]
+		var it = ls.get_meta("item") if ls.has_meta("item") else null
+		if it != null: print("slot ", i, " ", it, " tex ", ls.get_meta("tex"), " icon85 ", S._icons.get(85, "none"), " icon83 ", S._icons.get(83, "none"))
 
 ## floor heights of the room geometry (Room.floor_at from 3 m down): -- floor ROOM x0 x1 z0 z1 step
 func floor_test() -> void:
@@ -652,3 +668,43 @@ func _maxbone(z) -> String:
 	for b in ["b01", "b09", "b10", "b05", "b07"]:
 		if z.bones.has(b): o += "%s %s " % [b, z.bone_xform(z.bones[b]).origin.snapped(Vector3.ONE * 0.01)]
 	return o
+
+## snd ROOM POS secs [ROOM2 POS2 secs2]: the active sound slots / ev 0x35 while standing in a room (ZAI_FLAGS preset)
+func snd_test() -> void:
+	var a := OS.get_cmdline_user_args()
+	for fs in OS.get_environment("ZAI_FLAGS").split(" ", false):
+		vm.set_flag(int(fs.get_slice(":", 0)), int(fs.get_slice(":", 1)), true)
+	var i := 1
+	while i + 2 < a.size():
+		await g.enter_room(a[i], int(a[i + 1]), null, false)
+		for k in int(float(a[i + 2]) / 0.5):
+			if g.msg.active: g.sim(0.3, ["KeyE"]); await sleep(10)
+			await sim(0.5)
+			print("%s T%.1f ev35 %s rm %x slots %s %s" % [a[i], (k + 1) * 0.5, vm.flag(1, 0x35), vm.rm, g.audio._slots.keys(), stt()])
+		i += 3
+
+## two AI zombies next to each other in front of Claire: the grab, her push-off and the knock-down of the other
+## (EnemyPushChk / CollCheckPush): -- knock ROOM X Z ANG SECS
+func knock_test() -> void:
+	var a := OS.get_cmdline_user_args()
+	await g.enter_room(a[1], 0, null, false)
+	await wait_free()
+	P.place(float(a[2]), P.position.y, float(a[3]), float(a[4]))
+	P.hp = 100000
+	await sim(3.0)
+	P.place(float(a[2]), P.position.y, float(a[3]), float(a[4]))
+	var zs: Array = []
+	for z in g.zombies:
+		var zw: EvtVM.Work = vm.get_work(1, z.index)
+		if z.visible and not (zw and zw.scripted) and z.alive: zs.append(z)
+	var f: Vector3 = P.forward()
+	var side := Vector3(f.z, 0, -f.x)
+	for i in mini(2, zs.size()):
+		zs[i].position = P.position + f * 0.7 + side * (0.3 * i - 0.15)
+		zs[i]._ay = int(roundf((P.heading + PI) / Zombie.BAMS)) & 0xFFFF
+	print("zombies ", zs.size())
+	for k in int(float(a[5]) / 0.25):
+		await sim(0.25)
+		var o := []
+		for z in zs: o.append("z%d m%d/%d/%d/%d mtn %d:%d x40 %x p %.2f,%.2f" % [z.index, z.mode0, z.mode1, z.mode2, z.mode3, z.lo.no, z.lo.frm >> 16, z.x40, z.position.x, z.position.z])
+		print("T%.2f grab %s | %s" % [(k + 1) * 0.25, (g.grab.z.index if g.grab else -1), " | ".join(o)])

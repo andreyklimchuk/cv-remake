@@ -150,7 +150,9 @@ func _play_list(bank: String, list: int, key: Variant, o := {}) -> void:
 		return
 	var lists: Dictionary = b.lists
 	var L: Variant = lists.get(str(list))
-	if L == null or int(L.s) >= b.samples.size():
+	# rm_common (lists 64+) numbers its samples after the room bank's 64: sample s is rm_common[s - 64]
+	var s0 := 64 if bank == "rm_common" else 0
+	if L == null or int(L.s) - s0 < 0 or int(L.s) - s0 >= b.samples.size():
 		return
 	if key != null: stop(key)
 	var v := Voice.new()
@@ -167,7 +169,8 @@ func _play_list(bank: String, list: int, key: Variant, o := {}) -> void:
 	var l: Variant = L
 	var n := 0
 	while l != null and n < 4:
-		var s: Dictionary = b.samples[int(l.s)]
+		if int(l.s) - s0 < 0 or int(l.s) - s0 >= b.samples.size(): break
+		var s: Dictionary = b.samples[int(l.s) - s0]
 		var st := _stream("audio/se/%s.ogg" % s.f)
 		if st != null:
 			if s.has("loop") and o.get("loop", true) != false and st is AudioStreamOggVorbis:

@@ -483,6 +483,7 @@ func _frame() -> bool:
 	_set_mtn()
 	flg &= ~4
 	if x2f > 0: x2f -= 1
+	_coll_check()
 	if _room != null:
 		if mode0 != 4 and not (x40 & 0x80000): position = _room.resolve(position, 0.25)
 		var y: Variant = _room.floor_at(position.x, position.z, position.y)
@@ -944,6 +945,8 @@ func _nage() -> void:
 				if spd < 0.0: spd = 0.05
 				_add_speed(32768)
 				ct0 += 1
+			# thrown off: knocks down the zombies it runs into (CollCheck -> CollCheckPush) until frame 10 of 12
+			if f == 20: x40 |= 0x100
 			if f == lo.nf - 1:
 				_chg(lo, 12, 7 << 16, 0); lo.x40 &= ~0x3000000
 				flg |= 0x40000
@@ -952,6 +955,7 @@ func _nage() -> void:
 				x40 &= ~0xF; x40 |= 6
 				mode3 = 4
 		4:
+			if (lo.frm >> 16) == 10: x40 &= ~0x100
 			if (lo.frm >> 16) == lo.nf - 1:
 				x40 &= ~0xF; x40 |= 6; x40 |= 0x40000; x44 |= 0x40
 				lo.add = 0; up.add = 0
@@ -1053,7 +1057,8 @@ func _player_control() -> void:
 			x40 &= ~0x80000
 			_pm3 = 3
 		3:
-			# (bhEne01_EnemyPushChk at frames 14 / 17 is not ported)
+			if _pfrm == 14: _enemy_push_chk(1)
+			elif _pfrm == 17: _enemy_push_chk(0)
 			if _pfrm >= _pnf - 1:
 				pl_state = "free"
 				x40 &= ~0x24080
@@ -1105,8 +1110,16 @@ func _player_link() -> void:
 
 # ---------------------------------------------------------------- Damage (mode0 3) / Die (mode0 4)
 
+## bhEne01_Damage: DamageMode2W[mode2] (DGType00); the gun hits pick DG03, the knock-downs (EnemyPushChk / CollCheckPush)
+## DG02 / DG03 / DG04
 func _damage() -> void:
-	# DG03: falls on its back (11); (the handgun's combo act 6 always picks DG03)
+	match mode2:
+		2: _dg02()
+		4: _dg04()
+		_: _dg03()
+
+## bhEne01_DG03: falls on its back (11); (the handgun's combo act 6 always picks DG03)
+func _dg03() -> void:
 	match mode3:
 		0:
 			x40 &= ~0xF; x40 |= 6
@@ -1122,6 +1135,51 @@ func _damage() -> void:
 				lo.add = 0; up.add = 0
 				mode0 = 1; mode1 = 0; mode2 = 4; mode3 = 0
 				x40 |= 0x40000; x44 |= 0x40
+
+## bhEne01_DG02: staggers (16 from the front / 17 from behind), then walks on (FlyingCap not ported)
+func _dg02() -> void:
+	if mode3 == 0:
+		var m := 16 if x40 & 0x2000 else 17
+		_chg(lo, m, 0, 5); lo.x40 &= ~0x3000000
+		flg |= 0x40000
+		_chg(up, m + 200, 0, 5); up.x40 &= ~0x3000000
+		x40 &= ~0xF; x40 |= 1
+		mode3 = 1
+	var f := lo.frm >> 16
+	if (f == 28 and lo.no == 16) or (f == 30 and lo.no == 17):
+		# (epw->flr_no == plp->flr_no: one floor in the port)
+		if _dist > 15.0 and _ikou3(_pl.x, _pl.z, 24576) != 0:
+			mode0 = 1; mode1 = 0; mode2 = 7; mode3 = 0
+		else:
+			mode0 = 1; mode1 = 1; mode2 = 1; mode3 = 0
+		x40 &= ~0x200; x40 &= ~0xF; x40 |= 1
+
+## bhEne01_DG04: knocked down backwards (12), slides back at frames 16-20; the wall / ledge branches (ZulzulCheck /
+## GakeotiCheck -> mode3 3 / 7) and FlyingCap are not ported
+func _dg04() -> void:
+	if mode3 == 0:
+		x40 &= ~0xF; x40 |= 6
+		_chg(lo, 12, 0, 10); lo.x40 &= ~0x3000000
+		flg |= 0x40000
+		_chg(up, 212, 0, 10); up.x40 &= ~0x3000000
+		if not (x40 & 0x200): ayp = int(10430.381 * atan2(dvx, dvz))
+		ct1 = 0
+		mode3 = 1
+	if mode3 != 1: return
+	var f := lo.frm >> 16
+	if not (x40 & 0x200) and f < 10:
+		var ang := (ayp - _ay) & 0xFFFF
+		if ang > 0x8000: ang = ang - 0x8000 - 0x8000
+		_ay = (_ay + ang / 2) & 0xFFFF
+	if f == 10: x40 &= ~0x100
+	if f >= 16 and f < 21:
+		spd = 0.49733332
+		_add_speed(32768)
+	if f == lo.nf - 1:
+		x40 &= ~0xF; x40 |= 6
+		lo.add = 0; up.add = 0
+		mode0 = 1; mode1 = 0; mode2 = 4; mode3 = 0
+		x40 |= 0x40000; x44 |= 0x40
 
 ## bhEne01_DD00: lies dead, twitching (37 / 38) a few times
 const DD_MTN := [[37, 237], [38, 238], [3, 203]]
@@ -1190,6 +1248,9 @@ func hit(dmg: float) -> void:
 		x40 |= 0x8000000; x2c = 0
 
 var x48 := 0
+## ep->dvx / dvz: the knock-down direction (EnemyPushChk / CollCheckPush)
+var dvx := 0.0
+var dvz := 0.0
 
 func mtn_no() -> int:
 	return lo.no
@@ -1267,3 +1328,113 @@ func _setup_morph(file: String) -> void:
 	mi.mesh = _morph_cache[name_]
 	for s in overrides.size(): mi.set_surface_override_material(s, overrides[s])
 	_morph_mi = mi
+
+# ---------------------------------------------------------------- bodies: bhEne01_CollCheck / CollCheckPush / EnemyPushChk
+
+const CAR := 2.5          # epw->car (bhEne01_Init)
+## the dogs of the room (set by the game): obstacles of bhCheckEnemies too
+static var others: Array = []
+var _ao := Vector3.ZERO    # aox / aoz: the body centre = root object b00 (CollCheck)
+var _cah := 1.82           # cah = owP[10].y - py (CalcEnemy), metres
+var _st2 := false          # stflg 2: touched by a pushing enemy (bhCheckEnemies)
+
+## enemies with flg 1 / 8 (alive, body collision on; DD clears 0x128)
+static func _bodies() -> Array:
+	var r: Array = []
+	for z in _all:
+		if is_instance_valid(z) and z.is_inside_tree() and z.visible and not (z.flg & 2) and z.mode0 != 4: r.append(z)
+	for d in others:
+		if is_instance_valid(d) and d.is_inside_tree() and d.visible and (d.flg & 8) and not (d.flg & 2): r.append(d)
+	return r
+
+func _coll_check() -> void:
+	if flg & 2 or mode0 == 4 or _scripted: return
+	_cah = _obj_pos(10).y - position.y
+	if x40 & 0x100:
+		_coll_check_push()
+	else:
+		var b := _obj_pos(0)
+		_ao = Vector3(b.x - position.x, 0, b.z - position.z)
+		# (bhCheckPlayer: Claire's body circle is handled by the player code)
+		_check_enemies()
+
+## bhCheckEnemies: pushed out to the contact distance of every enemy it overlaps (the average of the contact points);
+## only the caller moves. Dogs: centre = px, cah 4.0 (bhEne04 init value)
+func _check_enemies() -> void:
+	var e0 := position + _ao
+	var n := 0
+	var sum := Vector2.ZERO
+	for z in _bodies():
+		if z == self: continue
+		var isz: bool = z is Zombie
+		var e1: Vector3 = z.position + (z._ao if isz else Vector3.ZERO)
+		var cah1: float = z._cah if isz else 4.0 * S
+		var car_: float = CAR + (CAR if isz else float(z.car))
+		var ln := Vector2(e0.x - e1.x, e0.z - e1.z).length() / S
+		if ln < car_ and e1.y <= e0.y + _cah and e1.y + cah1 >= e0.y:
+			var r := atan2(e1.x - e0.x, e1.z - e0.z)
+			sum += Vector2(e1.x - car_ * S * sin(r) - _ao.x, e1.z - car_ * S * cos(r) - _ao.z)
+			n += 1
+			if isz: z._st2 = true
+	if n:
+		position.x = sum.x / n; position.z = sum.y / n
+
+func _can_knock() -> bool:
+	return etype not in [2, 3, 6, 7, 9, 10] and mode0 == 1 and not (x40 & 0x400000) and not (x40 & 0x40000) and not (x40 & 0x200)
+
+## bhEne01_CollCheckPush: the zombie Claire threw off knocks down the zombies it touches (fhit: they face away from
+## it -> DG04, else DG03; outside +-30 degrees of their facing DG02); it is not stopped by them (stflg 1 never set)
+func _coll_check_push() -> void:
+	for z in _all:
+		if is_instance_valid(z): z._st2 = false
+	var keep := position
+	_check_enemies()
+	for z in _bodies():
+		if not (z is Zombie) or z == self or not z._can_knock() or not z._st2: continue
+		z.x40 |= 0x200
+		var fhit := _cdir((_ay + 0x8000) & 0xFFFF, z._ay) == 0
+		if fhit: z.x40 |= 0x2000
+		else: z.x40 &= ~0x2000
+		if _enemy_hit_chk(z, 5461):
+			z.dvx = -sin(z._ay * BAMS); z.dvz = -cos(z._ay * BAMS)
+			z.mode2 = 4 if fhit else 3
+		else:
+			z.mode2 = 2
+		z.mode0 = 3; z.mode1 = 0; z.mode3 = 0
+	position = keep
+
+## bhEne01_EnemyHitChk: this zombie within +-rng of tz's facing
+func _enemy_hit_chk(tz: Zombie, rng: int) -> bool:
+	var ang := (tz._ay + (_dir(tz.position.x, tz.position.z, position.x, position.z) & 0xFFFF)) & 0xFFFF
+	var r2 := (tz._ay + rng) & 0xFFFF
+	var r1 := (tz._ay - rng) & 0xFFFF
+	return r2 >= ang or ang >= r1
+
+## bhDGCdirCheck: dv against the facing rot (1 = in front)
+static func _dg_cdir(dv: Vector3, rot: int) -> bool:
+	var v1 := Vector2(-sin(rot * BAMS), -cos(rot * BAMS))
+	var v0 := Vector2(dv.x, dv.z).normalized()
+	return v1.dot(v0) >= 0.0
+
+## bhEne01_EnemyPushChk (PlyDG00 case 3, frames 14 / 17 of Claire's push-off): the zombies within 1 m of her are
+## knocked down too (mode 1: 2 in 3 times nothing happens)
+func _enemy_push_chk(mode: int) -> void:
+	if player == null: return
+	var pl: Vector3 = player.position
+	for z in _bodies():
+		if not (z is Zombie) or z == self or not z._can_knock(): continue
+		if mode == 1 and randi() % 3 != 0: return
+		if pl.distance_to(z.position) / S >= 10.0: continue
+		var vec := Vector3(z.position.x - pl.x, 0, z.position.z - pl.z)
+		var hit := not _dg_cdir(vec, z._ay)
+		if hit: z.x40 |= 0x2000
+		else: z.x40 &= ~0x2000
+		z.mode0 = 3; z.mode1 = 0; z.mode3 = 0
+		var front := (x40 & 0x4000) != 0   # this zombie grabbed her from the front
+		var knock := front if _dg_cdir(vec, _pay()) else not front
+		if knock:
+			z.dvx = -sin(z._ay * BAMS); z.dvz = -cos(z._ay * BAMS)
+			z.mode2 = 4 if hit else 3
+		else:
+			z.mode2 = 2
+		z.x40 |= 0x200

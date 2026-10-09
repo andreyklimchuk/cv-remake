@@ -1,0 +1,8 @@
+{
+  "_doc": "Ninja material diffuse alpha (chunk 'mat' c[3]) of BLEND (flag 0x08) materials that the web converter drops; scanned in rm_0030/rm_0070/rm_0090 data (fix_mat_alpha.py)",
+  "objects/ob_019.glb": {"ob_019_t0": 0.298},
+  "objects/ob_021.glb": {"ob_021_t0": 0.298},
+  "objects/ob_022.glb": {"ob_022_t0": 0.498},
+  "objects/ob_027.glb": {"ob_027_t1": 0.698},
+  "rooms/rm_0030.glb": {"rm_0030_t69": 0.498}
+}

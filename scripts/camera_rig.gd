@@ -16,6 +16,8 @@ var ev_sub := 0.0
 var mode := "fixed"   # fixed | behind
 var using_fallback := false
 var shown := -1
+## cam.ncut: the room cut last set by the cut areas (bhSetCut) or by bhSv 2; event cameras leave it alone
+var ncut := 0
 var _cams: Array = []
 var _room: Room = null
 var _track_yaw: Variant = null
@@ -55,7 +57,7 @@ func set_room(room: Room) -> void:
 	for c in cuts: cut_on.append(bool(int(c[0]) & 1))
 	for c in _cams:
 		_cut.append(room.hidden_meshes(c.get("hid")))
-	index = -1; _override = -2; _finit = false; _track_yaw = null
+	index = -1; _override = -2; _finit = false; _track_yaw = null; ncut = 0
 
 func _inside(c: Dictionary, x: float, z: float, m := 0.0) -> bool:
 	var zn: Array = c.zone
@@ -173,10 +175,14 @@ func update(p: Vector3, head: Vector3, heading: float, snap := false, dt := 1.0 
 	if ev.active:
 		ev.apply(cam, ev_sub); _finit = false; index = -1; return false
 	if mode == "behind":
+		if cuts.size():
+			var pc := cut_area(p.x, p.z, flr)
+			if pc != -1: ncut = pc
 		_update_shoulder(p, head, snap, dt); return false
 	var fc := forced if forced >= 0 and forced < _cams.size() else -1
 	var idx := fc if fc >= 0 else (_cut_cam(p, snap) if cuts.size() else _zone_cam(p))
 	index = idx
+	if idx >= 0: ncut = idx
 	_vis_t -= dt
 	if fc >= 0 or cuts.size():
 		# the original has no visibility fallback: the cut areas decide (the fallback stays for rooms without data)

@@ -63,6 +63,14 @@ if os.path.exists(ix):
 sys.path.insert(0, HERE); import fix_zombie_clips
 for p in sorted(glob.glob(os.path.join(OUT, 'enemies', 'en01a*.glb'))):
     if fix_zombie_clips.fix(p): print('zfix', os.path.relpath(p, OUT))
+# room motions (rmt) the web build's zombie glbs lack (tools/room_clips, see add_room_clips.py) -> merged in (idempotent)
+import add_room_clips
+for p in sorted(glob.glob(os.path.join(OUT, 'enemies', 'en01a*.glb'))):
+    k = add_room_clips.merge(p)
+    if k: print('room clips', os.path.relpath(p, OUT), k)
+# material alpha of Ninja BLEND materials the web glbs drop (tools/mat_alpha.json) -> baseColorFactor (idempotent)
+import fix_mat_alpha
+for r in fix_mat_alpha.run(OUT): print('mat alpha', r)
 
 have_ff = shutil.which('ffmpeg') is not None
 # movies
