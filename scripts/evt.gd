@@ -430,6 +430,9 @@ func _exec() -> int:
 		0x3e: _face("mstart", _b(2), _b(3))
 		0x3f: _face("lstart", _b(2), _b(3))
 		0x8f: _face("pause", _b(1), _b(2))
+		# bhInitPonySet: 0 -> plp->flg2 |= 2 (the ponytail starts over); 1 -> an enemy's (not ported)
+		0x80:
+			if _b(1) == 0 and host.has_method("pony_reset"): host.pony_reset()
 		0x90: _face("reset", _b(1), 0)
 		0x9a: _face("rep", _b(1), _b(2))
 		# ---- sound (event.c bhBgmOn.. / sdfunc.c); fades in 1/100 s (x10), volumes in driver units (negative)

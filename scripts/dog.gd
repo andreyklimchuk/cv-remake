@@ -97,6 +97,45 @@ var pl_state := ""
 ## PlyDamageCheck knocked Claire this frame: 1 from the front (mtn 73), 2 from behind (74)
 var pl_hurt := 0
 var bit := 0
+## en04_mtn_tbl: [motion, [[frame, SE], ...]] (bhEne04_CheckMtnTbl -> bhEne04_SePlay)
+const MTN_TBL := [
+	[0, [[18, 0x12300], [48, 0x12300]]],
+	[1, [[0, 0x12300], [2, 0x12300]]],
+	[2, [[0, 0x12300], [2, 0x12300]]],
+	[3, [[0, 0x12300], [2, 0x12300]]],
+	[34, [[0, 0x12300], [2, 0x12300]]],
+	[40, [[0, 0x12300], [2, 0x12300]]],
+	[41, [[0, 0x12300], [2, 0x12300]]],
+	[4, [[4, 0x12300], [10, 0x1011304]]],
+	[6, [[12, 0x12301]]],
+	[7, [[9, 0x1012302]]],
+	[8, [[12, 0x1011306], [22, 0x12301]]],
+	[9, [[8, 0x1011306], [29, 0x12301]]],
+	[14, [[0, 0x11308], [16, 0x11308]]],
+	[16, [[18, 0x12301], [31, 0x1011304], [55, 0x1011306], [90, 0x1012303]]],
+	[20, [[10, 0x12301], [18, 0x12301]]],
+	[21, [[0, 0x11308], [12, 0x1002309], [64, 0x11308]]],
+	[25, [[0, 0x101230e]]],
+	[43, [[0, 0x101230e]]],
+	[33, [[21, 0x12301]]],
+	[35, [[9, 0x12301]]],
+	[36, [[0, 0x1011304], [9, 0x1011306]]],
+	[37, [[24, 0x12301], [37, 0x12301]]],
+	[38, [[24, 0x12301], [41, 0x12301]]],
+	[17, [[7, 0x1011304]]],
+	[18, [[12, 0x101130d], [26, 0x101130d]]],
+	[19, [[15, 0x101130d], [33, 0x1011307]]],
+	[46, [[27, 0x12300], [42, 0x12300], [54, 0x12300]]],
+	[48, [[20, 0x12300], [29, 0x12300]]]]
+var se_cb: Callable      # RequestEnemySe (se_cb.call(-1) -> a sound of this dog is playing)
+var voice_cb: Callable   # bhEne_PlayerSePlay -> CallPlayerVoice
+
+## bhEne04_SePlay: RequestEnemySe unless flg 0x10000 (the port: hidden)
+func _se(no: int) -> void:
+	if visible and se_cb.is_valid(): se_cb.call(no)
+
+func _voice(no: int) -> void:
+	if voice_cb.is_valid(): voice_cb.call(no)
 var _pm0 := 0
 var _pm1 := 0
 var _pm3 := 0
@@ -273,7 +312,12 @@ func _set_mtn() -> void:
 				_P[0].x = 0.0; _P[0].z = 0.0
 			12: _P[0].y = -3.880015 * S
 			39: _P[0] = Vector3(0, -3.782267 * S, 0)
-	# (bhEne04_CheckMtnTbl: en04_mtn_tbl sound effects / en04_mtn_tbl2 vibration; the enemy sound banks are not ported)
+	# bhEne04_CheckMtnTbl (not for room motions; en04_mtn_tbl2 vibration is not ported)
+	if not _scripted:
+		for e in MTN_TBL:
+			if e[0] != w.no: continue
+			for a in e[1]:
+				if a[0] == frm: _se(a[1])
 
 ## bhEne_GetTranslateMtn: px += R(ay) * (key[frm] - key[frm - 1]) (y ignored)
 func _translate(frm: int, moving: bool) -> void:
@@ -742,6 +786,7 @@ func _mv01() -> void:
 		if ct0 < 0:
 			mode3 = 1; ct0 = _rnd(32) + 75
 	ct2 += 1
+	if ct2 % 90 == 0: _se(16851714)
 
 func _speed_up(g: float, limit: float) -> void:
 	if spd < limit: spd = minf(spd + g, limit)
@@ -1217,7 +1262,8 @@ func _ng00() -> void:
 		mode3 = 1
 	match mode3:
 		1:
-			if (w.frm >> 16) == 12: bit += 1
+			if (w.frm >> 16) == 12:
+				bit += 1; _se(16847622)
 			if flg & 0x2000000:
 				_chg(18, 0, 0); mode3 = 2
 		2:
@@ -1287,6 +1333,7 @@ func _ply_dg00() -> void:
 			_link = PLY_OFS; waxp = -32768
 			_pm3 = 1
 		1:
+			if _pfrm == 12: _voice(1026)
 			if _pfrm == 0:
 				_ply_motion(101, 0)
 				_pm3 = 2
@@ -1315,6 +1362,10 @@ func _ply_dg01() -> void:
 			if player != null: player.hp = -1
 			_pm3 = 1
 		1:
+			if _pfrm == 3: _voice(1025)
+			if x10 & 0x200:
+				if _pfrm == 20 or _pfrm == 29: _se(70408)
+			elif _pfrm == 9 or _pfrm == 15 or _pfrm == 22: _se(70408)
 			if _pfrm == _pnf - 1:
 				pl_state = "dead"; _pm3 = 2
 
@@ -1418,7 +1469,10 @@ func _die() -> void:
 ## bhEne04_DmgChk / DamageAdd / ChgDmgMode (a handgun hit: En04_WpnDamageTbl[2] nm_act 0, cb_act 3 -> DG00)
 func hit(dmg: float) -> void:
 	if not hittable: return
-	if hp >= 0: hp -= dmg
+	# bhEne04_DamageAdd
+	if hp >= 0:
+		hp -= dmg
+		_se(16786185 if hp < 0 else 16847623)
 	etype = 0
 	if mode0 >= 3: return
 	flg |= 0x40

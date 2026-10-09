@@ -102,6 +102,8 @@ func room(stg: int, rm: int, rcase: int) -> void:
 	_pc_bank = "pc_" + pc
 	for k in _slots.keys():
 		if not String(k).begins_with("bg"): stop(k)
+	for i in 6: _ene_slot[i] = {}
+	_ene_req.clear()
 	for b in [_rm_bank, _bg_bank, _pc_bank, "rm_common"]:
 		if b != "": _bank(b)
 
@@ -257,6 +259,76 @@ func foot(floor_: int, run: bool, pos: Variant = null, id := 0, vol: Variant = n
 	if vol != null and vol[1] != -1: o.fade = vol
 	_play_list(_pc_bank, clampi(floor_, 0, 4), "foot%d_%d" % [id, _foot_sw[id]], o)
 
+# ---------------------------------------------------------------- enemy SE / player voice (sdfunc.c)
+## enemy SE banks (sound/se/enemy): en01 zombie -> en_000_000_0, en04 dog -> en_004_000_0
+const ENEMY_BANK := {1: "en_000_000_0", 4: "en_004_000_0"}
+const VOL_DOWN := [0, -2, -4, -6, -8, -9, -10, -11]   # VolDownTbl (chars 254..245)
+var _ene_req := {}      # RequestEnemySeBasic: enemy no -> {"se": [no, pos, bank], "sev": [...], "prio"}
+var _ene_slot: Array = [{}, {}, {}, {}, {}, {}]   # EnemySlotInfo[6]
+
+## RequestEnemySe(EnemyNo, pPos, SeNo) (bhEne01_SePlay / bhEne04_SePlay): collected, played by exec_enemy_se
+func enemy_se(enemy_no: int, enemy_id: int, pos: Vector3, se_no: int) -> void:
+	var bank: String = ENEMY_BANK.get(enemy_id, "")
+	if bank == "": return
+	var r: Dictionary = _ene_req.get(enemy_no, {"prio": 3})
+	r.prio = mini(int(r.prio), (se_no >> 16) & 0xF)
+	r["sev" if se_no & 0xF000000 else "se"] = [se_no, pos, bank]
+	_ene_req[enemy_no] = r
+
+## ChechPlayEnemySe(EnemyNo, SeNo > 0): a sound of this enemy is playing
+func enemy_se_playing(enemy_no: int) -> bool:
+	for i in 6:
+		var e: Dictionary = _ene_slot[i]
+		if not e.is_empty() and _slots.has("ene%d" % i) and int(e.enemy) == enemy_no: return true
+	return false
+
+## ExecEnemySeManager (once per 30 Hz frame): 6 slots, requests by priority then distance
+func exec_enemy_se() -> void:
+	for i in 6:
+		if not _slots.has("ene%d" % i): _ene_slot[i] = {}
+	if _ene_req.is_empty(): return
+	var order: Array = _ene_req.keys()
+	var dist := func(n: int) -> float:
+		var r: Dictionary = _ene_req[n]
+		var q: Array = r.get("se", r.get("sev"))
+		return (q[1] as Vector3).distance_to(listener.global_position) if listener != null and listener.is_inside_tree() else 0.0
+	order.sort_custom(func(a: int, b: int) -> bool:
+		var pa := int(_ene_req[a].prio); var pb := int(_ene_req[b].prio)
+		return pa < pb if pa != pb else dist.call(a) < dist.call(b))
+	for n in order:
+		var r: Dictionary = _ene_req[n]
+		for k in ["se", "sev"]:
+			if not r.has(k): continue
+			var q: Array = r[k]
+			var se_no: int = q[0]
+			var attrib := (se_no >> 24) & 0xF
+			# CheckPlaySameSe: the same SE of other enemies at most (SeNo >> 12) & 0xF times
+			var same := 0
+			for e in _ene_slot:
+				if not e.is_empty() and int(e.se) == se_no and int(e.enemy) != n: same += 1
+			if same > 0 and same >= ((se_no >> 12) & 0xF): continue
+			var slot := -1
+			for i in 6:
+				var e: Dictionary = _ene_slot[i]
+				if not e.is_empty() and int(e.enemy) == n and int(e.attrib) == attrib: slot = i; break
+			if slot < 0:
+				for i in 6:
+					if (_ene_slot[i] as Dictionary).is_empty(): slot = i; break
+			if slot < 0: continue
+			_ene_slot[slot] = {"enemy": n, "se": se_no, "attrib": attrib}
+			_play_list(q[2], se_no & 0xff, "ene%d" % slot, {"pos": q[1], "u": VOL_DOWN[(se_no >> 20) & 7]})
+			if not _slots.has("ene%d" % slot): _ene_slot[slot] = {}
+	_ene_req.clear()
+
+func stop_enemy_se() -> void:
+	for i in 6:
+		stop("ene%d" % i); _ene_slot[i] = {}
+	_ene_req.clear()
+
+## CallPlayerVoice(SeNo): bank 4 = the player's voice bank (core_000 Claire), slot 7
+func player_voice(se_no: int, pos: Variant = null) -> void:
+	_play_list("core_000", se_no & 0xff, "pvoice", {"pos": pos})
+
 ## player action SE (CallPlayerActionSe)
 func action(se_no: int, pos: Variant = null) -> void:
 	_play_list(_pc_bank, se_no & 0xff, "act", {"pos": pos})
@@ -339,6 +411,7 @@ func voice_off(fade_out := 0.0) -> void:
 
 ## per frame: volume ramps (30 steps per second like RequestSeFadeFunctionEx), 3D updates, BGM loop end
 func _process(dt: float) -> void:
+	exec_enemy_se()
 	for v in _slots.values() + _loose:
 		var vv: Voice = v
 		if vv.fade != null:

@@ -242,6 +242,11 @@ func _spawn_enemies(r: Room) -> void:
 			z.init("enemies/%s.glb" % mdl, float(e.pos[0]), float(e.pos[1]), float(e.pos[2]), float(rot[1] if lying else rot[2]), lying)
 			zombies.append(z); add_child(z)
 			var idx := i
+			# RequestEnemySe / CallPlayerVoice (sound.c): the enemy bank of the room and Claire's core bank
+			z.se_cb = func(no: int) -> Variant:
+				if no < 0: return audio.enemy_se_playing(idx)
+				audio.enemy_se(idx, 1, z.global_position, no); return null
+			z.voice_cb = func(no: int) -> void: audio.player_voice(no)
 			npcs.append({"root": z, "hittable": func() -> bool:
 				var ww: EvtVM.Work = vm.get_work(1, idx)
 				return z.visible and z.hittable and not (ww != null and ww.scripted), "hit": func() -> void: hit_zombie(z, 1)})
@@ -250,6 +255,11 @@ func _spawn_enemies(r: Room) -> void:
 			d.player = player; d.flr = vm.flr; d.on_rm_flag = func(b: int) -> void: vm.rm |= b
 			d.init("enemies/en04a00.glb", float(e.pos[0]), float(e.pos[1]), float(e.pos[2]), float(rot[2]), type)
 			dogs.append(d); add_child(d)
+			var di := i
+			d.se_cb = func(no: int) -> Variant:
+				if no < 0: return audio.enemy_se_playing(di)
+				audio.enemy_se(di, 4, d.global_position, no); return null
+			d.voice_cb = func(no: int) -> void: audio.player_voice(no)
 			npcs.append({"root": d, "hittable": func() -> bool: return d.visible and d.hittable, "hit": func() -> void: hit_zombie(d, 1)})
 		elif NPC_MODELS.has(mdl):
 			# cutscene characters (Rodrigo, Steve, ...): original model, driven by the room motions of the scripts
@@ -357,11 +367,15 @@ func _apply_works() -> void:
 		var w: EvtVM.Work = vm.get_work(1, z.index)
 		if w == null: continue
 		z.visible = not w.gone and not w.hidden
+		var moved := false
 		if w.pos_set:
 			# POS 0 0 0 is a real position for a zombie on a room motion (rm_0030: the car zombie's shake ends at 0)
-			if w.px or w.py or w.pz or w.mtn_kind == 1: z.position = Vector3(w.px, w.py, w.pz)
+			if w.px or w.py or w.pz or w.mtn_kind == 1: z.position = Vector3(w.px, w.py, w.pz); moved = true
 			w.pos_set = false
-		if w.ang_set: z.heading = w.ay; z.rotation.y = w.ay; w.ang_set = false
+		if w.ang_set: z.heading = w.ay; z.rotation.y = w.ay; w.ang_set = false; moved = true
+		# the script placed the enemy (in the original before its first frame / bhCalcFixOffset reads the new owP):
+		# refresh last frame's world matrices, else the foot lock pulls it back to the old spot
+		if moved and z.has_method("_save_world"): z._save_world()
 		if z is Zombie:
 			(z as Zombie).ev_no = w.mtn if w.mtn_kind == 4 and w.scripted else -1
 			(z as Zombie).ev_frm = w.frm; (z as Zombie).ev_hokan = w.hokan
@@ -907,6 +921,8 @@ func _start_grab(z: Zombie) -> void:
 func _start_dog_hurt(z: Dog) -> void:
 	var front := z.pl_hurt == 1
 	z.pl_hurt = 0
+	# player.c damage mode2 < 2: CallPlayerVoice(1026)
+	audio.player_voice(1026)
 	player.play_sync("m48" if front else "m49", false, 4 / 30.0)
 	dog_hurt = 12 / 30.0
 
@@ -914,7 +930,6 @@ func _start_dog_hurt(z: Dog) -> void:
 func _update_dog_bite(_dt: float) -> void:
 	var z: Dog = dog_bite.z
 	z.lever += (4 if _inp_hit_dir() else 0) + (3 if input.hit(["KeyE", "Space", "Enter", "KeyZ", "KeyF", "KeyQ", "Mouse0"]) else 0)
-	for k in z.bit: audio.se("bite")
 	z.bit = 0
 	if z.pl_state == "free" or z.pl_state == "":
 		player.play_sync(null); dog_bite = null
@@ -925,7 +940,6 @@ func _update_grab(_dt: float) -> void:
 	var z: Zombie = grab.z
 	# bhEne_LeverCheck (sys->pad_ps): a new direction press 4, a new button press 3
 	z.lever += (4 if _inp_hit_dir() else 0) + (3 if input.hit(["KeyE", "Space", "Enter", "KeyZ", "KeyF", "KeyQ", "Mouse0"]) else 0)
-	for k in z.bit: audio.se("bite")
 	z.bit = 0
 	if z.pl_state == "free" or z.pl_state == "":
 		player.play_sync(null); grab = null
@@ -934,6 +948,10 @@ func _update_grab(_dt: float) -> void:
 
 func _inp_hit_dir() -> bool:
 	return input.hit(["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"])
+
+## bhInitPonySet 0 (event script)
+func pony_reset() -> void:
+	player.hair_reset()
 
 func game_over() -> void:
 	if _over_shown: return

@@ -47,6 +47,7 @@ func _ready() -> void:
 		"zai": await zai_test()
 		"use": await use_test()
 		"file": await file_test()
+		"tail": await tail_test()
 	print("DONE")
 	get_tree().quit()
 
@@ -516,3 +517,26 @@ func file_test() -> void:
 	await _fsim(0.1, ["Escape"]); await _fsim(0.5, [], "menu_back")
 	await _fsim(0.1, ["Escape"]); await _fsim(0.8, [], "menu_untag")
 	await _fsim(0.1, ["Escape"]); await _fsim(0.5, [], "menu_top")
+
+## ponytail (bhObjClpn): -- tail ROOM x z ang : stand, walk, run, turn; joint positions in Claire's frame (m)
+func tail_test() -> void:
+	var a := OS.get_cmdline_user_args()
+	await g.enter_room(a[1], 0, null, false)
+	await wait_free()
+	if a.size() > 4: P.place(float(a[2]), P.position.y, float(a[3]), float(a[4]))
+	var rep := func(t: String) -> void:
+		var inv := P.global_transform.affine_inverse()
+		var hd := inv * P.bone_pos("b05")
+		var s := "%s head %.2f,%.2f,%.2f" % [t, hd.x, hd.y, hd.z]
+		for i in 4:
+			var q := inv * P.bone_pos("pt%d" % i)
+			s += " | pt%d %.3f,%.3f,%.3f" % [i, q.x - hd.x, q.y - hd.y, q.z - hd.z]
+		print(s)
+	await sim(1.5); rep.call("stand")
+	await sim(0.5, ["KeyW"]); rep.call("walk0.5")
+	await sim(1.0, ["KeyW"]); rep.call("walk1.5")
+	await sim(1.0, ["KeyW", "ShiftLeft"]); rep.call("run")
+	await sim(0.3); rep.call("stop0.3")
+	await sim(1.5); rep.call("stop1.8")
+	await sim(0.6, ["KeyA"]); rep.call("turn")
+	await sim(1.5); rep.call("rest")

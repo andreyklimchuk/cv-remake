@@ -31,10 +31,12 @@ var _step_prev := -1
 var _step_clip := ""
 var _tail: Array[int] = []
 var _tail_rest: Array[Quaternion] = []
-var _sway := Vector2.ZERO
-var _sway_v := Vector2.ZERO
 var _last_pos := Vector3.ZERO
 var _last_head := 0.0
+## bhObjClpn / bhCalcHair (objitm.c / player.c): the ponytail object (pl00 MDL 1, 4 joints) state, Ninja units
+var _hr := {}
+var _hr_acc := 0.0
+var _hr_q: Array[Quaternion] = []
 var _mix_time := 0.0
 var lighter_on := false
 var _lighter: Node3D = null
@@ -87,6 +89,7 @@ func load_model() -> void:
 		var b: int = bones.get("pt%d" % i, -1)
 		if b >= 0:
 			_tail.append(b); _tail_rest.append(skel.get_bone_pose_rotation(b))
+	hair_reset()
 	_load_hands()
 
 func _load_hand(file: String) -> Node3D:
@@ -193,6 +196,7 @@ func forward() -> Vector3:
 
 func place(x: float, y: float, z: float, h: float) -> void:
 	position = Vector3(x, y, z); heading = h; rotation.y = h; _last_pos = position; _last_head = h
+	hair_reset()
 
 func bone_xform(i: int) -> Transform3D:
 	return skel.global_transform * skel.get_bone_global_pose(i)
@@ -352,27 +356,102 @@ func _aim_bone(i: int, from: Vector3, to: Vector3, w: float) -> void:
 	var pq := _parent_wq(i)
 	skel.set_bone_pose_rotation(i, (pq.inverse() * q * wq).normalized())
 
+## pp->flg2 |= 2 (bhInitPonySet 0, a new position): bhObjClpn clears the hair work on its next frame
+func hair_reset() -> void:
+	_hr = {}
+
+## the hair object: linked to joint 5 at (0, 1.5869, 0.7747) (bhInitPlayer, Claire), flg 0x1000 -> no rotation
+const HAIR_LO := Vector3(0, 1.5869, 0.7747)
+const NJ := 10.0     # Ninja units per metre
+static func _bams(a: float) -> float: return float(int(a) & 0xFFFF) * TAU / 65536.0
+static func _s16(a: float) -> int:
+	var i := int(a) & 0xFFFF
+	return i - 0x10000 if i >= 0x8000 else i
+
 func _update_tail(dt: float) -> void:
-	if _tail.is_empty() or dt <= 0:
+	if _tail.size() < 4 or dt <= 0:
 		return
-	var vel := (position - _last_pos) / dt; _last_pos = position
-	var dh := U.wrap_pi(heading - _last_head) / dt; _last_head = heading
-	var f := forward()
-	var fv := vel.x * f.x + vel.z * f.z
-	var target := Vector2(clampf(fv * 0.22, -0.3, 0.6), clampf(-dh * 0.12, -0.5, 0.5))
-	target.x += sin(_mix_time * 9) * 0.03 * minf(1, absf(fv))
-	_sway_v = (_sway_v + (target - _sway) * 60 * dt) * exp(-7 * dt)
-	_sway += _sway_v * dt
-	var side := Vector3(-f.z, 0, f.x)
-	var D := (Vector3(0, -1, 0) + f * (-0.14 - _sway.x * 1.1) + side * (_sway.y * 0.9)).normalized()
-	var X := (side - D * side.dot(D)).normalized()
-	var Y := D.cross(X)
-	var qw := Basis(X, Y, D).get_rotation_quaternion()
-	var p0 := _tail[0]
-	skel.set_bone_pose_rotation(p0, (_parent_wq(p0).inverse() * qw).normalized())
-	for i in range(1, _tail.size()):
-		var q := Basis.from_euler(Vector3(-_sway.x * 0.3, _sway.y * 0.3, 0), EULER_ORDER_XYZ).get_rotation_quaternion()
-		skel.set_bone_pose_rotation(_tail[i], _tail_rest[i] * q)
+	_hr_acc += dt
+	while _hr_acc >= 1.0 / 30.0:
+		_hr_acc -= 1.0 / 30.0
+		_hair_frame()
+	if _hr_q.size() == 4:
+		# the root object has no rotation of its own (njUnitRotPortion): joint 0 turns in the world's frame
+		skel.set_bone_pose_rotation(_tail[0], (_parent_wq(_tail[0]).inverse() * _hr_q[0]).normalized())
+		for i in range(1, 4): skel.set_bone_pose_rotation(_tail[i], _hr_q[i])
+		skel.set_bone_pose_position(_tail[0], HAIR_LO / NJ)
+
+func _hair_frame() -> void:
+	var head := bone_xform(bones.b05)
+	var hm := Transform3D(head.basis, head.origin * NJ)     # owP[5].mtx in Ninja units
+	var root := hm * HAIR_LO                                  # op->mlwP->owP->mtx[12..14]
+	# bhCalcHair: pp->ax/ay/az + the angles of joints 0..5
+	var e := Vector3(0, heading * 65536.0 / TAU, 0)
+	for j in 6:
+		var b: int = bones.get("b%02d" % j, -1)
+		if b >= 0: e += skel.get_bone_pose_rotation(b).get_euler(EULER_ORDER_ZYX) * 65536.0 / TAU
+	var ax := _s16(e.x); var ay := _s16(e.y); var az := _s16(e.z)
+	if _hr.is_empty():
+		var ring: Array[Vector3] = []
+		ring.resize(128); ring.fill(Vector3.ZERO)
+		var z4: Array[Vector3] = [Vector3.ZERO, Vector3.ZERO, Vector3.ZERO, Vector3.ZERO]
+		_hr = {"ring": ring, "ct0": 0, "n": Vector3.ZERO, "spd": 0.0, "o": Vector3.ZERO, "sp": Vector3.ZERO,
+			"g": z4.duplicate(), "ps": z4.duplicate()}
+	var h: Dictionary = _hr
+	var ob: Vector3 = h.o
+	h.o = root
+	var ps := Vector3(root.x - ob.x, 0, root.z - ob.z)
+	var m := Basis(Vector3.UP, _bams(-ay)) * Basis(Vector3.RIGHT, _bams(-ax)) * Basis(Vector3.BACK, _bams(-az))
+	var sp := m * ps
+	sp.y = root.y - ob.y
+	sp = sp.clamp(Vector3(-1, -1, -1), Vector3(1, 1, 1))
+	h.sp = sp
+	var n: Vector3 = h.n
+	n += 0.333 * (-sp * 0.25 - n)
+	h.n = n
+	var ring: Array[Vector3] = h.ring
+	var ct0: int = h.ct0
+	ring[ct0] = n
+	var px := root
+	var rx := 0; var ry := 0
+	var g: Array[Vector3] = h.g
+	var psp: Array[Vector3] = h.ps
+	var q: Array[Quaternion] = []
+	var rot_y := Basis(Vector3.UP, _bams(ay))
+	for i in 4:
+		var p3: Vector3 = ring[(ct0 - 3 * i) & 0x7F]
+		var ps1 := rot_y * p3
+		# (pp->flg2 & 0x100: the joints are pulled 1 unit straight down - its setter is not in the decompilation)
+		h.spd = clampf(float(h.spd) + p3.y - 0.333, -0.5, 0.5)
+		g[i] = Vector3(px.x + ps1.x, float(h.spd) + px.y + ps1.y, px.z + ps1.z)
+		var ps3 := hm * Vector3(0, 1, 0)
+		var d := g[i] - ps3
+		if Vector2(d.x, d.z).length() < 1.0:
+			var u := Vector3(d.x, 0, d.z).normalized()
+			g[i].x = ps3.x + u.x; g[i].z = ps3.z + u.z
+		psp[i] += 0.333 * (g[i] - psp[i])
+		var v := psp[i] - px
+		if v.length() > 0.5: psp[i] = px + v.normalized() * 0.5
+		var ps5 := hm * Vector3(0, 1.8, -0.3)
+		ps5.y = ps3.y
+		d = psp[i] - ps5
+		if Vector2(d.x, d.z).length() < 1.3:
+			var u := Vector3(d.x, 0, d.z).normalized()
+			psp[i].x = ps5.x + 1.3 * u.x; psp[i].z = ps5.z + 1.3 * u.z
+		v = psp[i] - px
+		if v.length() > 0.5:
+			v = v.normalized() * 0.5; psp[i] = px + v
+		var c := (Basis(Vector3.RIGHT, _bams(rx)) * Basis(Vector3.UP, _bams(ry))) * v
+		var a_y := _s16(10430.381 * atan2(c.x, 0.1 + c.z))
+		ry -= a_y
+		var a_x := _s16(182.04445 * (150.0 * -c.y))
+		rx -= a_x
+		# objP[i].ang[0] / [1] (ang[2] of the model is 0): the joint's local njRotateXYZ = Rz Ry Rx (tools ninja.euler_m)
+		var lb := Basis(Vector3.UP, _bams(a_y)) * Basis(Vector3.RIGHT, _bams(a_x))
+		q.append(lb.get_rotation_quaternion())
+		px = psp[i]
+	h.ct0 = (ct0 + 1) & 0x7F
+	_hr_q = q
 
 ## lighter: two-bone IK on the right arm (b07 shoulder, b08 elbow, b09 wrist)
 func _update_lighter(dt: float) -> void:

@@ -642,12 +642,28 @@ func _setup_check(obj: Node3D, id: int) -> void:
 	var cam: Camera3D = chk_vp.get_node("cam")
 	cam.transform = Transform3D(Basis(), Vector3(0, 0, 3.4))
 	chk_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-	_chk = {"obj": grp, "rx": 0.35, "ry": 0.0}
+	_chk = {"obj": grp, "b": Basis.from_euler(Vector3(0.35, 0, 0), EULER_ORDER_XYZ), "acc": 0.0}
 	_spin_apply()
 
 func _spin_apply() -> void:
 	if _chk == null: return
-	(_chk.obj as Node3D).basis = Basis.from_euler(Vector3(_chk.rx, _chk.ry, 0), EULER_ORDER_XYZ)
+	(_chk.obj as Node3D).basis = _chk.b
+
+## ItemModelCheck / DrawSubItem: while a direction is held the model turns 546 BAMS per 30 Hz frame about the
+## screen axes (st_cam.rotmat); it does not turn by itself (GetItem shows it still)
+const CHK_STEP := 546.0 * TAU / 65536.0
+func _spin_check(dt: float) -> void:
+	var c: Dictionary = _chk
+	c.acc += dt
+	while c.acc >= 1.0 / 30.0:
+		c.acc -= 1.0 / 30.0
+		var cay := 0.0; var cax := 0.0
+		if input.has(["KeyA", "ArrowLeft"]): cay = -CHK_STEP
+		elif input.has(["KeyD", "ArrowRight"]): cay = CHK_STEP
+		if input.has(["KeyW", "ArrowUp"]): cax = -CHK_STEP
+		elif input.has(["KeyS", "ArrowDown"]): cax = CHK_STEP
+		c.b = (Basis(Vector3.RIGHT, cax) * Basis(Vector3.UP, cay) * c.b).orthonormalized()
+	_spin_apply()
 
 func refresh() -> void:
 	render()
@@ -855,10 +871,6 @@ func _close_check() -> void:
 	if chk_vp: chk_vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	if _mode == "check": _mode = "list"
 
-func _spin_get(dt: float) -> void:
-	if _mode != "get" or _chk == null: return
-	_chk.ry += dt * 0.6; _spin_apply()
-
 ## Per-frame update while the screen is open. Returns false when the screen was closed.
 func update(dt: float) -> bool:
 	if not is_open:
@@ -871,11 +883,9 @@ func update(dt: float) -> bool:
 	if _anim != null:
 		while _acc >= 1.0 / 30.0 and _anim != null:
 			_acc -= 1.0 / 30.0; _step_anim()
-		_spin_get(dt)
 		return true
 	_acc = 0
 	if _mode == "get":
-		_spin_get(dt)
 		if _ask != null: _update_ask()
 		return true
 	if _ask != null:
@@ -889,13 +899,7 @@ func update(dt: float) -> bool:
 			audio.se("cancel"); return false
 		_update_box(L, R, Up, D); return true
 	if _mode == "check" and _chk != null:
-		var c: Dictionary = _chk
-		if input.has(["KeyA", "ArrowLeft"]): c.ry -= dt * 2.2
-		elif input.has(["KeyD", "ArrowRight"]): c.ry += dt * 2.2
-		else: c.ry += dt * 0.6
-		if input.has(["KeyW", "ArrowUp"]): c.rx -= dt * 2.2
-		if input.has(["KeyS", "ArrowDown"]): c.rx += dt * 2.2
-		_spin_apply()
+		_spin_check(dt)
 		if input.action:
 			if _page + 1 < _pages.size():
 				_page += 1; _text = _pages[_page]; msgtx.text = _esc(_text); audio.se("cursor")

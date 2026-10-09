@@ -296,8 +296,48 @@ func _fix(tree_i: int, off: Vector3, k := 1.0) -> void:
 	var src: Vector3 = _prevW[tree[-1]] * off
 	position.x -= (dst.x - src.x) * k; position.z -= (dst.z - src.z) * k
 
-## bhEne01_CheckMtnTbl: en01_mtn_tbl foot lock
+## en01_mtn_tbl2: [mtn_no, [[frame, SeNo], ...]] — the sounds of the motions (steps 0x1130f, bites 0x2300, falls 0x2303, voices)
+const MTN_TBL2 := [[49, [[0, 0x1011317]]], [0, [[12, 0x1130f], [45, 0x1130f]]], [40, [[9, 0x1130f], [46, 0x1130f]]],
+	[41, [[11, 0x1130f], [48, 0x1130f]]], [31, [[11, 0x1130f], [31, 0x1130f]]], [117, [[11, 0x1130f], [31, 0x1130f]]],
+	[125, [[14, 0x1130f], [30, 0x1130f]]], [11, [[16, 0x2303], [35, 0x2303]]], [12, [[17, 0x2303], [26, 0x2303]]],
+	[13, [[5, 0x1130f], [51, 0x1130f], [78, 0x1130f]]], [14, [[9, 0x1130f], [40, 0x1130f]]], [16, [[11, 0x1130f], [18, 0x1130f]]],
+	[17, [[14, 0x1130f], [22, 0x1130f]]], [44, [[15, 0x1130f]]], [45, [[5, 0x1130f], [16, 0x1130f]]],
+	[50, [[0, 0x1309], [8, 0x100130a], [22, 0x2303]]], [123, [[0, 0x1130f], [32, 0x2303]]],
+	[53, [[0, 0x1309], [17, 0x2303], [43, 0x100130a]]], [48, [[0, 0x1309], [14, 0x2303], [30, 0x100130a], [50, 0x2303]]],
+	[127, [[11, 0x1130f], [40, 0x1130f]]], [124, [[0, 0x2303]]], [52, [[9, 0x1130f], [30, 0x1130f]]], [55, [[21, 0x1130f], [60, 0x1130f]]],
+	[33, [[0, 0x1001316], [15, 0x2303], [21, 0x2303]]], [8, [[2, 0x1001316], [24, 0x2300], [38, 0x2300], [60, 0x2300]]],
+	[85, [[24, 0x2300], [38, 0x2300], [60, 0x2300]]], [120, [[2, 0x1001316], [24, 0x2300], [38, 0x2300], [60, 0x2300]]],
+	[121, [[24, 0x2300], [38, 0x2300], [60, 0x2300]]], [9, [[11, 0x1001316], [27, 0x2300], [45, 0x2300], [63, 0x2300]]],
+	[43, [[11, 0x1001316], [27, 0x2300], [45, 0x2300], [63, 0x2300]]], [86, [[27, 0x2300], [45, 0x2300], [63, 0x2300]]],
+	[7, [[17, 0x1002314]]], [34, [[25, 0x2300], [47, 0x2300], [66, 0x2300]]], [46, [[7, 0x2300], [30, 0x2300]]],
+	[111, [[9, 0x2300], [30, 0x2300]]], [98, [[44, 0x1130f], [73, 0x1130f]]], [99, [[4, 0x130c], [15, 0x1002315]]],
+	[100, [[4, 0x130c], [15, 0x1002315]]], [201, [[10, 0x1130f]]], [232, [[15, 0x1130f]]], [42, [[15, 0x1130f]]],
+	[27, [[67, 0x2303]]], [28, [[65, 0x2303]]], [25, [[60, 0x2303]]], [26, [[67, 0x2303]]], [10, [[15, 0x2302]]],
+	[58, [[18, 0x1130f]]], [56, [[28, 0x1130f], [65, 0x1130f]]], [60, [[29, 0x1130f], [62, 0x1130f]]], [59, [[22, 0x1130f]]],
+	[57, [[28, 0x1130f], [63, 0x1130f]]], [61, [[29, 0x1130f], [56, 0x1130f]]], [64, [[0, 0x2303]]], [75, [[0, 0x2303]]],
+	[95, [[16, 0x2303]]], [96, [[19, 0x2303], [22, 0x2303]]], [63, [[19, 0x2303]]], [65, [[0, 0x2303]]], [76, [[0, 0x2303]]]]
+## bhEne01_SePlay add_seno by en01 personal type (voices 20..63 of the bank)
+const ADD_SENO := [28, 32, 16, 0, 4, 8, 32, 36, 0, 8, 20, 24, 8, 12, 8, 12, 16, 4, 40, 36, 40, 0, 8, 24, 20, 28, 8]
+## RequestEnemySe (set by the game: enemy no, position, SeNo)
+var se_cb: Callable
+
+## bhEne01_SePlay
+func _se(no: int) -> void:
+	if not visible or not se_cb.is_valid(): return
+	var se_no := no
+	var b := no & 0xff
+	if b >= 20 and b < 64:
+		se_no += ADD_SENO[ptype]
+		if b == 20 or b == 21:
+			if se_cb.call(-1) or _rnd(2) == 0: return
+	se_cb.call(se_no)
+
+## bhEne01_CheckMtnTbl: en01_mtn_tbl foot lock, en01_mtn_tbl2 sounds
 func _check_mtn_tbl(frm: int) -> void:
+	for e in MTN_TBL2:
+		if e[0] != lo.no: continue
+		for a in e[1]:
+			if a[0] == frm: _se(a[1])
 	if not (flg & 0x40000): return
 	var v2 := Vector3(0, -1.0, -1.9) * S
 	if lo.no == 2:
@@ -584,6 +624,13 @@ func _mv00() -> void:
 		ct0 -= 1
 		if ct0 <= 0 or (x40 & 0x400):
 			mode1 = 1; mode2 = 1; mode3 = 0
+	_moan()
+
+## the moan timer at the end of MV00 / MV01 / MV02
+func _moan() -> void:
+	ct3 -= 1
+	if ct3 < 0:
+		_se(16847639); ct3 = _rnd(120) + 180
 
 func _mv01() -> void:
 	if mode3 == 0:
@@ -598,6 +645,7 @@ func _mv01() -> void:
 		1:
 			if _dist < PERSONAL[ptype][0] and (x40 & 0x400):
 				mode1 = 1; mode2 = 2; mode3 = 0
+				_se(16847639)
 			elif _dist <= 15.0:
 				mode3 = 3; ct0 = _rnd(64) + 100
 			elif _dir_wall(6.0):
@@ -623,6 +671,7 @@ func _mv01() -> void:
 			ct0 -= 1
 			if ct0 < 0:
 				mode3 = 1; ct0 = _rnd(128) + 200
+	_moan()
 
 ## bhEne01_FastWalkCheck: only one zombie at a time takes the fast walk 125
 func _fast_walk() -> bool:
@@ -656,6 +705,7 @@ func _mv02() -> void:
 			if x94 == 0:
 				if (((x44 & 2) and _dist <= 25.0) or (not (x44 & 2) and _dist <= 20.0)) and _ikou3(_pl.x, _pl.z, 16384) == 0:
 					x44 &= ~0x80
+					_se(16847639)
 					ct3 = _rnd(120) + 180
 					_chg_walk()
 					x2f = 5
@@ -683,6 +733,7 @@ func _mv02() -> void:
 	if x98 > 0:
 		x98 -= 1
 		if x98 == 0: _chg_walk()
+	_moan()
 
 ## bhGetFrameNum (as compiled: the 16.16 result is clamped against the frame count)
 static func _frame_num(nf_old: int, nf_new: int, frm: int) -> int:
@@ -785,6 +836,7 @@ func _mv05() -> bool:
 		_chg(lo, 122, 0, 8); lo.x40 &= ~0x2000000; lo.x40 |= 0x1000000
 		_chg(up, 322, 0, 8); up.x40 &= ~0x2000000; up.x40 |= 0x1000000
 		_ay = _dir(position.x, position.z, _pl.x, _pl.z) & 0xFFFF
+		_se(16782102)
 		mode3 = 1
 	if mode3 == 1:
 		var f := lo.frm >> 16
@@ -1007,6 +1059,7 @@ func _player_control() -> void:
 				x40 &= ~0x24080
 		4:
 			_ply_motion(8 if front else 9, 5)
+			_voice(1026)
 			_link = PLY_OFS2[0 if front else 1]
 			x40 |= 0x80000
 			_ply_turn_start()
@@ -1016,8 +1069,10 @@ func _player_control() -> void:
 			_ply_turn()
 		6:
 			_ply_motion(12 if front else 13, 0)
+			_voice(1025)
 			_pm3 = 7
 		7:
+			if front and (_pfrm == 22 or _pfrm == 30): _se(8963)
 			if _pfrm >= _pnf - 1:
 				pl_state = "dead"
 				x40 &= ~0xA4080
@@ -1028,6 +1083,13 @@ func _pdg_1(front: bool) -> void:
 		_ply_motion(6 if front else 7, 5)
 		_link = PLY_OFS[0 if front else 1]
 		x40 |= 0x80000
+	elif (lo.frm >> 16) == 12:
+		_voice(1026)
+
+## bhEne_PlayerSePlay -> CallPlayerVoice (set by the game)
+var voice_cb: Callable
+func _voice(no: int) -> void:
+	if voice_cb.is_valid(): voice_cb.call(no)
 
 ## bhEne01_PlayerLink: Claire stands at the offset in the zombie's frame, turned by waxp; a wall in her way pushes both
 func _player_link() -> void:
@@ -1097,6 +1159,8 @@ func _die_wait() -> void:
 func hit(dmg: float) -> void:
 	if not hittable: return
 	hp -= dmg
+	# bhEne01_DmgCheck: the hit / death voice
+	_se(16786197 if hp < 0 else 16786196)
 	flg |= 4; _hit_flg = true
 	x40 |= 0x200400; x48 = 0
 	# bhEne_DGDirCheck: a shot from in front of the zombie (comb_flg 4 -> EXP0_I(0x40) 0x2000) and the side of the hit (EXP0_I(0x44) 0x20)
