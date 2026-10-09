@@ -6,6 +6,12 @@ extends Node3D
 
 var data: Dictionary
 var shapes: Array = []           # active wall shapes {k:box|circle|tri,...}
+## the player's wall records (bhCheckWallEx): {s: shape, sh, flr, attr, y, h, i}; wall_on = ATR flg bit 0
+var pl_walls: Array = []
+var wall_on: Array = []
+## rom->grand (rmh header, metres): floor levels for bhCheckFloorNum
+var grand: Array = []
+static var _grand_db: Dictionary = {}
 var wall_shapes: Array = []      # per collision record (null = no shape)
 var obj_meshes := {}             # object index -> Node3D
 var outside := {}                # object indices placed outside the room bounds
@@ -27,6 +33,10 @@ static func load_room(id: String) -> Room:
 	var r := Room.new()
 	r.name = id
 	r.data = Assets.json("rooms/%s.json" % id, {})
+	if _grand_db.is_empty():
+		var f := FileAccess.open("res://data/room_grand.json", FileAccess.READ)
+		if f: _grand_db = JSON.parse_string(f.get_as_text())
+	r.grand = _grand_db.get(id, [])
 	var sp := "res://scenes/rooms/%s.tscn" % id
 	if ResourceLoader.exists(sp):
 		r._build_scene((load(sp) as PackedScene).instantiate() as RoomScene)
@@ -136,6 +146,56 @@ func _build_walls() -> void:
 	for i in col.size():
 		if wall_shapes[i] != null and (String(col[i].type).hex_to_int() & 1):
 			shapes.append(wall_shapes[i])
+	pl_walls = []; wall_on = []
+	for i in col.size():
+		var e: Dictionary = col[i]
+		var t := String(e.type).hex_to_int()
+		wall_on.append(bool(t & 1))
+		var sh := (t >> 8) & 0xff
+		if sh == 6 or sh > 7: continue
+		var fl := String(e.flags).hex_to_int()
+		var attr := ((fl & 0xff) << 24) | ((fl & 0xff00) << 8) | ((fl >> 8) & 0xff00) | ((fl >> 24) & 0xff)
+		var x := float(e.x); var z := float(e.z); var sx := float(e.sx); var sz := float(e.sz)
+		var shp: Dictionary
+		if sh == 4 or sh == 5: shp = {"k": "tri", "a": Vector2(x, z), "b": Vector2(x + sx, z), "c": Vector2(x, z + sz)}
+		elif sh == 2 or sh == 3: shp = {"k": "circle", "x": x, "z": z, "r": sx}
+		else: shp = {"k": "box", "x0": minf(x, x + sx), "z0": minf(z, z + sz), "x1": maxf(x, x + sx), "z1": maxf(z, z + sz)}
+		var h := float(e.sy)
+		pl_walls.append({"s": shp, "sh": sh, "flr": t >> 24, "attr": attr, "y": float(e.y), "h": h if h != 0.0 else 1000.0, "i": i})
+
+## bhCheckFloorNum: floor number of a height (rom->grand)
+func floor_num(py: float) -> int:
+	var fno := 2
+	for i in mini(31, grand.size()):
+		var g := float(grand[i])
+		if (g != 0.0 and py + 0.001 >= g) or (i == 2 and py + 0.001 >= g): fno = i
+	return fno - 2
+
+## rom->grand[flr_no + 2]
+func floor_height(flr: int) -> float:
+	var i := flr + 2
+	return float(grand[i]) if i >= 0 and i < grand.size() else 0.0
+
+## bhCheckWallEx for the player (second call, plp->px / ar / ah, flg 0x100 set): the record filters of the original —
+## flg bit 0, type 1 off while on the stairs (flg 0x400), attr 1 = same floor only, attr 4 = enemy-only wall
+## (the player always has stflg 0x40000000), vertical overlap (py + ah >= y and py <= y + h, h 0 = rom->h);
+## type 7 = a raised block (hit while its top is above the feet and below the head)
+func resolve_pl(p: Vector3, r: float, flr: int, ah := 1.65, kaidan := false) -> Vector3:
+	var act: Array = []
+	for w in pl_walls:
+		if not wall_on[w.i]: continue
+		var attr: int = w.attr
+		if (attr & 1) and int(w.flr) != flr: continue
+		var sh: int = w.sh
+		if sh == 7:
+			var top: float = w.y + w.h
+			if not (p.y < top and p.y + ah > top): continue
+		else:
+			if (sh & 1) and kaidan: continue
+			if attr & 4: continue
+			if not (p.y + ah >= w.y and p.y <= w.y + w.h): continue
+		act.append(w.s)
+	return _resolve_in(p, r, act)
 
 ## floor triangles, occluder triangles and the bounding box of the room model
 func _collect(sc: Node3D) -> void:
@@ -263,6 +323,7 @@ func _collider_shape(e: Dictionary) -> Variant:
 ## enable flags of the collision records (ATR flg bit 0, switched by the WALL command)
 func sync_walls(on: Callable) -> void:
 	shapes = []
+	for i in wall_on.size(): wall_on[i] = on.call(i)
 	for i in wall_shapes.size():
 		if wall_shapes[i] != null and on.call(i):
 			shapes.append(wall_shapes[i])
@@ -359,8 +420,11 @@ func clear_distance(from: Vector3, to: Vector3, skip: Variant = null) -> float:
 
 ## push a point (x, z) out of all collision shapes keeping radius r
 func resolve(p: Vector3, r: float) -> Vector3:
+	return _resolve_in(p, r, shapes)
+
+func _resolve_in(p: Vector3, r: float, list: Array) -> Vector3:
 	for _it in 3:
-		for s in shapes:
+		for s in list:
 			match s.k:
 				"box":
 					var cx := clampf(p.x, s.x0, s.x1); var cz := clampf(p.z, s.z0, s.z1)

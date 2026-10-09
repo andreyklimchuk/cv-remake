@@ -10,6 +10,9 @@ const WALK := 1.05
 const RUN := 2.6
 const TURN := 2.6
 const RADIUS := 0.2
+## PlyInfo[Claire]: ar 3.5, ah 16.5 (walls of bhCheckWallEx)
+const AR := 0.35
+const AH := 1.65
 const W_KNIFE := {"draw": "k00", "act": ["k01", "k04", "k07"], "stance": ["k03", "k06", "k09"], "drawT": 9.0 / 30.0, "actT": 24.0 / 30.0, "hitT": 8.0 / 30.0}
 const W_GUN := {"draw": "g00", "act": ["g01", "g03", "g05"], "stance": ["g02", "g04", "g06"], "drawT": 9.0 / 30.0, "actT": 16.0 / 30.0, "hitT": 1.0 / 30.0}
 const G_RELOAD := "g07"
@@ -67,6 +70,13 @@ var _flame: Node3D
 var _flame_t := 0.0
 var _arm_blend := 0.0
 var _attach: BoneAttachment3D
+## stairs (bhCPM2_act_kdu / kdd, mode2 14/15): {} = not on stairs; on_kaidan_end(atr) clears the use flags
+var kdn := {}
+var on_kaidan_end: Callable
+var _kdn_acc := 0.0
+var _fix_off := Vector3.ZERO
+var _fix_t := -1.0
+var _hold_y := false   # after the stairs: py stays at rom->grand until the player moves
 
 func load_model() -> void:
 	model = Assets.scene("chars/claire.glb")
@@ -196,6 +206,9 @@ func forward() -> Vector3:
 
 func place(x: float, y: float, z: float, h: float) -> void:
 	position = Vector3(x, y, z); heading = h; rotation.y = h; _last_pos = position; _last_head = h
+	if not kdn.is_empty() and on_kaidan_end.is_valid(): on_kaidan_end.call(kdn.a)
+	kdn = {}; _hold_y = false; _fix_t = -1.0
+	if model: model.position = Vector3.ZERO
 	hair_reset()
 
 func bone_xform(i: int) -> Transform3D:
@@ -217,6 +230,19 @@ func play_sync(id: Variant, loop := false, fade := 0.08) -> void:
 	else: play("idle", 0.25)
 
 func update(dt: float, inp: GameInput, room: Room, cam_yaw: Variant = null) -> void:
+	if not kdn.is_empty() and sync == null:
+		state = "stairs"; aiming = false; _k_state = "none"
+		if not frozen:
+			_kdn_acc = minf(_kdn_acc + dt, 0.25)
+			while _kdn_acc >= 1.0 / 30.0 and not kdn.is_empty():
+				_kdn_acc -= 1.0 / 30.0; _kdn_tick(room)
+		rotation.y = heading
+		_update_tail(dt); _update_lighter(dt); _update_hands(); return
+	if _fix_t >= 0.0:
+		_fix_t += dt
+		var w := minf(1.0, _fix_t / (8.0 / 30.0))
+		model.position = _fix_off * (1.0 - w) if not frozen else model.position
+		if w >= 1.0: _fix_t = -1.0; model.position = Vector3.ZERO
 	if sync != null:
 		state = "sync"; rotation.y = heading; _advance(dt); _update_tail(dt); _update_lighter(dt); _update_hands(); return
 	var speed := 0.0
@@ -261,11 +287,12 @@ func update(dt: float, inp: GameInput, room: Room, cam_yaw: Variant = null) -> v
 	else:
 		state = "idle"; play("idle", 0.25)
 	if speed != 0:
-		var np := room.resolve(position + forward() * speed * dt, RADIUS)
+		_hold_y = false
+		var np := room.resolve_pl(position + forward() * speed * dt, AR, room.floor_num(position.y), AH)
 		var y: Variant = room.floor_at(np.x, np.z, position.y)
 		if y != null and absf(y - position.y) < 0.5:
 			position = Vector3(np.x, y, np.z)
-	else:
+	elif not _hold_y:
 		var y: Variant = room.floor_at(position.x, position.z, position.y)
 		if y != null: position.y = y
 	_advance(dt)
@@ -273,6 +300,127 @@ func update(dt: float, inp: GameInput, room: Room, cam_yaw: Variant = null) -> v
 	_update_tail(dt)
 	_update_lighter(dt)
 	_update_hands()
+
+## ---- stairs: bhCheckExmAtari type 1 -> mode2 14 (prm0 0, up) / 15 (down); kdu/kdd of player.c at 30 Hz ----
+## PlMtnAct[0][dmlvl]: [0] stand 42/43/44, [1] turn 39/40/41, [2] walk 0/2/3; stairs motions 31/32 (35/36 when
+## prm2 % 4 == 0, +2 at dmlvl 2) = clips m24..m31, turns m32..m34, stand m35..m37 (pl00 motion order)
+const KDN_STAND := ["m35", "m36", "m37"]
+const KDN_TURN := ["m32", "m33", "m34"]
+const KDN_WALK := ["m00", "m02", "m03"]
+const PL_KDU := [19, 6, 15]      # PlKDU[Claire][dlvl]
+const KDN_FOOT := {true: [21, 8], false: [20, 8]}   # PlFootSnd[0][0/1][5 kdu / 6 kdd]
+
+func start_kaidan(a: Dictionary) -> void:
+	kdn = {"a": a, "up": int(a.prm[0]) == 0, "m3": 0, "f": 0, "end": false}
+	_kdn_acc = 0.0
+
+static func _kdn_mtn(n: int) -> String:
+	return "m%02d" % (n - 7)
+
+func _root_local(id: String, t: float) -> Vector3:
+	var an := ap.get_animation(id)
+	if an == null: return Vector3.ZERO
+	for k in an.get_track_count():
+		if an.track_get_type(k) == Animation.TYPE_POSITION_3D and String(an.track_get_path(k)).ends_with("b00"):
+			return an.position_track_interpolate(k, t)
+	return Vector3.ZERO
+
+func _kdn_tick(room: Room) -> void:
+	var k := kdn
+	var a: Dictionary = k.a
+	var up: bool = k.up
+	var lv := dmlvl()
+	var dl := 1 if lv >= 2 else 0
+	var bams := int(round(heading / TAU * 65536.0)) & 0xFFFF
+	var ayp := -(int(182.04445 * (int(a.prm[1]) * 90)) & 0xFFFF)
+	var rt := 0.8 if lv == 2 else 1.0
+	match int(k.m3):
+		0:
+			_play_id(KDN_TURN[lv], 4.0 / 30.0, true)
+			k.m3 = 2 if _s16(ayp - _s16(bams)) >= 0 else 1
+			ap.speed_scale = 1.0 if k.m3 == 2 else -1.0
+			ap.advance(1.0 / 30.0)
+			return
+		1, 2:
+			if absi(_s16(ayp) - _s16(bams)) < 1310:
+				k.m3 = 3
+			else:
+				var st := int(182.04445 * (7.2 * rt))
+				bams += st if k.m3 == 2 else -st
+				heading = _bams(bams)
+				ap.advance(1.0 / 30.0)
+				return
+	if int(k.m3) == 3:
+		var n: int = (35 if int(a.prm[2]) % 4 == 0 else 31) + (0 if up else 1) + (2 if lv >= 2 else 0)
+		k.id = _kdn_mtn(n)
+		k.ct2 = int(a.prm[2]); k.ct3 = int(a.prm[2]) / 4
+		if up:
+			k.yn = room.floor_height(room.floor_num(position.y + 0.2 * int(a.prm[2])))
+		heading = _bams(ayp)
+		position += forward() * (0.1 if up else 0.2)
+		_play_id(k.id, 4.0 / 30.0, false, 1.0, true)
+		k.n = int(round(ap.get_animation(k.id).length * 30.0)) + 1
+		k.py0 = _root_local(k.id, 0.0).y
+		k.f = 0; k.end = false
+		k.m3 = 5
+	if int(k.m3) == 5:
+		var pos := _root_local(k.id, k.f / 30.0)
+		if not up and position.y + pos.y <= float(a.y) - 0.2 * int(a.prm[2]):
+			_kdn_land(room, Vector3(bone_pos("b00").x, float(a.y) - 0.2 * int(a.prm[2]), bone_pos("b00").z), 0.2)
+			return
+		if k.end:
+			if int(k.ct3) > 0: k.ct3 = int(k.ct3) - 1
+			position += Basis(Vector3.UP, heading) * Vector3(pos.x, 0, pos.z) + Vector3(0, pos.y - float(k.py0), 0)
+			k.f = 0; k.end = false
+			ap.seek(0.0, true)
+		if up and ((int(k.ct2) % 4 == 0 and int(k.ct3) == 1 and int(k.f) >= PL_KDU[0]) or (int(k.ct2) % 4 != 0 and int(k.ct3) == 0 and int(k.f) >= PL_KDU[1])):
+			# the root offset of the stairs motion is kept (flg 0x8040000; the motion engine is not in the
+			# decompilation — without it the final px = root object would fall back to the start of the loop):
+			# the model is shifted by the offset in step with the 4-frame cross-fade
+			k.carry = Vector3(pos.x, pos.y - float(k.py0), pos.z); k.fade = 0
+			_play_id(KDN_WALK[lv], 4.0 / 30.0, true, 1.0, true)
+			ap.seek(PL_KDU[2] / 30.0, true)
+			k.ct1 = 10 if lv < 2 else 4
+			if on_step.is_valid(): on_step.call("b21", 0)
+			k.m3 = 6
+			ap.advance(1.0 / 30.0)
+			return
+		var fs: Array = KDN_FOOT[up]
+		if int(k.f) == fs[0] and on_step.is_valid(): on_step.call("b17", 0)
+		if int(k.f) == fs[1] and on_step.is_valid(): on_step.call("b21", 0)
+		ap.advance(1.0 / 30.0)
+		k.f = int(k.f) + 1
+		if int(k.f) >= int(k.n) - 1:
+			k.f = int(k.n) - 1; k.end = true
+		return
+	if int(k.m3) == 6:
+		ap.advance(1.0 / 30.0)
+		k.fade = int(k.fade) + 1
+		model.position = (k.carry as Vector3) * minf(1.0, k.fade / 4.0)
+		k.ct1 = int(k.ct1) - 1
+		if int(k.ct1) <= 0:
+			var b := bone_pos("b00")
+			_kdn_land(room, Vector3(b.x, float(k.yn), b.z), 0.0)
+
+## end of the stairs: position from the root object, floor number, py = rom->grand, stand motion (hokan 8)
+func _kdn_land(room: Room, p: Vector3, fwd: float) -> void:
+	var a: Dictionary = kdn.a
+	var rl := Basis(Vector3.UP, -heading) * (bone_pos("b00") - position) - model.position
+	model.position = Vector3.ZERO
+	position = p + forward() * fwd
+	position.y = room.floor_height(room.floor_num(position.y))
+	# flg 0x10 again: the wall check of the next frame (bhCheckWallEx) pushes the player out of the walls
+	position = room.resolve_pl(position, AR, room.floor_num(position.y), AH)
+	_hold_y = true
+	kdn = {}
+	_play_id(KDN_STAND[dmlvl()], 8.0 / 30.0, true, 1.0, true)
+	cur = KDN_STAND[dmlvl()]
+	# the cross-fade (hokan 8) blends the root translation of the stairs motion too: the model is shifted back by
+	# the fading part of it so the root stays at the new position
+	_fix_off = -(rl - _root_local(cur, 0.0))
+	_fix_t = 0.0; model.position = _fix_off
+	if on_kaidan_end.is_valid(): on_kaidan_end.call(a)
+	_last_pos = position
 
 func _advance(dt: float) -> void:
 	_mix_time += dt * ap.speed_scale

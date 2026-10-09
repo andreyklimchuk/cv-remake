@@ -105,6 +105,9 @@ func _ready() -> void:
 		var g: Variant = _gun()
 		return g != null and int(g.count) > 0
 	player.empty_click = func() -> void: audio.se("empty")
+	player.on_kaidan_end = func(a: Dictionary) -> void:
+		var i := vm.etc.find(a)
+		if i >= 0: _kaidan_flags(i, false)
 	player.on_step = func(foot: String, type: int) -> void:
 		var p: Variant = bone_pos(0, 0, 17 if foot == "b17" else 21) if foot != "" else player.position
 		audio.foot(floor_sound(p), type == 1, p, 0)
@@ -419,12 +422,24 @@ func _floor_check() -> void:
 func _examine() -> bool:
 	var f := player.forward(); var q := _quad_bit(); var P := player.position
 	vm.cb &= ~0x100 & EvtVM.M32
+	if not player.kdn.is_empty(): return false
+	var flr := room.floor_num(P.y)
 	for i in vm.etc.size():
 		var a: Dictionary = vm.etc[i]
 		if not (a.flg & 1): continue
 		var d: float = EXM_DIST[a.type] if a.type < EXM_DIST.size() else 0.45
-		if not _in_box(a, P.x + f.x * d, P.z + f.z * d) or (a.attr & q): continue
+		if not _in_box(a, P.x + f.x * d, P.z + f.z * d): continue
+		# exp->flr_no == pp->flr_no: checked for the stairs only (the port has no bhCheckFloorP floor tracking;
+		# the floor number comes from the height, see HANDOFF)
+		if (a.type == 1 or a.type == 2) and int(a.flr) != flr: continue
+		if a.type != 1 and a.type != 2 and (a.attr & q): continue
 		vm.cb |= 0x100; vm.etc_idx = i
+		if a.type == 1:
+			# kaidan: bhSetUseKaidanFlag + mode2 14 (up) / 15 (down)
+			if not (a.attr & 0x400000):
+				_kaidan_flags(i, true)
+				player.start_kaidan(a)
+			return true
 		if a.type == 0: door(0, a.prm[0], a.prm[1], a.prm[2])
 		elif a.type == 3:
 			if a.attr & 0x8000: _show_message(a.prm[1], true)
@@ -438,6 +453,16 @@ func _examine() -> bool:
 				vm.sb_id = int(items[k].id); _item_screen()
 		return true
 	return false
+
+## bhSetUseKaidanFlag / bhClrUseKaidanFlag: attr 0x400000 on the stairs record and its pair (prm3 0xFF = the next
+## record for the lower end, the previous one for the upper end; otherwise record prm3)
+func _kaidan_flags(i: int, on: bool) -> void:
+	var a: Dictionary = vm.etc[i]
+	var j: int = (i + 1 if int(a.prm[0]) == 0 else i - 1) if int(a.prm[3]) == 0xFF else int(a.prm[3])
+	for idx in [i, j]:
+		if idx < 0 or idx >= vm.etc.size(): continue
+		var b: Dictionary = vm.etc[idx]
+		b.attr = (int(b.attr) | 0x400000) if on else (int(b.attr) & ~0x400000)
 
 ## item use from the inventory (sub1.c ItemUse / Use_05): -1 = used (the subscreen closes), else the system message
 ## to show. ItemUse always sets sb_id and cb 0x400 (only bhUseItemClear / a room change clear it); the room's main
@@ -1048,7 +1073,7 @@ func step(dt: float) -> void:
 					dog_hurt = 0.0
 					if player.hp <= 0: game_over()
 					else: player.play_sync(null)
-			var free := grab == null and dog_bite == null and player.sync == null and player.hp > 0
+			var free := grab == null and dog_bite == null and player.sync == null and player.hp > 0 and player.kdn.is_empty()
 			for z in zombies:
 				var zw: EvtVM.Work = vm.get_work(1, z.index)
 				if zw != null and (zw.gone or zw.hidden): continue

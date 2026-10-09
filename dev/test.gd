@@ -51,6 +51,8 @@ func _ready() -> void:
 		"case": await case_test()
 		"floor": await floor_test()
 		"walk": await walk_test()
+		"stairs": await stairs_test()
+		"spawnwalk": await spawnwalk_test()
 	print("DONE")
 	get_tree().quit()
 
@@ -596,3 +598,31 @@ func walk_test() -> void:
 	for k in int(float(a[5]) / 0.25):
 		await sim(0.25, keys)
 		print("W%.2f pos %.2f,%.2f,%.2f state %s" % [(k + 1) * 0.25, P.position.x, P.position.y, P.position.z, P.state])
+
+## stairs test: -- stairs ROOM x z ang walk_secs [secs]: walks forward, presses the action button, prints the
+## position / floor number / clip every 0.1 s (bhCPM2_act_kdu / kdd)
+func stairs_test() -> void:
+	var a := OS.get_cmdline_user_args()
+	await g.enter_room(a[1], 0, null, false)
+	await wait_free()
+	var x := float(a[2]); var z := float(a[3])
+	var y0: Variant = g.room.floor_at(x, z, float(a[7]), 0.05) if a.size() > 7 else g.room.floor_at(x, z, 2.0, 2.0)
+	P.place(x, y0 if y0 != null else 0.0, z, float(a[4]))
+	if float(a[5]) > 0: await sim(float(a[5]), ["KeyW"])
+	print("before pos %.2f,%.2f,%.2f flr %d" % [P.position.x, P.position.y, P.position.z, g.room.floor_num(P.position.y)])
+	await sim(0.05, ["KeyE"])
+	var n := int((float(a[6]) if a.size() > 6 else 4.0) / 0.1)
+	for k in n:
+		await sim(0.1, [])
+		var b := P.bone_pos("b00")
+		print("t%.1f pos %.2f,%.2f,%.2f root %.2f,%.2f,%.2f clip %s m3 %s f %s flr %d" % [(k + 1) * 0.1, P.position.x, P.position.y, P.position.z, b.x, b.y, b.z, P.cur, P.kdn.get("m3", "-"), P.kdn.get("f", "-"), g.room.floor_num(P.position.y)])
+
+## -- spawnwalk ROOM...: enters each room at spawn 0, walks 1.5 s, prints the distance covered and the floor number
+func spawnwalk_test() -> void:
+	var a := OS.get_cmdline_user_args()
+	for r in a.slice(1):
+		await g.enter_room(r, 0, null, false)
+		await wait_free()
+		var p0 := P.position
+		await sim(1.5, ["KeyW"])
+		print("%s moved %.2f y %.2f flr %d inside %s" % [r, p0.distance_to(P.position), P.position.y, g.room.floor_num(P.position.y), g.room.resolve_pl(p0, P.AR, g.room.floor_num(p0.y), P.AH).distance_to(p0) > 0.001])
