@@ -48,6 +48,9 @@ func _ready() -> void:
 		"use": await use_test()
 		"file": await file_test()
 		"tail": await tail_test()
+		"case": await case_test()
+		"floor": await floor_test()
+		"walk": await walk_test()
 	print("DONE")
 	get_tree().quit()
 
@@ -540,3 +543,56 @@ func tail_test() -> void:
 	await sim(1.5); rep.call("stop1.8")
 	await sim(0.6, ["KeyA"]); rep.call("turn")
 	await sim(1.5); rep.call("rest")
+
+## Briefcase (83) -> TG-01 (85): -- case ROOM
+func case_test() -> void:
+	var a := OS.get_cmdline_user_args()
+	await g.enter_room(a[1], 0, null, false)
+	await wait_free()
+	g.inv.add(83, Text.ITEM_NAMES.get(83, ""))
+	g.toggle_inv(true)
+	await sim(1.0)
+	var S = g.inv_screen
+	for i in g.inv.slots.size():
+		if g.inv.slots[i] != null and g.inv.slots[i].id == 83: S._sel = i
+	S._mode = "list"; S._open_check(); await sim(0.2)
+	print("check ", S._mode, " side ", S._case_button_side())
+	await sim(0.1, ["KeyE"]); print("wrong side -> ", S._mode, " ", S._page)
+	S._open_check(); S._chk.b = Basis(Vector3.UP, PI); S._spin_apply(); await sim(0.1)
+	print("side ", S._case_button_side())
+	await sim(0.1, ["KeyE"]); await sleep(100)
+	print("ask ", S._mode, " ", S.msgtx.text)
+	await sim(0.1, ["KeyE"])
+	for k in 30:
+		await sleep(100); await sim(0.03)
+		if k % 5 == 0: print("t", k, " mode ", S._mode, " fv ", g.file_view.active, " slots ", g.inv.slots.map(func(x): return x.id if x else -1))
+	print("owned %x" % g.file_view.owned)
+
+## floor heights of the room geometry (Room.floor_at from 3 m down): -- floor ROOM x0 x1 z0 z1 step
+func floor_test() -> void:
+	var a := OS.get_cmdline_user_args()
+	await g.enter_room(a[1], 0, null, false)
+	await wait_free()
+	var st := float(a[6])
+	var z := float(a[5])
+	while z >= float(a[4]):
+		var row := "%6.1f " % z
+		var x := float(a[2])
+		while x <= float(a[3]):
+			var y: Variant = g.room.floor_at(x, z, 0.0, 1.5)
+			row += ("  . " if y == null else "%4d" % int(roundf(y * 100 / 10)))
+			x += st
+		print(row)
+		z -= st
+
+## walk test: -- walk ROOM x z ang secs [keys]: holds W (and keys), prints the position / height every 0.25 s
+func walk_test() -> void:
+	var a := OS.get_cmdline_user_args()
+	await g.enter_room(a[1], 0, null, false)
+	await wait_free()
+	P.place(float(a[2]), g.room.floor_at(float(a[2]), float(a[3]), 2.0, 2.0) if g.room.floor_at(float(a[2]), float(a[3]), 2.0, 2.0) != null else 0.0, float(a[3]), float(a[4]))
+	var keys := ["KeyW"]
+	if a.size() > 6: keys.append_array(a[6].split(","))
+	for k in int(float(a[5]) / 0.25):
+		await sim(0.25, keys)
+		print("W%.2f pos %.2f,%.2f,%.2f state %s" % [(k + 1) * 0.25, P.position.x, P.position.y, P.position.z, P.state])

@@ -77,6 +77,7 @@ static func T(k: String, a := "") -> Variant:
 		"unlit": return "Клэр убрала зажигалку." if r else "Claire put the lighter away."
 		"box": return "ЯЩИК" if r else "BOX"
 		"boxHint": return "Enter — переложить · Esc — закрыть" if r else "Enter — move item · Esc — close"
+		"pressBtn": return "Нажать на кнопку?" if r else "Press the button?"
 		"rot": return "Стрелки — вращать · Enter — далее · Esc — назад" if r else "Arrows — rotate · Enter — next · Esc — back"
 	return ""
 
@@ -642,7 +643,7 @@ func _setup_check(obj: Node3D, id: int) -> void:
 	var cam: Camera3D = chk_vp.get_node("cam")
 	cam.transform = Transform3D(Basis(), Vector3(0, 0, 3.4))
 	chk_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-	_chk = {"obj": grp, "b": Basis.from_euler(Vector3(0.35, 0, 0), EULER_ORDER_XYZ), "acc": 0.0}
+	_chk = {"obj": grp, "b": Basis.from_euler(Vector3(0.35, 0, 0), EULER_ORDER_XYZ), "acc": 0.0, "id": id}
 	_spin_apply()
 
 func _spin_apply() -> void:
@@ -865,6 +866,74 @@ func _update_file(dt: float) -> void:
 		await fileview.read(fileview.filenum, false)
 		_mode = "file"; _facc = 0; _fkeys = {}
 
+# ---------------------------------------------------------------- the Briefcase (83) -> TG-01 (85)
+## ItemModelCheck -> MdlDirChk (c_a) -> question (testmode 6) -> MdlAction -> ItemModelChangeZoomOut -> idsettbl -> ZoomIn -> GetFile.
+## The c_a / itemflg / mestbl / idsettbl tables are not available: the button side is a guess (the front of the case, away from
+## the lid hinge at model z +2, turned to the viewer), the question text is "Press the button?".
+const CASE_ID := 83
+const TG01_ID := 85
+func _case_button_side() -> bool:
+	var b: Basis = _chk.b
+	return (b * Vector3(0, 0, -1)).dot(Vector3(0, 0, 1)) > 0.7
+
+func _frame30() -> void:
+	await get_tree().create_timer(1.0 / 30.0).timeout
+
+static func _find_node(n: Node, nm: String) -> Node3D:
+	if n.name == nm and n is Node3D: return n
+	for c in n.get_children():
+		var r := _find_node(c, nm)
+		if r != null: return r
+	return null
+
+func _open_case() -> void:
+	_mode = "case"
+	audio.se("menu")
+	var r := await say([T("pressBtn")], [Text.yes(), Text.no()])
+	if r != 0 or _chk == null:
+		# mes_sel 101: back to ItemModelCheck
+		if _chk != null: _mode = "check"; _set_text(item_desc(CASE_ID))
+		return
+	var grp: Node3D = _chk.obj
+	var body := _find_node(grp, "n001"); var lid := _find_node(grp, "n002")
+	# MdlAction (itemview.c): the lid object += 1456 per frame until 32768, its parent -= 728, the model y -> -0.76
+	var a_lid := 0; var a_body := 0
+	while a_lid < 32768:
+		a_lid += 1456; a_body -= 728
+		if lid: lid.basis = Basis(Vector3.RIGHT, a_lid * TAU / 65536.0)
+		if body: body.basis = Basis(Vector3.RIGHT, a_body * TAU / 65536.0)
+		grp.position.y = maxf(grp.position.y - 0.05 * CASE_VIEW, -0.76 * CASE_VIEW)
+		await _frame30()
+	# ItemModelChangeZoomOut: 32 frames, the model goes away turning (ay1 += 4095, az1 += 2047)
+	await _case_zoom(grp, false)
+	# idsettbl: the item becomes TG-01
+	var s: Variant = _cur()
+	if s != null:
+		inv.slots[_sel] = {"id": TG01_ID, "name": Text.ITEM_NAMES.get(TG01_ID, ""), "count": 1}
+	_setup_check(_model(TG01_ID), TG01_ID)
+	render()
+	# ItemModelChangeZoomIn, then (ips1 == 85) GetFile: TG-01 is file 2
+	await _case_zoom(_chk.obj, true)
+	_close_check()
+	if fileview != null:
+		_mode = "file_read"; _set_text("")
+		await fileview.read(FileView.number(0, 0, TG01_ID), true)
+	_mode = "list"; _set_text(_cur_name()); render()
+
+## the zoom of the item view (st_cam.pos_0.z += / -= 3.2 per frame, 32 frames) in the port's view units
+const CASE_VIEW := 0.5
+func _case_zoom(grp: Node3D, come_in: bool) -> void:
+	var b0: Basis = _chk.b if _chk != null else grp.basis
+	for f in 32:
+		var k := float(f + 1) / 32.0
+		var d := (1.0 - k) if come_in else k
+		grp.position.z = -3.2 * 32 * d * CASE_VIEW * 0.25
+		var ay1 := (f + 1) * 4095; var az1 := (f + 1) * 2047
+		grp.basis = b0 * Basis(Vector3.UP, ay1 * TAU / 65536.0) * Basis(Vector3.BACK, az1 * TAU / 65536.0)
+		await _frame30()
+	grp.basis = b0
+	if come_in: grp.position.z = 0
+
 func _close_check() -> void:
 	_chk = null
 	if chk_box: chk_box.visible = false
@@ -890,6 +959,7 @@ func update(dt: float) -> bool:
 		return true
 	if _ask != null:
 		_update_ask(); return true
+	if _mode == "case": return true
 	var L := input.hit(["KeyA", "ArrowLeft"]); var R := input.hit(["KeyD", "ArrowRight"]); var Up := input.hit(["KeyW", "ArrowUp"]); var D := input.hit(["KeyS", "ArrowDown"])
 	if _mode == "file":
 		_update_file(dt); return true
@@ -900,7 +970,9 @@ func update(dt: float) -> bool:
 		_update_box(L, R, Up, D); return true
 	if _mode == "check" and _chk != null:
 		_spin_check(dt)
-		if input.action:
+		if input.action and _chk.get("id", -1) == CASE_ID and _case_button_side():
+			_open_case()
+		elif input.action:
 			if _page + 1 < _pages.size():
 				_page += 1; _text = _pages[_page]; msgtx.text = _esc(_text); audio.se("cursor")
 			else:
