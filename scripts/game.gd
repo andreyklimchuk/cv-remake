@@ -213,6 +213,7 @@ func enter_room(id: String, pos: int, at: Variant = null, fade := true, min_ms :
 	vm.etc = (r.data.get("triggers", []) as Array).map(EvtVM.atr_from)
 	vm.wal = (r.data.get("collision", []) as Array).map(EvtVM.atr_from)
 	vm.flr = (r.data.get("areas", []) as Array).map(EvtVM.atr_from)
+	vm.posp = r.data.get("spawns", []); vm.evt_posno = [0, 0, 0, 0, 0, 0, 0, 0]
 	_sync_player_work()
 	cam.forced = -1; _wall_sig = ""; _hid_sig = ""
 	audio.room(vm.stg, vm.room, vm.rcase); audio.listener = cam.cam
@@ -622,6 +623,12 @@ func bone_obj(kind: int, idx: int, bone: int) -> Variant:
 	if kind == 2 and room and room.obj_meshes.has(idx): return (room.obj_meshes[idx] as Node3D).global_transform
 	if kind == 3 and room and room.item_meshes.has(idx): return (room.item_meshes[idx] as Node3D).global_transform
 	return null
+
+## bhZombieUpDieCk: the zombie's lower body work (cepw) has flg 2 (dead, bhEne01_DD00)
+func zombie_dead(idx: int) -> bool:
+	for z in zombies:
+		if z.index == idx: return z.state == "dead"
+	return false
 
 func bone_pos(kind: int, idx: int, bone: int) -> Variant:
 	var t: Variant = bone_obj(kind, idx, bone)

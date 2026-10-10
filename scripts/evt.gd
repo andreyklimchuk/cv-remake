@@ -88,6 +88,9 @@ var cb := 0
 var pl := [0, 0, 0, 0]
 var etc: Array = []   # Atr dictionaries
 var flr: Array = []
+## rom->posp (the room's POS records = spawns) and sys->evt_posno (bhEtcAtariEnePosSet / bhEtcAtariEvtPosSet)
+var posp: Array = []
+var evt_posno := [0, 0, 0, 0, 0, 0, 0, 0]
 var wal: Array = []
 var etc_idx := 0
 var flr_idx := 0
@@ -416,6 +419,38 @@ func _exec() -> int:
 			var a = etc[_b(1)] if _b(1) < etc.size() else null
 			if a:
 				a.attr = _u16(2); a.prm = [_b(4), _b(5), _b(6), _b(7)]; a.type = _b(8)
+		0x7c:
+			# bhFlrAtariSet2: rewrite a floor ATR (attr, prm0-3, type) like ETCSET
+			var a = flr[_b(1)] if _b(1) < flr.size() else null
+			if a:
+				a.attr = _u16(2); a.prm = [_b(4), _b(5), _b(6), _b(7)]; a.type = _b(8)
+		0x8e:
+			# bhZombieUpDieCk: zombie whose lower body (cepw) is dead (bhEne01_DD00) -> rm flag
+			if host.has_method("zombie_dead") and host.zombie_dead(_b(1)): set_flag(4, _u16(2), true)
+		0xb3:
+			# bhEtcAtariEnePosSet: the POS record in [v2, v3) nearest to bone v5 of enemy v0 -> evt_posno[v4];
+			# ETC v1 is centred on it
+			var bp: Variant = host.bone_pos(1, _b(1), _b(6))
+			var a = etc[_b(2)] if _b(2) < etc.size() else null
+			if bp != null and a and _b(3) < posp.size():
+				var v := bp as Vector3
+				var best := _b(3)
+				var d2 := v.distance_to(_pos(best))
+				for c in range(_b(3), mini(_b(4), posp.size())):
+					var d1 := v.distance_to(_pos(c))
+					if d1 < d2: d2 = d1; best = c
+				var P := _pos(best)
+				a.x = P.x - a.w / 2.0; a.y = P.y; a.z = P.z - a.d / 2.0
+				evt_posno[_b(5) & 7] = best
+		0xb4:
+			# bhEtcAtariEvtPosSet: ETC v1 centred on POS evt_posno[v0], item work v3 placed on it
+			var P := _pos(evt_posno[_b(1) & 7])
+			var a = etc[_b(2)] if _b(2) < etc.size() else null
+			if a:
+				a.x = P.x - a.w / 2.0; a.y = P.y; a.z = P.z - a.d / 2.0
+			var w := work(3, _b(3))
+			w.px = P.x; w.py = P.y; w.pz = P.z; w.pos_set = true
+		0x4e, 0x9e, 0x9f: pass  # bhEffBloodSet (enemy blood, not ported), bhPuruPuruFlagSet / Start (vibration, not ported)
 		0x26: r = int(host.weapon() == _b(1))
 		0x27: host.set_weapon(_b(1))
 		0x31: host.lose_item(_b(1))
@@ -661,10 +696,42 @@ func _common(t: Task) -> void:
 					var q: Dictionary = part.call()
 					var o: Array = q.get("ang", [0.0, 0.0, 0.0])
 					q.ang = [A[0] if am & 1 else o[0], A[1] if am & 2 else o[1], A[2] if am & 4 else o[2]]
+		0x20:
+			# Overhauser spline through ips[3], ips[2], ips[1], ips[0] (njOverhauserSpline, frame cnt2 / cnt3)
+			var fr := float(t.cnt2) / t.cnt3 if t.cnt3 else 1.0
+			var P: Array = _spline(t.ips[3], t.ips[2], t.ips[1], t.ips[0], fr)
+			if t.cno == 0:
+				w.px = P[0]; w.py = P[1]; w.pz = P[2]; w.pos_set = true
+			else:
+				part.call().pos = P
+		0x33:
+			# ips 0/1 = bone v1 of enemy v0, ips 2 = halfway to POS evt_posno[v2] (on its height), ips 3 = bone mirrored in y
+			var bp: Variant = host.bone_pos(1, _b(2), _b(3))
+			if bp != null:
+				var B := bp as Vector3
+				var Q := _pos(evt_posno[_b(4) & 7])
+				t.ips[0] = [B.x, B.y, B.z]; t.ips[1] = [B.x, B.y, B.z]
+				t.ips[2] = [Q.x - (Q.x - B.x) / 2.0, Q.y, Q.z - (Q.z - B.z) / 2.0]
+				t.ips[3] = [B.x, -B.y, B.z]
+		0x34:
+			var Q := _pos(evt_posno[_b(2) & 7])
+			t.ips[0] = [w.px, w.py, w.pz]; t.ips[1] = [Q.x, Q.y, Q.z]
 		0x28: w.frm = _u16(2) << 16
 		0x30:
 			t.ips[_b(2)] = [w.px, w.py, w.pz] if t.cno == 0 else (part.call().get("pos", [0.0, 0.0, 0.0]) as Array).duplicate()
 		0x31: t.ian[_b(2)] = [w.ax / D2R, w.ay / D2R, w.az / D2R]
+
+func _pos(i: int) -> Vector3:
+	if i < 0 or i >= posp.size(): return Vector3.ZERO
+	var q: Array = posp[i].pos
+	return Vector3(float(q[0]), float(q[1]), float(q[2]))
+
+static func _spline(p0: Array, p1: Array, p2: Array, p3: Array, t: float) -> Array:
+	var t2 := t * t; var t3 := t2 * t
+	var o := []
+	for i in 3:
+		o.append(0.5 * (2 * p1[i] + (-p0[i] + p2[i]) * t + (2 * p0[i] - 5 * p1[i] + 4 * p2[i] - p3[i]) * t2 + (-p0[i] + 3 * p1[i] - 3 * p2[i] + p3[i]) * t3))
+	return o
 
 ## ATR record from the room JSON (type/flags strings as exported by conv/room.py)
 static func atr_from(e: Dictionary) -> Dictionary:

@@ -58,6 +58,7 @@ func _ready() -> void:
 		"knock": await knock_test()
 		"m100p": await m100p_test()
 		"prof": await prof_test()
+		"tour": await tour_test()
 	print("DONE")
 	get_tree().quit()
 
@@ -754,3 +755,18 @@ func prof_test() -> void:
 		for z in g.dogs: ds.append("d%d %s m%d/%d %.1f,%.1f" % [z.index, z.visible, z.mode0, z.mode1, z.position.x, z.position.z])
 		print("T%.1f %.1f ms/step pos %.2f,%.2f cam %d | %s" % [k * 0.5, us / 15000.0, P.position.x, P.position.z, g.cam.index, " ".join(ds)])
 		await sleep(1)
+
+## -- tour ROOM [ETC...]: enter ROOM (pos 0), list its ETC records, then use the given ETC indices in turn
+## (examine / pick up / door) and print the event state after each
+func tour_test() -> void:
+	var a := OS.get_cmdline_user_args()
+	await g.enter_room(a[1], 0, null, false)
+	await wait_free(); print("IN ", stt()); list_etc()
+	for e in a.slice(2):
+		var i := int(e)
+		if i >= vm.etc.size(): continue
+		await act(i)
+		await wait_free(); await sim(1); await wait_free()
+		if g.inv_open: print("INV OPEN ", g.inv_screen._mode); g.sim(0.1, ["KeyE"]); await sleep(10); g.sim(0.1, []); await sleep(10); await wait_free()
+		print("ETC ", i, " -> ", stt()); inv()
+		if g.room_id != a[1]: list_etc(); break
