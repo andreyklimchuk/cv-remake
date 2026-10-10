@@ -437,11 +437,15 @@ func _side_wall(step: float, both: int) -> int:
 ## bhCollisionCheckLine: [point, push-out normal] of the first collision on the segment (null = free)
 func _line_hit(a: Vector3, b: Vector3) -> Variant:
 	if _room == null: return null
+	# only the walls near the segment are sampled (same result as testing all of them, far cheaper on long lines)
+	var near := _room.shapes_near(a, b, 0.02)
+	var list: Array = near.list
+	if list.is_empty(): return null
 	var L := Vector2(b.x - a.x, b.z - a.z).length()
 	var n := maxi(1, int(ceil(L / 0.05)))
-	for i in range(1, n + 1):
+	for i in range(maxi(1, int(floor(float(near.t0) * n))), mini(n, int(ceil(float(near.t1) * n))) + 1):
 		var q := a.lerp(b, float(i) / n)
-		var q2 := _room.resolve(q, 0.02)
+		var q2 := _room.resolve_in(q, 0.02, list)
 		if q2.distance_to(q) > 0.001: return [q, (q2 - q).normalized()]
 	return null
 

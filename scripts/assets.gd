@@ -80,7 +80,10 @@ void vertex() {
 vec3 pt(vec4 p, vec3 c, vec2 r, vec3 n) {
 	if (p.w < 0.5) return vec3(0.0);
 	vec3 d = p.xyz - wp; float L = length(d);
-	float att = clamp((r.y - L) / max(r.y - r.x, 1e-4), 0.0, 1.0);
+	// njCnkCvVn (ps2_NinjaCnk.c): no light at or beyond far; beyond near the intensity falls as near^2 / distance^2
+	float RR = L * L;
+	if (RR >= r.y * r.y) return vec3(0.0);
+	float att = RR > r.x * r.x ? r.x * r.x / RR : 1.0;
 	return c * max(dot(n, d / max(L, 1e-5)), 0.0) * att;
 }
 vec3 s2l(vec3 c) { return clamp(c, 0.0, 1.0); }

@@ -57,6 +57,7 @@ func _ready() -> void:
 		"snd": await snd_test()
 		"knock": await knock_test()
 		"m100p": await m100p_test()
+		"prof": await prof_test()
 	print("DONE")
 	get_tree().quit()
 
@@ -734,3 +735,22 @@ func m100p_test() -> void:
 	g.inv_screen._combine(g.inv.slots.find(g.inv.find(143)), g.inv.slots.find(g.inv.find(142)))
 	print("after combine 142 %d 143 %s" % [g.inv.find(142).count, g.inv.find(143).count if g.inv.find(143) else "gone"])
 	print("icon 142 ", g.inv_screen.icon(142).region if g.inv_screen.icon(142) else null, " icon 9 ", g.inv_screen.icon(9).region)
+
+## frame cost: -- prof ROOM SECS X Z ANG  (ZAI_FLAGS as for zai; logs the CPU time of each 0.5 s of game time = 15 steps)
+func prof_test() -> void:
+	var a := OS.get_cmdline_user_args()
+	for fs in OS.get_environment("ZAI_FLAGS").split(" ", false):
+		vm.set_flag(int(fs.get_slice(":", 0)), int(fs.get_slice(":", 1)), true)
+	await g.enter_room(a[1], 0, null, false)
+	await wait_free()
+	if a.size() > 5: P.place(float(a[3]), P.position.y, float(a[4]), float(a[5]))
+	P.hp = 100000
+	for k in int(float(a[2]) / 0.5):
+		if g.msg.active: g.sim(0.3, ["KeyE"])
+		var t0 := Time.get_ticks_usec()
+		g.sim(0.5, [])
+		var us := Time.get_ticks_usec() - t0
+		var ds := []
+		for z in g.dogs: ds.append("d%d %s m%d/%d %.1f,%.1f" % [z.index, z.visible, z.mode0, z.mode1, z.position.x, z.position.z])
+		print("T%.1f %.1f ms/step pos %.2f,%.2f cam %d | %s" % [k * 0.5, us / 15000.0, P.position.x, P.position.z, g.cam.index, " ".join(ds)])
+		await sleep(1)

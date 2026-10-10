@@ -15,6 +15,10 @@ static var _grand_db: Dictionary = {}
 var wall_shapes: Array = []      # per collision record (null = no shape)
 var obj_meshes := {}             # object index -> Node3D
 var outside := {}                # object indices placed outside the room bounds
+## objects further than this outside the room mesh bounds are not drawn (port heuristic, not in the original: rm_0020/0021
+## place unused objects 4-7 m outside); props set into the walls (rm_0070 window ob_022 0.14 m, rm_0060 lamp ob_021
+## 0.41 m) stay visible
+const OUT_MARGIN := 1.0
 var player_parts := {}           # empty object rows 0/1 = Claire's right/left hand (bone space, see _add_hands)
 var item_meshes := {}            # item index -> Node3D
 var item_players := {}           # item index -> AnimationPlayer (room motions rm_XXXX_rNN)
@@ -61,7 +65,7 @@ func _build_scene(rs: RoomScene) -> void:
 			if po: po.visible = false
 			continue
 		var p := po.position
-		if p.x < bbox.position.x - 0.05 or p.z < bbox.position.z - 0.05 or p.x > bbox.end.x + 0.05 or p.z > bbox.end.z + 0.05:
+		if p.x < bbox.position.x - OUT_MARGIN or p.z < bbox.position.z - OUT_MARGIN or p.x > bbox.end.x + OUT_MARGIN or p.z > bbox.end.z + OUT_MARGIN:
 			outside[po.get_index()] = true; po.visible = false
 		Assets.to_lambert(po, "obj")
 		obj_meshes[po.get_index()] = po
@@ -82,7 +86,7 @@ func _build() -> void:
 		if not ob.get("model") or ob.flags == "00000000":
 			continue
 		var p := U.v3(ob.pos)
-		var outs := p.x < bbox.position.x - 0.05 or p.z < bbox.position.z - 0.05 or p.x > bbox.end.x + 0.05 or p.z > bbox.end.z + 0.05
+		var outs := p.x < bbox.position.x - OUT_MARGIN or p.z < bbox.position.z - OUT_MARGIN or p.x > bbox.end.x + OUT_MARGIN or p.z > bbox.end.z + OUT_MARGIN
 		var o := Assets.scene("objects/%s.glb" % ob.model)
 		if o == null:
 			continue
@@ -421,6 +425,43 @@ func clear_distance(from: Vector3, to: Vector3, skip: Variant = null) -> float:
 ## push a point (x, z) out of all collision shapes keeping radius r
 func resolve(p: Vector3, r: float) -> Vector3:
 	return _resolve_in(p, r, shapes)
+
+## xz bounds of a collision shape (cached in the shape)
+static func _shape_bb(sh: Dictionary) -> Rect2:
+	if sh.has("bb"): return sh.bb
+	var bb: Rect2
+	match sh.k:
+		"box": bb = Rect2(sh.x0, sh.z0, sh.x1 - sh.x0, sh.z1 - sh.z0)
+		"circle": bb = Rect2(sh.x - sh.r, sh.z - sh.r, sh.r * 2, sh.r * 2)
+		_: bb = Rect2(sh.a, Vector2.ZERO).expand(sh.b).expand(sh.c)
+	sh.bb = bb
+	return bb
+
+## the shapes whose bounds (grown by r) the segment a-b crosses, and the part [t0, t1] of the segment inside them
+## (a pre-filter for the sampled line checks: points outside every bound are never moved by _resolve_in)
+func shapes_near(a: Vector3, b: Vector3, r: float) -> Dictionary:
+	var o := Vector2(a.x, a.z); var d := Vector2(b.x - a.x, b.z - a.z)
+	var out: Array = []; var t0 := 1.0; var t1 := 0.0
+	for sh in shapes:
+		var bb := _shape_bb(sh).grow(r + 0.01)
+		var lo := 0.0; var hi := 1.0
+		var ok := true
+		for ax in 2:
+			var oa := o.x if ax == 0 else o.y; var da := d.x if ax == 0 else d.y
+			var mn := bb.position.x if ax == 0 else bb.position.y; var mx := bb.end.x if ax == 0 else bb.end.y
+			if absf(da) < 1e-9:
+				if oa < mn or oa > mx: ok = false; break
+			else:
+				var u := (mn - oa) / da; var v := (mx - oa) / da
+				if u > v: var w := u; u = v; v = w
+				lo = maxf(lo, u); hi = minf(hi, v)
+				if lo > hi: ok = false; break
+		if ok:
+			out.append(sh); t0 = minf(t0, lo); t1 = maxf(t1, hi)
+	return {"list": out, "t0": t0, "t1": t1}
+
+func resolve_in(p: Vector3, r: float, list: Array) -> Vector3:
+	return _resolve_in(p, r, list)
 
 func _resolve_in(p: Vector3, r: float, list: Array) -> Vector3:
 	for _it in 3:
