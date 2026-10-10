@@ -59,6 +59,8 @@ func _ready() -> void:
 		"m100p": await m100p_test()
 		"prof": await prof_test()
 		"tour": await tour_test()
+		"push": await push_test()
+		"push2": await push2_test()
 	print("DONE")
 	get_tree().quit()
 
@@ -774,3 +776,54 @@ func tour_test() -> void:
 		if g.inv_open: print("INV OPEN ", g.inv_screen._mode); g.sim(0.1, ["KeyE"]); await sleep(10); g.sim(0.1, []); await sleep(10); await wait_free()
 		print("ETC ", i, " -> ", stt()); inv()
 		if g.room_id != a[1]: list_etc(); break
+
+## -- push: rm_0100 boxes (bhObj001): push box 7 north, climb it (dnu), walk on its top, step down (dnd)
+func push_test() -> void:
+	await g.enter_room("rm_0100", 0, null, false)
+	await wait_free()
+	var bx: PushBox = null
+	for b in g.boxes: if b.idx == 7: bx = b
+	print("boxes ", g.boxes.size(), " etc ", vm.etc.size(), " box7 ", bx.node.position)
+	P.place(bx.node.position.x, 0.4, bx.node.position.z - 0.45 - 0.40, PI)
+	for k in 8:
+		await sim(0.5, ["KeyW"])
+		print("t%d st %s psh %s ct %d pl %.2f,%.2f box %.3f,%.3f attr %x" % [k, P.state, str(P.psh.get("m3", -1)), P.ps.ct, P.position.x, P.position.z, bx.node.position.x, bx.node.position.z, bx.wal.attr])
+	await sim(1.0)
+	print("released st ", P.state, " psh ", P.psh)
+	# climb from the west side facing east
+	P.place(bx.node.position.x - 0.45 - 0.40, 0.4, bx.node.position.z, -PI / 2)
+	await sim(0.1, ["KeyE"]); print("dn ", P.dn)
+	await sim(2.0)
+	print("after climb y %.2f dansa %s pos %.2f,%.2f st %s" % [P.position.y, P.dansa, P.position.x, P.position.z, P.state])
+	await sim(1.5, ["KeyW"])
+	print("walk top y %.2f pos %.2f,%.2f dla %d" % [P.position.y, P.position.x, P.position.z, g.room.dla.size()])
+	var fs := sin(PI / 2 * 3); var fc := cos(PI / 2 * 3)
+	var q := Vector3(P.position.x - fs * (0.3 + Player.AR), P.position.y - 0.89, P.position.z - fc * (0.3 + Player.AR))
+	print("down check ", q, " ", g.room.wall_type(q, Player.AR, Player.AH), " h ", P.heading, " danf? ", g._dansa_at(g.room.floor_num(P.position.y), P.position.x - 0.45 * fs, P.position.z - 0.45 * fc))
+	await sim(0.1, ["KeyE"]); print("dn ", P.dn)
+	for k in 8:
+		await sim(0.2); print("  d%d x %.2f y %.2f m %s b00 %s dn %s" % [k, P.position.x, P.position.y, P.model.position, P.bone_pos("b00"), P.dn.get("f", -1)])
+	var tp := Vector3(-0.069, 0.4, -9.615)
+	print("resolve ", g.room.resolve_pl(tp, Player.AR, 1, Player.AH), " wt ", g.room.wall_type(tp, Player.AR, Player.AH))
+	print("after down y %.2f dansa %s pos %.2f,%.2f st %s" % [P.position.y, P.dansa, P.position.x, P.position.z, P.state])
+	print("flag ", stt())
+
+## -- push2: rm_0100 box 7 into the bhAreaSearchObj zone (ev127)
+func push2_test() -> void:
+	await g.enter_room("rm_0100", 0, null, false)
+	await wait_free()
+	var bx: PushBox = null
+	for b in g.boxes: if b.idx == 7: bx = b
+	for b in g.boxes: print("box ", b.idx, " ", b.node.position)
+	print("walls0 ", [54, 55, 133, 138, 139].map(func(i): return int(vm.wal[i].flg) & 1), " effs ", g.fx.has_method("debug_list"))
+	P.place(bx.node.position.x, 0.4, bx.node.position.z - 0.45 - 0.40, PI)
+	for k in 6:
+		await sim(1.5, ["KeyW"]); print("n%d box %.3f,%.3f attr %x psh %s" % [k, bx.node.position.x, bx.node.position.z, bx.wal.attr, str(P.psh.get("m3", -1))])
+	await sim(1.0)
+	P.place(bx.node.position.x + 0.45 + 0.40, 0.4, bx.node.position.z, PI / 2)
+	for k in 6:
+		await sim(1.0, ["KeyW"]); print("w%d box %.3f,%.3f attr %x psh %s" % [k, bx.node.position.x, bx.node.position.z, bx.wal.attr, str(P.psh.get("m3", -1))])
+	await sim(1.0)
+	for k in 10:
+		await sim(1.0); print("e flags 4/1 %s 4/2 %s 1/7f %s 1/bf %s 10/17 %s" % [vm.flag(4, 1), vm.flag(4, 2), vm.flag(1, 0x7f), vm.flag(1, 0xbf), vm.flag(10, 0x17)])
+		if k == 0: print("walls1 ", [54, 55, 133, 138, 139].map(func(i): return int(vm.wal[i].flg) & 1))

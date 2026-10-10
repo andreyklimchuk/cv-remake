@@ -73,6 +73,9 @@ var dog_hurt := 0.0
 var _st8_frames := 0
 ## zombie bite in progress (Claire z00/z01 + zombie m00, then z02/z03 push-off)
 var grab: Variant = null
+## bhObj001 boxes of the room (PushBox) and the box top of the last step check (pp->dan_ap)
+var boxes: Array = []
+var _dan_ap: Variant = null
 
 func _init(ui_: UIRoot) -> void:
 	ui = ui_
@@ -107,6 +110,8 @@ func _ready() -> void:
 		var g: Variant = _gun()
 		return g != null and int(g.count) > 0
 	player.empty_click = func() -> void: audio.se("empty")
+	player.on_action_se = func(n: int) -> void: audio.action(n, player.position)
+	player.on_psh_frame = func() -> void: _box_frame()
 	player.on_kaidan_end = func(a: Dictionary) -> void:
 		var i := vm.etc.find(a)
 		if i >= 0: _kaidan_flags(i, false)
@@ -214,6 +219,7 @@ func enter_room(id: String, pos: int, at: Variant = null, fade := true, min_ms :
 	vm.wal = (r.data.get("collision", []) as Array).map(EvtVM.atr_from)
 	vm.flr = (r.data.get("areas", []) as Array).map(EvtVM.atr_from)
 	vm.posp = r.data.get("spawns", []); vm.evt_posno = [0, 0, 0, 0, 0, 0, 0, 0]
+	_init_boxes(r)
 	_sync_player_work()
 	cam.forced = -1; _wall_sig = ""; _hid_sig = ""
 	audio.room(vm.stg, vm.room, vm.rcase); audio.listener = cam.cam
@@ -230,6 +236,54 @@ func enter_room(id: String, pos: int, at: Variant = null, fade := true, min_ms :
 	if wait > 0: await get_tree().create_timer(wait / 1000.0).timeout
 	if fade: await ui.fade(false, 350)
 	busy = false
+
+## objitm.c bhSetObject: the ETTY objects of type 1 (bhObj001, ex byte 1) become push boxes — aspd = r3,
+## param = ex byte 0, floor = ex byte 2; their records follow the room's (sys->mwalp / metcp / mflrp)
+func _init_boxes(r: Room) -> void:
+	boxes = []; _dan_ap = null; r.mwal = []; r.dla = []
+	var objs: Array = r.data.get("objects", [])
+	for i in objs.size():
+		var o: Dictionary = objs[i]
+		var ex: String = o.get("ex", "000000000000")
+		if not (String(o.flags).hex_to_int() & 1) or ex.substr(2, 2).hex_to_int() != 1 or not r.obj_meshes.has(i): continue
+		boxes.append(PushBox.new(i, r.obj_meshes[i], int(o.get("r3", 0)), ex.substr(0, 2).hex_to_int(), ex.substr(4, 2).hex_to_int(), r, vm.etc, vm.flr))
+
+## one frame of the boxes (bhObj001 mode0 1); a stop request ends the push (plp->mode3 = 6)
+func _box_frame() -> void:
+	for b in boxes:
+		if (b as PushBox).tick(room, player.ps) and not player.psh.is_empty() and int(player.psh.m3) < 6:
+			player.psh.m3 = 6
+
+## bhCheckDansaAtari: a box top (ETC type 2, prm0 != 0) on floor flr containing (x, z)
+func _dansa_at(flr: int, x: float, z: float) -> Variant:
+	for a in vm.etc:
+		if (int(a.flg) & 1) and int(a.type) == 2 and int(a.prm[0]) != 0 and float(a.x) <= x and float(a.x) + float(a.w) >= x and float(a.z) <= z and float(a.z) + float(a.d) >= z and int(a.flr) == flr:
+			return a
+	return null
+
+## bhCheckFloorP (end): stflg 0x20000 = on a box top (the centre or a point ar away on a box top of the player's
+## floor); bhSetDansaLimitAtari: then temporary walls (type 1, attr 0x800000, 0.1 m high) keep the player on the
+## box top along the sides without a neighbouring top
+func _dansa_check() -> void:
+	var P := player.position; var flr := room.floor_num(P.y); var ar := Player.AR
+	room.dla = []
+	player.dansa = false
+	for q in [Vector2(P.x, P.z), Vector2(P.x, P.z - ar), Vector2(P.x + ar, P.z), Vector2(P.x, P.z + ar), Vector2(P.x - ar, P.z)]:
+		if _dansa_at(flr, q.x, q.y) != null: player.dansa = true; break
+	if not player.dansa: return
+	var pop: Variant = _dansa_at(flr, P.x, P.z)
+	if pop == null: pop = _dan_ap
+	else: _dan_ap = pop
+	if pop == null: player.dansa = false; return
+	var a: Dictionary = pop
+	var tmp := 0.5 * ar
+	var x: float = a.x; var z: float = a.z; var w: float = a.w; var d: float = a.d
+	var add := func(x0: float, z0: float, ww: float, dd: float) -> void:
+		room.dla.append({"s": {"k": "box", "x0": x0, "z0": z0, "x1": x0 + ww, "z1": z0 + dd}, "sh": 1, "flr": flr, "attr": 0x800000, "y": float(a.y), "h": 0.1, "i": -1})
+	if _dansa_at(flr, P.x, P.z - ar) == null: add.call(x - 2 * ar, z - (2 * ar + tmp), w + 4 * ar, 2 * ar)
+	if _dansa_at(flr, P.x + ar, P.z) == null: add.call(tmp + x + w, z - 2 * ar, 2 * ar, d + 4 * ar)
+	if _dansa_at(flr, P.x, P.z + ar) == null: add.call(x - 2 * ar, tmp + z + d, w + 4 * ar, 2 * ar)
+	if _dansa_at(flr, P.x - ar, P.z) == null: add.call(x - (2 * ar + tmp), z - 2 * ar, 2 * ar, d + 4 * ar)
 
 ## enemies of the room record that the scripts did not remove (InitModelSet / ENESETCK)
 func _spawn_enemies(r: Room) -> void:
@@ -429,8 +483,12 @@ func _floor_check() -> void:
 func _examine() -> bool:
 	var f := player.forward(); var q := _quad_bit(); var P := player.position
 	vm.cb &= ~0x100 & EvtVM.M32
-	if not player.kdn.is_empty(): return false
+	if not player.kdn.is_empty() or not player.psh.is_empty() or not player.dn.is_empty(): return false
 	var flr := room.floor_num(P.y)
+	var danf := false
+	var bams := Player._bams_of(player.heading)
+	var ayp := ((bams + 8192) & 0xC000) / 65536.0 * TAU
+	var fs := sin(ayp); var fc := cos(ayp)
 	for i in vm.etc.size():
 		var a: Dictionary = vm.etc[i]
 		if not (a.flg & 1): continue
@@ -441,6 +499,16 @@ func _examine() -> bool:
 		if (a.type == 1 or a.type == 2) and int(a.flr) != flr: continue
 		if a.type != 1 and a.type != 2 and (a.attr & q): continue
 		vm.cb |= 0x100; vm.etc_idx = i
+		if a.type == 2:
+			# a box: prm0 0 = climb (mode2 16) when the point 0.6 m ahead (facing quadrant) is inside the record
+			# (1 unit in from the sides) and no wall stands 0.9 m up at 0.2 m + ar ahead; prm0 != 0 = a box top
+			if int(a.prm[0]) != 0:
+				danf = true; continue
+			var qx := P.x - 0.6 * fs; var qz := P.z - 0.6 * fc
+			if a.x + 0.1 <= qx and a.x + a.w - 0.1 >= qx and a.z + 0.1 <= qz and a.z + a.d - 0.1 >= qz:
+				var ck: Variant = room.wall_type(Vector3(P.x - fs * (0.2 + Player.AR), P.y + 0.91, P.z - fc * (0.2 + Player.AR)), Player.AR, Player.AH)
+				if ck == null or (int(ck.attr) & 4): player.start_climb(true)
+			return true
 		if a.type == 1:
 			# kaidan: bhSetUseKaidanFlag + mode2 14 (up) / 15 (down)
 			if not (a.attr & 0x400000):
@@ -459,6 +527,11 @@ func _examine() -> bool:
 				if a.attr & 0x10: vm.cb |= 0x20000
 				vm.sb_id = int(items[k].id); _item_screen()
 		return true
+	# on a box top facing off its side: down (mode2 17) when no wall is in the way 0.9 m below at 0.3 m + ar ahead
+	if player.dansa and not danf:
+		var ck: Variant = room.wall_type(Vector3(P.x - fs * (0.3 + Player.AR), P.y - 0.89, P.z - fc * (0.3 + Player.AR)), Player.AR, Player.AH)
+		if ck == null or (int(ck.attr) & 4):
+			player.start_climb(false); return true
 	return false
 
 ## bhCamInfoSet (event command 0x39)
@@ -476,6 +549,8 @@ func _cam_floor() -> void:
 		var a: Dictionary = k.a
 		cam.flr = room.floor_num(float(a.y) - 0.2 * int(a.prm[2])) if not k.up and int(k.m3) >= 5 else room.floor_num(player.position.y)
 		cam.zone_p = player.bone_pos("b00")
+	elif not player.dn.is_empty() and player.dn.has("flr"):
+		cam.flr = int(player.dn.flr); cam.zone_p = player.bone_pos("b00")
 	else:
 		cam.flr = room.floor_num(player.position.y); cam.zone_p = null
 
@@ -624,6 +699,20 @@ func bone_obj(kind: int, idx: int, bone: int) -> Variant:
 	if kind == 3 and room and room.item_meshes.has(idx): return (room.item_meshes[idx] as Node3D).global_transform
 	return null
 
+## bhAreaSearchObj: px / pz of a work (enemy v0 = its ETTY record, objects / items by index)
+func work_xz(kind: int, idx: int) -> Variant:
+	var n: Node3D = null
+	if kind == 0: n = player
+	elif kind == 1:
+		for z in zombies + dogs:
+			if z.index == idx: n = z
+		for c in chars:
+			if c.index == idx: n = c.m
+	elif kind == 2 and room: n = room.obj_meshes.get(idx)
+	elif kind == 3 and room: n = room.item_meshes.get(idx)
+	if n == null: return null
+	return Vector2(n.global_position.x, n.global_position.z)
+
 ## bhZombieUpDieCk: the zombie's lower body work (cepw) has flg 2 (dead, bhEne01_DD00)
 func zombie_dead(idx: int) -> bool:
 	for z in zombies:
@@ -690,6 +779,7 @@ func _node_motion(ap: AnimationPlayer, w: EvtVM.Work) -> void:
 func _evt_frame() -> void:
 	_sync_player_work()
 	_floor_check()
+	if player.psh.is_empty(): _box_frame()
 	vm.tick()
 	if _st8_frames > 0:
 		_st8_frames -= 1
@@ -1078,6 +1168,7 @@ func step(dt: float) -> void:
 			var sens := 0.0024 * (0.6 if player.aiming else 1.0)
 			cam.look(inp.mdx * sens + ((1 if inp.cam_r else 0) - (1 if inp.cam_l else 0)) * 2.2 * dt, inp.mdy * sens)
 		cam.zoom += ((1.0 if sh and player.aiming else 0.0) - cam.zoom) * minf(1, dt * 10)
+		_dansa_check()
 		player.update(dt, inp, room, cam.yaw if sh else null)
 		if not msg.active and not inv_open and not in_cine and not (busy and grab == null):
 			if grab != null: _update_grab(dt)
@@ -1088,7 +1179,7 @@ func step(dt: float) -> void:
 					dog_hurt = 0.0
 					if player.hp <= 0: game_over()
 					else: player.play_sync(null)
-			var free := grab == null and dog_bite == null and player.sync == null and player.hp > 0 and player.kdn.is_empty()
+			var free := grab == null and dog_bite == null and player.sync == null and player.hp > 0 and player.kdn.is_empty() and player.dn.is_empty()
 			Zombie.others = dogs
 			for z in zombies:
 				var zw: EvtVM.Work = vm.get_work(1, z.index)

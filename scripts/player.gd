@@ -86,7 +86,21 @@ var on_kaidan_end: Callable
 var _kdn_acc := 0.0
 var _fix_off := Vector3.ZERO
 var _fix_t := -1.0
-var _hold_y := false   # after the stairs: py stays at rom->grand until the player moves
+var _hold_y := false
+## push (bhCPM2_act_psh, mode2 18) / box climb (bhCPM2_act_dnu / dnd, mode2 16 / 17): {} = inactive
+var psh := {}
+var dn := {}
+## bhCheckWallEx box contact: ay (bams), push (stflg 0x80), ct (psh_ct), box (psh_idx), m3 / spd of the push,
+## snd (sys->psh_snd)
+var ps := {"ay": 0, "push": false, "ct": 0, "box": null, "m3": 0, "spd": 0.0, "snd": 527}
+## stflg 0x20000: standing on a box top (bhCheckFloorP / bhSetDansaLimitAtari, set by the game)
+var dansa := false
+## CallPlayerActionSe(no)
+var on_action_se: Callable
+## after each 30 Hz push frame: the objects' frame (bhObj001 moves the touched box)
+var on_psh_frame: Callable
+## PlyTrsZ[4] = trans-Z table 9 of pl00 (the push motion 50 forward step per frame, game units)
+const TRSZ_PSH := [0.0, 0.0068, 0.0199, 0.0323, 0.0439, 0.0547, 0.0647, 0.0739, 0.0824, 0.0901, 0.0971, 0.1033, 0.1087, 0.1133, 0.1172, 0.1202, 0.1226, 0.1241, 0.1249, 0.1249, 0.1241, 0.1226, 0.1202, 0.1172, 0.1133, 0.1087, 0.1033, 0.0971, 0.0901, 0.0824, 0.0739, 0.0647, 0.0547, 0.0439, 0.0323, 0.0199, 0.0068]   # after the stairs: py stays at rom->grand until the player moves
 
 func load_model() -> void:
 	model = Assets.scene("chars/claire.glb")
@@ -230,7 +244,7 @@ func forward() -> Vector3:
 func place(x: float, y: float, z: float, h: float) -> void:
 	position = Vector3(x, y, z); heading = h; rotation.y = h; _last_pos = position; _last_head = h
 	if not kdn.is_empty() and on_kaidan_end.is_valid(): on_kaidan_end.call(kdn.a)
-	kdn = {}; _hold_y = false; _fix_t = -1.0
+	kdn = {}; psh = {}; dn = {}; ps.push = false; ps.ct = 0; ps.box = null; _hold_y = false; _fix_t = -1.0
 	if model: model.position = Vector3.ZERO
 	hair_reset()
 
@@ -259,6 +273,18 @@ func update(dt: float, inp: GameInput, room: Room, cam_yaw: Variant = null) -> v
 			_kdn_acc = minf(_kdn_acc + dt, 0.25)
 			while _kdn_acc >= 1.0 / 30.0 and not kdn.is_empty():
 				_kdn_acc -= 1.0 / 30.0; _kdn_tick(room)
+		rotation.y = heading
+		_update_tail(dt); _update_lighter(dt); _update_hands(); return
+	if (not psh.is_empty() or not dn.is_empty()) and sync == null:
+		state = "push" if not psh.is_empty() else "climb"; aiming = false; _k_state = "none"
+		if not frozen:
+			_kdn_acc = minf(_kdn_acc + dt, 0.25)
+			while _kdn_acc >= 1.0 / 30.0 and (not psh.is_empty() or not dn.is_empty()):
+				_kdn_acc -= 1.0 / 30.0
+				if not psh.is_empty():
+					_psh_tick(room, inp)
+					if on_psh_frame.is_valid(): on_psh_frame.call()
+				else: _dn_tick(room)
 		rotation.y = heading
 		_update_tail(dt); _update_lighter(dt); _update_hands(); return
 	if _fix_t >= 0.0:
@@ -309,12 +335,24 @@ func update(dt: float, inp: GameInput, room: Room, cam_yaw: Variant = null) -> v
 		state = "turn"; play("walk", 0.15, 0.7)
 	else:
 		state = "idle"; play("idle", 0.25)
+	# bhCPM2_act_wlk: psh_ct is kept while walking only (bhCPM1_act_bas clears it for the other modes)
+	if not (speed > 0 and state == "walk"): ps.ct = 0
 	if speed != 0:
 		_hold_y = false
-		var np := room.resolve_pl(position + forward() * speed * dt, AR, room.floor_num(position.y), AH)
-		var y: Variant = room.floor_at(np.x, np.z, position.y)
-		if y != null and absf(y - position.y) < 0.5:
-			position = Vector3(np.x, y, np.z)
+		ps.ay = _bams_of(heading)
+		var np := room.resolve_pl(position + forward() * speed * dt, AR, room.floor_num(position.y), AH, false, ps)
+		if dansa:
+			# on a box top the height stays at rom->grand of the floor (bhCheckWallEx, no floor polygon)
+			position = Vector3(np.x, room.floor_height(room.floor_num(position.y)), np.z)
+		else:
+			var y: Variant = room.floor_at(np.x, np.z, position.y)
+			if y != null and absf(y - position.y) < 0.5:
+				position = Vector3(np.x, y, np.z)
+		# psh_ct > 5 and not pushing: mode2 18 (stflg 0x10080)
+		if state == "walk" and int(ps.ct) > 5 and not ps.push:
+			start_push()
+	elif dansa:
+		position.y = room.floor_height(room.floor_num(position.y))
 	elif not _hold_y:
 		var y: Variant = room.floor_at(position.x, position.z, position.y)
 		if y != null: position.y = y
@@ -428,22 +466,148 @@ func _kdn_tick(room: Room) -> void:
 ## end of the stairs: position from the root object, floor number, py = rom->grand, stand motion (hokan 8)
 func _kdn_land(room: Room, p: Vector3, fwd: float) -> void:
 	var a: Dictionary = kdn.a
+	kdn = {}
+	_land(room, p + forward() * fwd)
+	if on_kaidan_end.is_valid(): on_kaidan_end.call(a)
+
+## end of a root-motion action (stairs, box climb): position from the root object, bhSetFloorNum, py = rom->grand,
+## the stand motion with hokan 8
+func _land(room: Room, p: Vector3) -> void:
 	var rl := Basis(Vector3.UP, -heading) * (bone_pos("b00") - position) - model.position
 	model.position = Vector3.ZERO
-	position = p + forward() * fwd
+	position = p
 	position.y = room.floor_height(room.floor_num(position.y))
+	# the step limit walls of a box top belong to the last bhCheckWallEx (bhCheckFloorP clears stflg 0x20000 on the
+	# new floor before the next one)
+	room.dla = []; dansa = false
 	# flg 0x10 again: the wall check of the next frame (bhCheckWallEx) pushes the player out of the walls
 	position = room.resolve_pl(position, AR, room.floor_num(position.y), AH)
 	_hold_y = true
-	kdn = {}
 	_play_id(KDN_STAND[dmlvl()], 8.0 / 30.0, true, 1.0, true)
 	cur = KDN_STAND[dmlvl()]
-	# the cross-fade (hokan 8) blends the root translation of the stairs motion too: the model is shifted back by
+	# the cross-fade (hokan 8) blends the root translation of the motion too: the model is shifted back by
 	# the fading part of it so the root stays at the new position
 	_fix_off = -(rl - _root_local(cur, 0.0))
 	_fix_t = 0.0; model.position = _fix_off
-	if on_kaidan_end.is_valid(): on_kaidan_end.call(a)
 	_last_pos = position
+
+static func _bams_of(h: float) -> int:
+	return int(round(h / TAU * 65536.0)) & 0xFFFF
+
+## the turn of mode3 0..2 shared by kdu / dnu / dnd / psh: turn motion PlMtnAct[1], ayp = the facing quadrant
+## ((ay + 0x2000) & ~0x3FFF), 7.2 deg * rtspd per frame until within 1310; returns true once mode3 is 3
+func _quad_turn(k: Dictionary) -> bool:
+	var lv := dmlvl()
+	var bams := _bams_of(heading)
+	match int(k.m3):
+		0:
+			k.ayp = (bams + 8192) & 0xC000
+			_play_id(KDN_TURN[lv], 4.0 / 30.0, true)
+			k.m3 = 2 if _s16(int(k.ayp) - _s16(bams)) >= 0 else 1
+			ap.speed_scale = 1.0 if int(k.m3) == 2 else -1.0
+			ap.advance(1.0 / 30.0)
+			return false
+		1, 2:
+			if absi(_s16(int(k.ayp)) - _s16(bams)) < 1310:
+				k.m3 = 3
+				return true
+			var st := int(182.04445 * (7.2 * (0.8 if lv == 2 else 1.0)))
+			bams += st if int(k.m3) == 2 else -st
+			heading = _bams(bams)
+			ap.advance(1.0 / 30.0)
+			return false
+	return true
+
+## ---- push: bhCPM2_act_psh (mode2 18): turn, motion 49 (clip m41) into the push pose, motion 50 (m42) looped with
+## the trans-Z steps; the box moves in PushBox.tick. Releasing forward (bhControlPlayerPad) or a blocked box side
+## -> mode3 6: motion 49 backwards at half speed, then the normal control (stflg &= ~0x10080)
+const PSH_IN := "m41"
+const PSH_LOOP := "m42"
+
+func start_push() -> void:
+	psh = {"m3": 0}; ps.push = true; ps.m3 = 0; ps.spd = 0.0; ps.ct = 0
+	_kdn_acc = 0.0
+
+func _psh_tick(room: Room, inp: GameInput) -> void:
+	var k := psh
+	# bhControlPlayerPad: forward released while pushing
+	if not inp.fwd and int(k.m3) == 5: k.m3 = 6
+	var spd := 0.0
+	if int(k.m3) <= 2:
+		_quad_turn(k)
+	elif int(k.m3) == 3:
+		_play_id(PSH_IN, 4.0 / 30.0, false, 1.0, true)
+		heading = _bams(int(k.ayp))
+		k.m3 = 4
+	elif int(k.m3) == 4:
+		ap.advance(1.0 / 30.0)
+		if ap.current_animation_position >= ap.get_animation(PSH_IN).length - 0.001:
+			_play_id(PSH_LOOP, 4.0 / 30.0, true, 1.0, true)
+			k.f = 0
+			k.m3 = 5
+			if on_action_se.is_valid(): on_action_se.call(int(ps.snd))
+	elif int(k.m3) == 5:
+		var n := roundi(ap.get_animation(PSH_LOOP).length * 30.0)
+		var f := int(k.f)
+		spd = float(TRSZ_PSH[mini(f + 1, TRSZ_PSH.size() - 1)]) * 0.1
+		ap.advance(1.0 / 30.0)
+		f += 1
+		if f >= n:
+			f = 0
+			if on_action_se.is_valid(): on_action_se.call(int(ps.snd))
+		k.f = f
+	elif int(k.m3) == 6:
+		_play_id(PSH_IN, 4.0 / 30.0, false, -0.5, true)
+		ap.seek(ap.get_animation(PSH_IN).length, true)
+		k.m3 = 7
+	elif int(k.m3) == 7:
+		ap.advance(1.0 / 30.0)
+		if ap.current_animation_position <= 0.001:
+			psh = {}; ps.push = false; ps.m3 = 0; ps.box = null
+			_play_id(KDN_STAND[dmlvl()], 4.0 / 30.0, true, 1.0, true)
+			cur = KDN_STAND[dmlvl()]
+			state = "idle"
+			return
+	ps.m3 = int(k.m3); ps.spd = spd; ps.ay = _bams_of(heading)
+	# bhAddSpeed + bhCheckWallEx: the step into the box (the contact marks the pushed box)
+	position = room.resolve_pl(position + forward() * spd, AR, room.floor_num(position.y), AH, false, ps)
+	var y: Variant = room.floor_at(position.x, position.z, position.y)
+	if y != null and absf(y - position.y) < 0.5 and not dansa: position.y = y
+
+## ---- box climb: bhCheckExmAtari ETC type 2 -> mode2 16 (dnu, up: motion 21 = clip m16, steps at frames 15 / 29,
+## py += 9) / 17 (dnd, down: motion 22 = m17, frames 13 / 16, py -= 9); the floor number changes at mode3 4
+func start_climb(up: bool) -> void:
+	dn = {"m3": 0, "up": up}
+	_kdn_acc = 0.0
+
+func _dn_tick(room: Room) -> void:
+	var k := dn
+	var up: bool = k.up
+	if int(k.m3) <= 2:
+		_quad_turn(k)
+		return
+	if int(k.m3) == 3:
+		k.id = "m16" if up else "m17"
+		_play_id(k.id, 4.0 / 30.0, false, 1.0, true)
+		heading = _bams(int(k.ayp))
+		k.n = roundi(ap.get_animation(k.id).length * 30.0)
+		k.f = 0
+		k.m3 = 4
+		return
+	if int(k.m3) == 4:
+		k.flr = room.floor_num(position.y + (0.9 if up else -0.9))
+		k.m3 = 5
+	var f := int(k.f)
+	if f >= int(k.n):
+		var b := bone_pos("b00")
+		dn = {}
+		_land(room, Vector3(b.x, position.y + (0.9 if up else -0.9), b.z))
+		return
+	var fs: Array = [15, 29] if up else [13, 16]
+	if f == fs[0] and on_step.is_valid(): on_step.call("b17", 0)
+	if f == fs[1] and on_step.is_valid(): on_step.call("b21", 0)
+	ap.advance(1.0 / 30.0)
+	k.f = f + 1
 
 func _advance(dt: float) -> void:
 	_mix_time += dt * ap.speed_scale

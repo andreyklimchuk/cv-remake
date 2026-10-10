@@ -9,6 +9,9 @@ var shapes: Array = []           # active wall shapes {k:box|circle|tri,...}
 ## the player's wall records (bhCheckWallEx): {s: shape, sh, flr, attr, y, h, i}; wall_on = ATR flg bit 0
 var pl_walls: Array = []
 var wall_on: Array = []
+## object walls (sys->mwalp, bhObj001 push boxes) and the step limit walls of a box top (bhSetDansaLimitAtari)
+var mwal: Array = []
+var dla: Array = []
 ## rom->grand (rmh header, metres): floor levels for bhCheckFloorNum
 var grand: Array = []
 static var _grand_db: Dictionary = {}
@@ -156,7 +159,7 @@ func _build_walls() -> void:
 		var t := String(e.type).hex_to_int()
 		wall_on.append(bool(t & 1))
 		var sh := (t >> 8) & 0xff
-		if sh == 6 or sh > 7: continue
+		if sh > 7: continue
 		var fl := String(e.flags).hex_to_int()
 		var attr := ((fl & 0xff) << 24) | ((fl & 0xff00) << 8) | ((fl >> 8) & 0xff00) | ((fl >> 24) & 0xff)
 		var x := float(e.x); var z := float(e.z); var sx := float(e.sx); var sz := float(e.sz)
@@ -183,14 +186,19 @@ func floor_height(flr: int) -> float:
 ## bhCheckWallEx for the player (second call, plp->px / ar / ah, flg 0x100 set): the record filters of the original —
 ## flg bit 0, type 1 off while on the stairs (flg 0x400), attr 1 = same floor only, attr 4 = enemy-only wall
 ## (the player always has stflg 0x40000000), vertical overlap (py + ah >= y and py <= y + h, h 0 = rom->h);
-## type 7 = a raised block (hit while its top is above the feet and below the head)
-func resolve_pl(p: Vector3, r: float, flr: int, ah := 1.65, kaidan := false) -> Vector3:
+## type 7 = a raised block (hit while its top is above the feet and below the head); type 6 is not a player wall.
+## The object walls (sys->mwalp: the push boxes, bhObj001) and the step limit walls of a box top
+## (bhSetDansaLimitAtari) follow the room records. ps (push state {ay, push, ct, box}): the box contact of
+## bhCheckWallEx — psh_ct counts the frames walking into a free side of a box (attr 0x10000), while pushing
+## (stflg 0x80) the touched box gets attr 0x20000 (psh_idx)
+func resolve_pl(p: Vector3, r: float, flr: int, ah := 1.65, kaidan := false, ps: Variant = null) -> Vector3:
 	var act: Array = []
-	for w in pl_walls:
-		if not wall_on[w.i]: continue
+	for w in pl_walls + mwal + dla:
+		if int(w.i) >= 0 and not wall_on[w.i]: continue
 		var attr: int = w.attr
 		if (attr & 1) and int(w.flr) != flr: continue
 		var sh: int = w.sh
+		if sh == 6: continue
 		if sh == 7:
 			var top: float = w.y + w.h
 			if not (p.y < top and p.y + ah > top): continue
@@ -198,8 +206,112 @@ func resolve_pl(p: Vector3, r: float, flr: int, ah := 1.65, kaidan := false) -> 
 			if (sh & 1) and kaidan: continue
 			if attr & 4: continue
 			if not (p.y + ah >= w.y and p.y <= w.y + w.h): continue
+		if ps != null and sh <= 1 and _in_rect(w.s, p.x, p.z, r, 0.002):
+			_push_contact(w, p, ps)
 		act.append(w.s)
 	return _resolve_in(p, r, act)
+
+static func _in_rect(b: Dictionary, x: float, z: float, ex: float, eps := 0.0) -> bool:
+	return x - (b.x0 - ex) >= -eps and x < b.x1 + ex + eps and z - (b.z0 - ex) >= -eps and z < b.z1 + ex + eps
+
+func _push_contact(w: Dictionary, p: Vector3, ps: Dictionary) -> void:
+	var attr: int = w.attr
+	if attr & 0x10000:
+		var ayp := (int(ps.ay) + 8192) & 0xC000
+		var blk := (ayp == 0 and attr & 0x40000) or (ayp == 0x4000 and attr & 0x200000) or (ayp == 0x8000 and attr & 0x100000) or (ayp == 0xC000 and attr & 0x80000)
+		if blk: ps.ct = 0
+		else:
+			var a := ayp / 65536.0 * TAU
+			var b: Dictionary = w.s
+			var qx := p.x - 0.5 * sin(a); var qz := p.z - 0.5 * cos(a)
+			ps.ct = int(ps.ct) + 1 if (b.x0 <= qx and b.x1 >= qx and b.z0 <= qz and b.z1 >= qz) else 0
+	if not (attr & 0x20000) and ps.push:
+		w.attr = attr | 0x20000
+		ps.box = w.get("box")
+
+## bhCheckWallType (flg 0x100; the step limit walls exist only inside bhCheckWallEx): the first wall touching a circle of radius r at pos (height ah), or null
+func wall_type(p: Vector3, r: float, ah: float, kaidan := false) -> Variant:
+	for w in pl_walls + mwal:
+		if int(w.i) >= 0 and not wall_on[w.i]: continue
+		var sh: int = w.sh
+		var vert: bool = p.y + ah >= w.y and p.y <= w.y + w.h
+		match sh:
+			0, 1:
+				if (sh & 1) and kaidan: continue
+				if vert and _in_rect(w.s, p.x, p.z, r): return w
+			2, 3:
+				if (sh & 1) and kaidan: continue
+				if vert and Vector2(p.x - w.s.x, p.z - w.s.z).length() < r + float(w.s.r): return w
+			4, 5:
+				if (sh & 1) and kaidan: continue
+				var q := Vector2(p.x, p.z)
+				if vert and (_in_tri(q, w.s.a, w.s.b, w.s.c) or q.distance_to(_closest_on_tri(q, w.s.a, w.s.b, w.s.c)) < r): return w
+			6:
+				if vert and _in_rect(w.s, p.x, p.z, 0.0): return w
+			7:
+				var top: float = w.y + w.h
+				if _in_rect(w.s, p.x, p.z, r) and p.y < top and p.y + ah > top: return w
+	return null
+
+## bhCheckWallType2 for an object (flg 0x2000, not 0x100): a box (half sizes aw / ad, height ah) at pos against
+## the walls; the object's own wall (attr 0x10000, prm3 = its index) and attr 0x40 walls are skipped
+func wall_type2(p: Vector3, aw: float, ad: float, ah: float, own: Variant) -> Variant:
+	for w in pl_walls + mwal:
+		if int(w.i) >= 0 and not wall_on[w.i]: continue
+		var attr: int = w.attr
+		if attr & 0x40: continue
+		var sh: int = w.sh
+		var vert: bool = p.y + ah >= w.y and p.y <= w.y + w.h
+		var b := Rect2(p.x - aw, p.z - ad, 2 * aw, 2 * ad)
+		match sh:
+			0, 1:
+				if (attr & 0x10000) and w.get("box") == own: continue
+				var s: Dictionary = w.s
+				if vert and p.x - (s.x0 - aw) >= 0 and p.x < s.x1 + aw and p.z - (s.z0 - ad) >= 0 and p.z < s.z1 + ad: return w
+			2, 3:
+				var c := Vector2(w.s.x, w.s.z)
+				var cl := Vector2(clampf(c.x, b.position.x, b.end.x), clampf(c.y, b.position.y, b.end.y))
+				if vert and cl.distance_to(c) <= float(w.s.r): return w
+			4, 5:
+				var poly := PackedVector2Array([b.position, Vector2(b.end.x, b.position.y), b.end, Vector2(b.position.x, b.end.y)])
+				if vert and not Geometry2D.intersect_polygons(poly, PackedVector2Array([w.s.a, w.s.b, w.s.c])).is_empty(): return w
+			6:
+				if vert and _in_rect(w.s, p.x, p.z, 0.0): return w
+			7:
+				var top: float = w.y + w.h
+				var s: Dictionary = w.s
+				if p.x - (s.x0 - aw) >= 0 and p.x < s.x1 + aw and p.z - (s.z0 - ad) >= 0 and p.z < s.z1 + ad and p.y + ah >= top and p.y < w.y: return w
+	return null
+
+## bhCheckWall2Box for an object work (flg 0x102000): pushes the box (centre p, half sizes aw / ad) out of the
+## box walls along the nearer axis; the circle walls use their square (the original's case 2 / 3 bounds)
+func wall2box(p: Vector3, aw: float, ad: float, ah: float, flr: int, own: Variant) -> Vector3:
+	for w in pl_walls + mwal:
+		if int(w.i) >= 0 and not wall_on[w.i]: continue
+		var attr: int = w.attr
+		var sh: int = w.sh
+		if sh > 3 and sh != 7: continue
+		if (attr & 1) and int(w.flr) != flr: continue
+		if attr & 4: continue
+		if sh <= 1 and (attr & 0x10000) and w.get("box") == own: continue
+		if sh >= 2 and sh <= 3 and (attr & 0x40): continue
+		var x0: float; var z0: float; var x1: float; var z1: float
+		if sh == 2 or sh == 3:
+			x0 = w.s.x - w.s.r; z0 = w.s.z - w.s.r; x1 = w.s.x + w.s.r; z1 = w.s.z + w.s.r
+		else:
+			x0 = w.s.x0; z0 = w.s.z0; x1 = w.s.x1; z1 = w.s.z1
+		if sh == 7:
+			var top: float = w.y + w.h
+			if not (p.y + ah >= top and p.y < w.y): continue
+		elif not (p.y + ah >= w.y and p.y <= w.y + w.h): continue
+		var px := x0 - aw; var pz := z0 - ad; var xn := x1 - x0 + 2 * aw; var zn := z1 - z0 + 2 * ad
+		if not (p.x - px >= 0 and p.x - px < xn and p.z - pz >= 0 and p.z - pz < zn): continue
+		var wpx := (x0 + x1) * 0.5; var wpz := (z0 + z1) * 0.5
+		var ex := px if p.x < wpx else px + xn
+		var ez := pz if p.z < wpz else pz + zn
+		if absf(p.x - ex) > absf(p.z - ez): p.z = ez
+		else: p.x = ex
+	return p
 
 ## floor triangles, occluder triangles and the bounding box of the room model
 func _collect(sc: Node3D) -> void:

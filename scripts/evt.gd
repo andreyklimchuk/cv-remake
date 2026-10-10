@@ -450,6 +450,18 @@ func _exec() -> int:
 				a.x = P.x - a.w / 2.0; a.y = P.y; a.z = P.z - a.d / 2.0
 			var w := work(3, _b(3))
 			w.px = P.x; w.py = P.y; w.pz = P.z; w.pos_set = true
+		0x72:
+			# bhAreaSearchObj: work v0 of kind v1 (0 player, 1 enemy, 2 object, 3 item) inside [x1, x2) x [z1, z2)
+			# (u16 / 100 game units, sign bits 1 / 4 of the flag bytes 3 and 9)
+			var q: Variant = host.work_xz(_b(2), _b(1)) if host.has_method("work_xz") else null
+			if q != null:
+				var x1 := _u16(4) / 1000.0 * (-1.0 if _b(3) & 1 else 1.0)
+				var z1 := _u16(6) / 1000.0 * (-1.0 if _b(3) & 4 else 1.0)
+				var x2 := _u16(10) / 1000.0 * (-1.0 if _b(9) & 1 else 1.0)
+				var z2 := _u16(12) / 1000.0 * (-1.0 if _b(9) & 4 else 1.0)
+				var v := q as Vector2
+				r = 1 if x1 <= v.x and x2 > v.x and z1 <= v.y and z2 > v.y else 0
+			else: r = 0
 		0x4e, 0x9e, 0x9f: pass  # bhEffBloodSet (enemy blood, not ported), bhPuruPuruFlagSet / Start (vibration, not ported)
 		0x26: r = int(host.weapon() == _b(1))
 		0x27: host.set_weapon(_b(1))
