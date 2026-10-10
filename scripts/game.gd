@@ -3,7 +3,7 @@ extends Node3D
 ## Port of game.ts: room loading, the event system glue (EvtHost), enemies, items, saving and the main loop.
 
 ## rooms converted from the PS3 data (room file = rm_<stage><room><case>)
-const ROOMS := ["rm_0000", "rm_0010", "rm_0020", "rm_0021", "rm_0030", "rm_0031", "rm_0040", "rm_0050", "rm_0060", "rm_0070", "rm_0080", "rm_0090", "rm_0100", "rm_0110", "rm_0160", "rm_1000", "rm_1120"]
+const ROOMS := ["rm_0000", "rm_0010", "rm_0020", "rm_0021", "rm_0030", "rm_0031", "rm_0040", "rm_0050", "rm_0060", "rm_0070", "rm_0080", "rm_0090", "rm_0100", "rm_0110", "rm_0160", "rm_1000", "rm_1020", "rm_1120", "rm_1130"]
 ## cutscene character models (enNNaVV)
 const NPC_MODELS := ["en91a00", "en93a00", "en98a00", "en62a00", "en68a00", "en69a00", "en87a00"]
 ## converted zombie models en01aNN (NN = model variant byte of the enemy record)
@@ -223,7 +223,11 @@ func enter_room(id: String, pos: int, at: Variant = null, fade := true, min_ms :
 	_sync_player_work()
 	cam.forced = -1; _wall_sig = ""; _hid_sig = ""
 	audio.room(vm.stg, vm.room, vm.rcase); audio.listener = cam.cam
-	fx.floors = vm.flr; fx.load_room(id, r.data.get("eft"))
+	fx.floors = vm.flr
+	fx.ground = func(x: float, y: float, z: float) -> Variant:
+		var h: Variant = r.floor_at(x * 0.1, z * 0.1, y * 0.1, 0.0)
+		return float(h) * 10.0 if h != null else null
+	fx.load_room(id, r.data.get("eft"))
 	lights.set_room(r.data.get("lgt"), r.data.get("evl"), r.data.get("amb"))
 	vm.init(ev.get("scripts", []))
 	_spawn_enemies(r)
@@ -553,6 +557,18 @@ func _cam_floor() -> void:
 		cam.flr = int(player.dn.flr); cam.zone_p = player.bone_pos("b00")
 	else:
 		cam.flr = room.floor_num(player.position.y); cam.zone_p = null
+
+## bhDefModelSet (event command 0x3b): NJD_EVAL_HIDE (evalflags 8) on node `node` of a model — only that node's
+## mesh is skipped, its children are still drawn. Objects only (kind 2); the walk-order node names nNNN of the glb
+func def_model(kind: int, idx: int, node: int, hide: bool) -> void:
+	if kind != 2 or room == null or not room.obj_meshes.has(idx): print("def_model: kind %d not ported" % kind); return
+	var n: Node = (room.obj_meshes[idx] as Node).find_child("n%03d" % node, true, false)
+	if n == null: return
+	var ms: Array = [n] if n is MeshInstance3D else n.get_children().filter(func(x): return x is MeshInstance3D and not String(x.name).begins_with("n"))
+	for m in ms:
+		var mi := m as MeshInstance3D
+		if not mi.has_meta("mesh0"): mi.set_meta("mesh0", mi.mesh)
+		mi.mesh = null if hide else mi.get_meta("mesh0")
 
 ## bhKaidanPlayerMotion (event command 0xa4): bhSetUseKaidanFlag on record idx, mode2 14 (flg 0, up) / 15 (down);
 ## attr 1 (mode2 20 / 21) is not ported
@@ -889,6 +905,7 @@ func movie_playing() -> bool: return _movie_on
 func eff(cmd: String, a: int, v: int) -> void:
 	if cmd == "disp": fx.disp(a, v)
 	elif cmd == "mode": fx.mode(a, v)
+	elif cmd == "type": fx.set_type(a, v)
 	else: fx.yure(a, v)
 
 ## bhCheckFloorSound: FLR records (flg 1, type 1) give the floor sound type (prm0) under a point

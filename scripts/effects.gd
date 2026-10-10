@@ -162,6 +162,8 @@ class O:
 
 var eff: Array[O] = []
 var _trs: Array = []
+## bhGetGroundPosition(x, y, z) in game units (set by the game: the room floor below)
+var ground: Callable
 var _opq: Array = []   # sys->ef_opq (bhEffBG), drawn after ef_trs
 var _fnc: Array = []
 var _trs2d: Array = []
@@ -270,6 +272,9 @@ func disp(i: int, on: int) -> void:
 	else: eff[i].stflg &= ~0x1000000
 func mode(i: int, v: int) -> void:
 	eff[i].mode1 = v
+## bhEffTypeSet (event command 0xad): op->type of room effect i
+func set_type(i: int, v: int) -> void:
+	eff[i].type = v
 func yure(kind: int, v: int) -> void:
 	if kind == 0: of = [0.01 * v * randf(), 0.01 * v * randf(), 0.01 * v * randf()]
 	else: of = [0.0, 0.0, 0.0]
@@ -413,7 +418,12 @@ func _run(op: O) -> void:
 		182: _e182(op)
 		201: _e201(op)
 		123: _e123(op)
-		59: op.flg = 0   # bhEffDmy
+		122: _e122(op)
+		125: _e125(op)
+		126: _e126(op)
+		249: _e249(op)
+		109: _e109(op)
+		64: op.flg = 0   # bhEffDmy (30..84 except 85)
 		93, 94, 95, 96, 97, 98, 99: _ebg(op)
 		18: _e018(op)
 		218: _e218(op)
@@ -573,6 +583,105 @@ func _e119(op: O) -> void:
 	_uv4(op, uv.u, uv.v, uv.u + uv.w, uv.v + uv.h)
 	op.ct0 += 1
 	_trs.append(op)
+
+## bhEff122 (effsub1.c): a fixed (not camera-facing) picture of texture 41 page `type`, uv frame mode1 (bhEffModeSet)
+const UV_122 := [[0.0, 0.0], [0.125, 0.0], [0.25, 0.0]]
+func _e122(op: O) -> void:
+	if op.mode0 == 0:
+		op.tex = 41; op.flg |= 0x4000000; op.bls = 8; op.bld = 6
+		for v in op.tv: v.col = 0xFFFFFFFF
+		op.ct0 = 0; op.mode0 = 1
+	op.ani = op.type
+	var uv: Array = UV_122[clampi(op.mode1, 0, 2)]
+	_uv4(op, uv[0], uv[1], uv[0] + 0.125, uv[1] + 0.125)
+	_trs.append(op)
+
+## bhEff125 (effsub1.c): on mode1 (bhEffModeSet) one bhEff126 puff (type mode1 - 1, mdlver type % 4) near the point
+func _e125(op: O) -> void:
+	op.flg |= 0x1000000
+	if op.mode1 != 0:
+		_set_tb({"flg": 0x4100001, "id": 126, "mdlver": op.type % 4, "type": op.mode1 - 1, "sx": 0.25 * op.sx, "sy": 0.25 * op.sy, "sz": op.sz,
+			"px": op.px + randf() - 0.5, "py": op.py, "pz": op.pz + randf() - 0.5, "ax": 0, "ay": op.ay})
+		op.mode1 = 0
+
+## bhEff126 (effsub1.c): dust / smoke puff of texture 35 falling to the ground (bhGetGroundPosition 3 below)
+const P0_126 := [[0.0, 0.0, 0.15625], [0.15625, 0.0, 0.15625], [0.3125, 0.0, 0.15625], [0.46875, 0.0, 0.15625], [0.625, 0.0, 0.15625], [0.78125, 0.0, 0.15625], [0.625, 0.0, 0.15625], [0.78125, 0.0, 0.15625], [0.625, 0.0, 0.15625], [0.78125, 0.0, 0.15625], [0.625, 0.0, 0.15625], [0.78125, 0.0, 0.15625], [0.625, 0.0, 0.15625], [0.78125, 0.0, 0.15625], [0.0, 0.15625, 0.15625], [0.15625, 0.15625, 0.15625], [0.3125, 0.15625, 0.15625], [0.46875, 0.15625, 0.15625]]
+const P2_126 := [[0.0, 0.0, 0.0625], [0.0625, 0.0, 0.09375], [0.15625, 0.0, 0.09375], [0.25, 0.0, 0.125], [0.375, 0.0, 0.1875], [0.5625, 0.0, 0.1875], [0.75, 0.0, 0.25], [0.5625, 0.0, 0.1875], [0.75, 0.0, 0.25], [0.5625, 0.0, 0.1875], [0.75, 0.0, 0.25], [0.0, 0.25, 0.25], [0.25, 0.25, 0.25], [0.5, 0.25, 0.25], [0.75, 0.25, 0.25], [0.0, 0.5, 0.25], [0.25, 0.5, 0.25], [0.5, 0.5, 0.25], [0.75, 0.5, 0.25]]
+const P3_126 := [[0.0, 0.0, 0.0625], [0.0625, 0.0, 0.09375], [0.15625, 0.0, 0.09375], [0.25, 0.0, 0.125], [0.375, 0.0, 0.1875], [0.5625, 0.0, 0.1875], [0.75, 0.0, 0.25], [0.0, 0.25, 0.25], [0.25, 0.25, 0.25], [0.5, 0.25, 0.25], [0.75, 0.25, 0.25], [0.0, 0.5, 0.25], [0.25, 0.5, 0.25], [0.5, 0.5, 0.25], [0.75, 0.5, 0.25]]
+func _e126(op: O) -> void:
+	var t := op.tv
+	if op.mode0 == 0:
+		op.tex = 35; op.flg |= 0x4100000
+		if op.type < 5:
+			t[0].x = -1.0; t[0].y = 1.0; t[1].x = 1.0; t[1].y = 1.0; t[2].x = -1.0; t[2].y = -1.0; t[3].x = 1.0; t[3].y = -1.0
+			for v in t: v.col = 0xFFFFFFFF
+		op.bls = 8; op.bld = 6
+		var g: Variant = ground.call(op.px, op.py - 3.0, op.pz) if ground.is_valid() else null
+		op.gpy = float(g) if g != null else 0.0
+		op.yn = -0.1
+		match op.type:
+			0, 1: op.exp = P0_126; op.spd = 0.015 * op.sz; op.ani = 0
+			2, 3:
+				op.exp = P0_126.map(func(q): return [q[0], q[1] + 0.3125, q[2]]); op.sx *= 0.8; op.sy *= 0.8; op.spd = 0.02 * op.sz; op.ani = 1
+			4:
+				for v in t: v.col = (((64 - op.mdlver * 16) << 24) | 0xFFFFFF) & 0xFFFFFFFF
+				op.exp = P2_126; op.sx *= 1.2; op.sy *= 1.2; op.spd = 0.005 * op.sz; op.ani = 2
+			5, 6:
+				if op.type == 6: op.yn = 0.25 * op.sz
+				for v in t: v.col = (((128 - op.mdlver * 32) << 24) | 0xFFFFFF) & 0xFFFFFFFF
+				op.exp = P3_126; op.ani = 2
+		if op.exp == null: op.flg = 0; return
+		op.mode0 = 1
+	match op.type:
+		0, 1, 2, 3, 4:
+			if op.yn > -3.0: op.yn -= op.spd
+			op.py += op.yn
+		6:
+			op.py += op.yn; op.yn *= 0.8
+	if op.ct0 >= (op.exp as Array).size() or op.py < op.gpy:
+		op.flg = 0; return
+	var q: Array = op.exp[op.ct0]
+	_uv4(op, q[0], q[1], q[0] + q[2], q[1] + q[2])
+	op.ct0 += 1
+	_trs.append(op)
+
+## bhEff109 (effsub1.c): water ripples — every 16 frames (type 0) / lkono frames a bhEff108 ring on the water surface
+## (sys->wt_wvp, room water with st_flg 0x40). The water surface is not ported, so bhEff108 ends at once (flg = 0)
+## as in the original without st_flg 0x40
+func _e109(op: O) -> void:
+	op.flg |= 0x1000000
+
+## bhEff249 (effsub5.c): a puff (texture 427, 4x4 frames of 56 px) thrown along (ax, ay) by sz / 10, slowing ×0.95,
+## sinking 0.01 per frame, growing by the fractional parts of sx / sy; lkono frames, then waits for mode1 again
+func _e249(op: O) -> void:
+	if op.type == 0 and op.mode1 != 0: op.type = op.mode1
+	if op.type == 0:
+		op.flg |= 0x1000000; return
+	op.flg &= ~0x1000000
+	match op.mode0:
+		0:
+			op.flg |= 0x4180000; op.tex = 427; op.bls = 8; op.bld = 3
+			op.gpx = op.px; op.gpy = op.py; op.gpz = op.pz; op.sxb = op.sx; op.syb = op.sy; op.szb = op.sz
+			for v in op.tv: v.col = 0xFFFFFFFF
+			op.ct0 = 0; op.ct1 = 0
+			op.aox = absf(op.sx - floorf(op.sx)) / 10.0; op.sx = floorf(op.sx) / 5.0
+			op.aoy = absf(op.sy - floorf(op.sy)) / 10.0; op.sy = floorf(op.sy) / 5.0
+			var v := _dir(op.ax, op.ay, op.sz / 10.0); op.xn = v.x; op.yn = v.y; op.zn = v.z
+			op.mode0 = 1
+		1:
+			op.ct0 += 1
+			if op.lkono <= op.ct0:
+				op.px = op.gpx; op.py = op.gpy; op.pz = op.gpz; op.sx = op.sxb; op.sy = op.syb; op.sz = op.szb
+				op.mode1 = 0; op.type = 0; op.mode0 = 0
+				return
+			op.ct1 = (op.ct0 * 16) / op.lkono
+			op.yn -= 0.01
+			op.px += op.xn; op.py += op.yn; op.pz += op.zn
+			op.xn *= 0.95; op.yn *= 0.95; op.zn *= 0.95
+			op.sx += op.sx * op.aox; op.sy += op.sy * op.aoy
+	var u := (op.ct1 % 4) * 56; var w := (op.ct1 / 4) * 56
+	_uv4(op, u / 256.0, w / 256.0, (u + 55) / 256.0, (w + 55) / 256.0)
+	if _trs.size() < 512: _trs.append(op)
 
 ## bhEffBG (effsub1.c, ids 93..99): a billboard picture of texture `id` (u 0..0.625, v 0..0.46875), blend 8/6, drawn in
 ## the opaque list (ef_opq) after the translucent effects
@@ -873,6 +982,14 @@ func draw(camera: Camera3D) -> void:
 			continue
 		var ca := cos(op.az * ANG); var sa := sin(op.az * ANG)
 		var q := []
+		if not (op.flg & 0x100000):
+			# fixed quad: njTranslateEx(p), njRotateEx(ax, ay, az), njScaleEx(s) in world space
+			var rb := Basis.from_euler(Vector3(op.ax * ANG, op.ay * ANG, op.az * ANG), EULER_ORDER_ZYX)
+			for k in 4:
+				var t: Dictionary = op.tv[k]
+				var p := (Vector3(op.px, op.py, op.pz) + rb * Vector3(t.x * op.sx, t.y * op.sy, 0.0)) * 0.1
+				q.append([p, Vector2(t.u, t.v), _col(int(t.col))])
+			b.quads.append(q); continue
 		for k in 4:
 			var t: Dictionary = op.tv[k]
 			# view space of the original: x right, y down; scale then rotate about z

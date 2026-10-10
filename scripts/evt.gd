@@ -462,6 +462,12 @@ func _exec() -> int:
 				var v := q as Vector2
 				r = 1 if x1 <= v.x and x2 > v.x and z1 <= v.y and z2 > v.y else 0
 			else: r = 0
+		0x3b:
+			# bhDefModelSet: node v2 of the model of v0/v1 (0 player, 1 enemy, 2 object) hidden (v3 0, evalflags 8) / shown
+			if host.has_method("def_model"): host.def_model(_b(1), _b(2), _b(3), _b(4) == 0)
+		0x6b: pass  # bhDelYakkyou (bhDeleteYakkyou: spent cartridge cases — not ported)
+		0x6a: pass  # bhEventSkipSet (gm_flg 0x40000000: event skip allowed / not) — the port does not limit skipping
+		0x2f: pass  # bhInitSetKage (bhSetShadow on an enemy: the round shadow, not ported)
 		0xa4:
 			# bhPlayerKaidanMotion -> bhKaidanPlayerMotion(v0, v1): stairs motion on record etc[v1], v0 0 = up, else down
 			if host.has_method("kaidan_motion"): host.kaidan_motion(_b(1), _b(2))
@@ -573,6 +579,7 @@ func _exec() -> int:
 		# effects (bhEffDispSet / bhEffModeSet) and bhCamYureSet
 		0x43: host.eff("disp", _b(1), _b(2))
 		0x91: host.eff("mode", _b(1), _b(2))
+		0xad: host.eff("type", _b(1), _b(2))  # bhEffTypeSet
 		0x5a: host.eff("yure", _b(1), _u16(2))
 		0xbc:
 			if _b(1) < 16: tasks[_b(1)].status = 0
