@@ -82,6 +82,9 @@ var _arm_blend := 0.0
 var _attach: BoneAttachment3D
 ## stairs (bhCPM2_act_kdu / kdd, mode2 14/15): {} = not on stairs; on_kaidan_end(atr) clears the use flags
 var kdn := {}
+## frozen only by an event (st_flg 4, bhCineSet): the pad is ignored, but the mode handlers keep running
+## (bhControlPlayer runs bhCtrPly_mode0 whenever sp_flg 1) — e.g. bhKaidanPlayerMotion stairs inside an event
+var cine := false
 var on_kaidan_end: Callable
 var _kdn_acc := 0.0
 var _fix_off := Vector3.ZERO
@@ -269,7 +272,7 @@ func play_sync(id: Variant, loop := false, fade := 0.08) -> void:
 func update(dt: float, inp: GameInput, room: Room, cam_yaw: Variant = null) -> void:
 	if not kdn.is_empty() and sync == null:
 		state = "stairs"; aiming = false; _k_state = "none"
-		if not frozen:
+		if not frozen or cine:
 			_kdn_acc = minf(_kdn_acc + dt, 0.25)
 			while _kdn_acc >= 1.0 / 30.0 and not kdn.is_empty():
 				_kdn_acc -= 1.0 / 30.0; _kdn_tick(room)
@@ -371,8 +374,8 @@ const KDN_WALK := ["m00", "m02", "m03"]
 const PL_KDU := [19, 6, 15]      # PlKDU[Claire][dlvl]
 const KDN_FOOT := {true: [21, 8], false: [20, 8]}   # PlFootSnd[0][0/1][5 kdu / 6 kdd]
 
-func start_kaidan(a: Dictionary) -> void:
-	kdn = {"a": a, "up": int(a.prm[0]) == 0, "m3": 0, "f": 0, "end": false}
+func start_kaidan(a: Dictionary, up := -1) -> void:
+	kdn = {"a": a, "up": int(a.prm[0]) == 0 if up < 0 else up == 1, "m3": 0, "f": 0, "end": false}
 	_kdn_acc = 0.0
 
 static func _kdn_mtn(n: int) -> String:

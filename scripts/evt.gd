@@ -462,6 +462,9 @@ func _exec() -> int:
 				var v := q as Vector2
 				r = 1 if x1 <= v.x and x2 > v.x and z1 <= v.y and z2 > v.y else 0
 			else: r = 0
+		0xa4:
+			# bhPlayerKaidanMotion -> bhKaidanPlayerMotion(v0, v1): stairs motion on record etc[v1], v0 0 = up, else down
+			if host.has_method("kaidan_motion"): host.kaidan_motion(_b(1), _b(2))
 		0x4e, 0x9e, 0x9f: pass  # bhEffBloodSet (enemy blood, not ported), bhPuruPuruFlagSet / Start (vibration, not ported)
 		0x26: r = int(host.weapon() == _b(1))
 		0x27: host.set_weapon(_b(1))

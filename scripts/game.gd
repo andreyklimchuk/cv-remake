@@ -3,11 +3,11 @@ extends Node3D
 ## Port of game.ts: room loading, the event system glue (EvtHost), enemies, items, saving and the main loop.
 
 ## rooms converted from the PS3 data (room file = rm_<stage><room><case>)
-const ROOMS := ["rm_0000", "rm_0010", "rm_0020", "rm_0021", "rm_0030", "rm_0031", "rm_0040", "rm_0050", "rm_0060", "rm_0070", "rm_0080", "rm_0090", "rm_0100", "rm_0110", "rm_0160"]
+const ROOMS := ["rm_0000", "rm_0010", "rm_0020", "rm_0021", "rm_0030", "rm_0031", "rm_0040", "rm_0050", "rm_0060", "rm_0070", "rm_0080", "rm_0090", "rm_0100", "rm_0110", "rm_0160", "rm_1120"]
 ## cutscene character models (enNNaVV)
 const NPC_MODELS := ["en91a00", "en93a00", "en98a00", "en62a00", "en68a00", "en69a00", "en87a00"]
 ## converted zombie models en01aNN (NN = model variant byte of the enemy record)
-const ZOMBIE_VARIANTS := [0, 1, 2, 9, 10, 32, 33]
+const ZOMBIE_VARIANTS := [0, 1, 2, 3, 6, 9, 10, 32, 33]
 ## en01_PersonalType add_atk per model variant
 const LIGHTER := 55
 const KNIFE := 8
@@ -553,6 +553,15 @@ func _cam_floor() -> void:
 		cam.flr = int(player.dn.flr); cam.zone_p = player.bone_pos("b00")
 	else:
 		cam.flr = room.floor_num(player.position.y); cam.zone_p = null
+
+## bhKaidanPlayerMotion (event command 0xa4): bhSetUseKaidanFlag on record idx, mode2 14 (flg 0, up) / 15 (down);
+## attr 1 (mode2 20 / 21) is not ported
+func kaidan_motion(flg: int, idx: int) -> void:
+	if idx >= vm.etc.size(): return
+	var a: Dictionary = vm.etc[idx]
+	if int(a.attr) & 1: print("kaidan_motion: attr 1 stairs (mode2 20/21) not ported"); return
+	_kaidan_flags(idx, true)
+	player.start_kaidan(a, 1 if flg == 0 else 0)
 
 ## bhSetUseKaidanFlag / bhClrUseKaidanFlag: attr 0x400000 on the stairs record and its pair (prm3 0xFF = the next
 ## record for the lower end, the previous one for the upper end; otherwise record prm3)
@@ -1134,6 +1143,7 @@ func step(dt: float) -> void:
 		player.frozen = true; return
 	if inp.hit(["F1", "Backquote"]): debug = not debug
 	var cine := in_cine
+	player.cine = false
 	if msg.active:
 		msg.update(dt, inp.action, inp.hit(["KeyA", "ArrowLeft"]), inp.hit(["KeyD", "ArrowRight"]), inp.cancel)
 		player.frozen = true
@@ -1144,7 +1154,7 @@ func step(dt: float) -> void:
 		if not inv_screen.update(dt): toggle_inv(false)
 	elif busy or _dialog: player.frozen = true
 	elif cine:
-		player.frozen = true
+		player.frozen = true; player.cine = true
 		# event skip (START in the original): the scripts check cb bit 0x10000000
 		if vm.cb & 4 and inp.hit(["Escape", "Enter", "Space"]): vm.cb |= 0x10000000
 	else:
