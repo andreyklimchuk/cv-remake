@@ -297,3 +297,24 @@
     отрезок, и участок [t0, t1]; точки и результат те же. Тест `-- prof ROOM SECS X Z ANG`: 35 → 3 мс на шаг (без рендера).
   - Новые локации (rm_0100–0150) в этот раз не начаты: восстановление после сброса заняло сессию. Конвейер: conv/room.py
     (+ light_patch, hid_patch, room_cuts, evt_export, enemy, sound, mes) веб-ветки → tools/build_scenes.gd → extra_assets.
+- 10.10, rm_0110 (морг/лаборатория за дверью rm_0160 p0; песочница сбрасывалась ещё дважды — всё пушится частями):
+  - Конвейер веб-ветки: conv/room.py, evt_export, evc_export (4 evc), ent_patch, light_patch, hid_patch, effects.py,
+    звук sound.bank(rm_011_0) (7 сэмплов) → assets; ROOMS += rm_0110, ROOM_BANKS += "011", NPC_MODELS += en68a00, en69a00,
+    en87a00. Сцены: `tools/build_scenes.gd -- models` и `-- rooms rm_0110`.
+  - Ассеты, которых нет в веб-бандле, лежат в `tools/extra_assets` (комната, evt/eft, звук, NPC, ob_039/040/064, it_047/051).
+    fetch_assets.py теперь понимает части `<путь>.b64.000, .001…` (склеиваются) и gzip внутри base64 (по сигнатуре 1f8b).
+  - NPC: en68a00 — жёсткая модель без SKIN (enemy.build с подменой skin_mdl, клипы rm_0110 r02–r05, скрипты берут r04/r05);
+    en69a00 — клип r00, в скриптах не двигается (стоит статично); en87a00 — enemy.py с порогом 3 <= nbk, клип r06 (38 кадров).
+    Зомби en01a01 (тип 0x000a) в событии 0 стоит в комнатном движении r00 (пауза): клип влит в assets/enemies/en01a*.glb
+    через `tools/room_clips/en01.json`.
+  - Новые опкоды (event.c): 0x7c bhFlrAtariSet2 (attr/prm/type пола как ETCSET), 0x8e bhZombieUpDieCk (зомби мёртв —
+    в порте state "dead" = DD00, где оригинал ставит cepw->flg 2 → rm-флаг), 0xb3 bhEtcAtariEnePosSet (ближайший POS к кости
+    врага → sys->evt_posno, ETC по центру), 0xb4 bhEtcAtariEvtPosSet (ETC и предмет на POS evt_posno), Common_controll 0x20
+    (сплайн Оверхаузера ips3..ips0), 0x33 (ips от кости врага до POS), 0x34 (ips от работы до POS). POS = spawns комнаты.
+  - Не перенесено (приближения): Anatomist-зомби en26 (ene4, ИИ en26.c не портирован — появляется при ev128 & ev129,
+    ENESETCK ed[35]; без него не срабатывают выпадение стеклянного глаза (события 60/61, etc12) и его кровь);
+    0x4e bhEffBloodSet (кровь врага, только у en26) и 0x9e/0x9f bhPuruPuru (вибрация) — пустые; эффекты id 123/125 не
+    портированы. Дверь etc0 → rm_0130 закрыта (flg 0) до сюжетных флагов.
+  - Тест `-- tour ROOM [ETC…]`: вход (pos 0), список ETC, затем осмотр/подбор/двери по индексам (читает и закрывает файлы).
+    rm_0110: осмотры 1–5, 7, 8 дают сообщения, etc6 — файл 9 «Дневник заключённого», etc9 — спрей, etc13 — патроны;
+    переход rm_0160 etc1 → rm_0110 работает.

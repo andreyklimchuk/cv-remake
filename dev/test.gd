@@ -767,6 +767,10 @@ func tour_test() -> void:
 		if i >= vm.etc.size(): continue
 		await act(i)
 		await wait_free(); await sim(1); await wait_free()
+		for k in 60:
+			if not g.file_view.active: break
+			if k == 0: print("FILE ", g.file_view.filenum, " pages ", g.file_view.last_page(g.file_view.filenum))
+			g.sim(0.2, ["KeyQ" if k % 2 == 0 else "KeyE"]); await sleep(10); g.sim(0.5, []); await sleep(10)
 		if g.inv_open: print("INV OPEN ", g.inv_screen._mode); g.sim(0.1, ["KeyE"]); await sleep(10); g.sim(0.1, []); await sleep(10); await wait_free()
 		print("ETC ", i, " -> ", stt()); inv()
 		if g.room_id != a[1]: list_etc(); break
