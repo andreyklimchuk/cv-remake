@@ -68,6 +68,9 @@ import add_room_clips
 for p in sorted(glob.glob(os.path.join(OUT, 'enemies', 'en01a*.glb'))):
     k = add_room_clips.merge(p)
     if k: print('room clips', os.path.relpath(p, OUT), k)
+# Claire's motion banks the web build lacks (tools/room_clips/claire.json: pl00w09 M-100P -> clips pNN = slot 100+NN)
+k = add_room_clips.merge(os.path.join(OUT, 'chars', 'claire.glb'))
+if k: print('player clips', k)
 # material alpha of Ninja BLEND materials the web glbs drop (tools/mat_alpha.json) -> baseColorFactor (idempotent)
 import fix_mat_alpha
 for r in fix_mat_alpha.run(OUT): print('mat alpha', r)

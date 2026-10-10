@@ -22,7 +22,7 @@ const DESC := {
 	104: {"en": "Medicine that is\nused to stop\nbleeding.\fIt should be used\non someone who\nis wounded.", "ru": "Лекарство,\nостанавливающее\nкровотечение.\fЕго нужно применить\nк раненому."},
 	133: {"en": "A board clip holding\nsome papers.", "ru": "Планшет-зажим\nс бумагами."},
 }
-const WEAPONS := [8, 9]
+const WEAPONS := [8, 9, 142]
 ## icon orientation overrides for models lying in another pose
 const ICON_ROT := {9: [-1.15, 0, 0.25]}
 const STANDARD := [55]
@@ -33,12 +33,12 @@ const CUREDATA := [4, 1, 0, 16, 2, 4, 17, 18, 3, 20]
 const HP_MAX := 160
 ## combidata: item -> [partner, result, type] (0/1 ammo into weapon, 2 ammo merge, 6 herbs)
 const COMBI := {
-	9: [[19, 10, 0], [12, 9, 0]], 12: [[5, 5, 1], [9, 9, 1], [10, 10, 1], [12, 12, 2], [131, 131, 1]],
+	9: [[19, 10, 0], [12, 9, 0]], 142: [[143, 142, 0]], 143: [[142, 142, 1]], 12: [[5, 5, 1], [9, 9, 1], [10, 10, 1], [12, 12, 2], [131, 131, 1]],
 	21: [[21, 24, 6], [22, 25, 6], [23, 26, 6], [24, 28, 6], [26, 27, 6]], 22: [[21, 25, 6], [26, 29, 6]],
 	23: [[21, 26, 6], [24, 27, 6], [25, 29, 6]], 24: [[21, 28, 6], [23, 27, 6]], 25: [[23, 29, 6]], 26: [[21, 27, 6], [22, 29, 6]],
 }
-const AMMO := [12]
-const BULLET_MAX := {9: 15, 10: 15, 12: 15}
+const AMMO := [12, 143]
+const BULLET_MAX := {9: 15, 10: 15, 12: 15, 142: 100}
 ## panel groups slide in from these offsets (640x480 units): 1 top menu, 2 status, 3 equipment, 5 item list, 6 message
 const CEN_OFF := {1: [0, -120], 2: [-448, 0], 3: [288, 0], 5: [208, 0], 6: [0, 152]}
 
@@ -235,6 +235,7 @@ func _ready() -> void:
 	_deco(g5, "blue", 667, 170, 200, 263)
 	for i in 8:
 		list_slots.append(_slot(g5, 667 + (i % 2) * 100, 170 + (i / 2) * 65.5))
+		list_slots[-1].set_meta("wide_ok", true)
 	lbl.list = _deco(g5, "bar", 667, 437, 200, 20); lbl.list.font = f_black; lbl.list.font_size = 13
 	_deco(g5, "stripes", 872, 155, 54, 440)
 	# message box
@@ -283,29 +284,49 @@ func _draw_slot(s: Control) -> void:
 	var it: Variant = (s.get_meta("item") if s.has_meta("item") else null)
 	if it != null:
 		var tex: Texture2D = (s.get_meta("tex") if s.has_meta("tex") else null)
+		var wide := (itemtype(int(it.id)) & 0x100) != 0
 		if tex:
-			var ts := tex.get_size(); var k := minf(94.0 / ts.x, 58.0 / ts.y)
-			var sz := ts * k
-			s.draw_texture_rect(tex, Rect2((s.size - sz) / 2, sz), false)
+			# ItemSet: a cell 34x24 is drawn 68x48 (two-slot items 136x48) on the 640x480 screen = the slot height
+			var ts := tex.get_size()
+			var r: Rect2
+			if wide and s.get_meta("wide_ok", false):
+				var w := s.size.y * ts.x / ts.y
+				r = Rect2((200.0 - w) / 2, 0, w, s.size.y)
+			else:
+				var k := minf(s.size.x / ts.x, s.size.y / ts.y)
+				r = Rect2((s.size - ts * k) / 2, ts * k)
+			s.draw_texture_rect(tex, r, false)
 		else:
 			var nm := Text.item_name(it.name)
 			s.draw_string(f_bold, Vector2(4, 36), nm, HORIZONTAL_ALIGNMENT_CENTER, 92, 12, Color("#d8d8d0"))
-		if it.count > 1 or it.id == 12 or it.id == 9:
-			s.draw_string(f_bold, Vector2(5, 62), str(it.count), HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color.BLACK)
-			s.draw_string(f_bold, Vector2(4, 61), str(it.count), HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color("#dfe6ff"))
+		# BulletSet: type 0x800 -> the count, 0x1000 -> percent of itemdata.max (at least 1 while not empty)
+		var ty := itemtype(int(it.id))
+		var txt := ""
+		if ty & 0x1000:
+			var mx := maxi(1, item_max(int(it.id)) / 100)
+			var pc := int(it.count) / mx
+			if int(it.count) > 0 and pc == 0: pc = 1
+			txt = str(pc) + "%"
+		elif ty & 0x800 or int(it.count) > 1:
+			txt = str(it.count)
+		if txt != "":
+			s.draw_string(f_bold, Vector2(5, 62), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color.BLACK)
+			s.draw_string(f_bold, Vector2(4, 61), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color("#dfe6ff"))
 		if (s.get_meta("eq") if s.has_meta("eq") else null):
-			s.draw_string(f_bold, Vector2(86, 13), "E", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color("#ffd060"))
+			s.draw_string(f_bold, Vector2((186 if wide and s.get_meta("wide_ok", false) else 86), 13), "E", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color("#ffd060"))
+	var ex := 100.0 if it != null and (itemtype(int(it.id)) & 0x100) and s.get_meta("wide_ok", false) else 0.0
 	if (s.get_meta("sel") if s.has_meta("sel") else null):
-		s.draw_rect(Rect2(1.5, 1.5, 97, 62), Color("#c81e1e"), false, 3)
-		s.draw_rect(Rect2(3, 3, 94, 59), Color(1, 0.16, 0.16, 0.18), false, 4)
+		s.draw_rect(Rect2(1.5, 1.5, 97 + ex, 62), Color("#c81e1e"), false, 3)
+		s.draw_rect(Rect2(3, 3, 94 + ex, 59), Color(1, 0.16, 0.16, 0.18), false, 4)
 	if (s.get_meta("cmb") if s.has_meta("cmb") else null):
 		var c := Color("#ffb030")
+		var r := 98.5 + ex
 		var x := 1.5
-		while x < 98:
-			s.draw_line(Vector2(x, 1.5), Vector2(minf(x + 6, 98.5), 1.5), c, 3); s.draw_line(Vector2(x, 63.5), Vector2(minf(x + 6, 98.5), 63.5), c, 3); x += 10
+		while x < r - 0.5:
+			s.draw_line(Vector2(x, 1.5), Vector2(minf(x + 6, r), 1.5), c, 3); s.draw_line(Vector2(x, 63.5), Vector2(minf(x + 6, r), 63.5), c, 3); x += 10
 		var y := 1.5
 		while y < 63:
-			s.draw_line(Vector2(1.5, y), Vector2(1.5, minf(y + 6, 63.5)), c, 3); s.draw_line(Vector2(98.5, y), Vector2(98.5, minf(y + 6, 63.5)), c, 3); y += 10
+			s.draw_line(Vector2(1.5, y), Vector2(1.5, minf(y + 6, 63.5)), c, 3); s.draw_line(Vector2(r, y), Vector2(r, minf(y + 6, 63.5)), c, 3); y += 10
 
 # ---------- procedural art ----------
 func _make_noise() -> void:
@@ -497,42 +518,46 @@ func _clear_holder(vp: SubViewport) -> Node3D:
 		h.remove_child(c); c.queue_free()
 	return h
 
+## ItemBoxIconSet / ItemSet (sub1.c): the item icons are cells of 34x24 (PS2 texels; the PS3 textures are 3x) in two
+## 7-column textures of the sub screen (item1/subtx tex0004: items < 64, tex0003: the others); two-slot items (type 0x100)
+## take two cells
+const ICON_REMAP := {30: 13, 63: 41, 128: 41, 129: 41, 130: 35, 136: 47, 138: 48, 142: 128, 143: 49, 144: 102, 145: 133}
+const ICON_SCALE := 3
+var _icon_tex := {}
+var _itemdata: Array = []
+
+func itemtype(id: int) -> int:
+	if _itemdata.is_empty():
+		_itemdata = Assets.data_json("itemdata.json").itemdata
+	return int(_itemdata[id][2]) if id >= 0 and id < _itemdata.size() else 0
+
+func item_max(id: int) -> int:
+	itemtype(0)
+	return int(_itemdata[id][0]) if id >= 0 and id < _itemdata.size() else 1
+
 func icon(id: int) -> Texture2D:
 	if _icons.has(id):
 		return _icons[id]
-	while _icon_busy:
-		await get_tree().process_frame
-	if _icons.has(id):
-		return _icons[id]
-	_icon_busy = true
-	var obj := _model(id)
-	if obj == null:
-		_icons[id] = null; _icon_busy = false; return null
-	var holder := _clear_holder(icon_vp)
-	holder.add_child(obj)
-	var s0 := _aabb(obj, holder).size
-	var ov: Variant = ICON_ROT.get(id)
-	var rot := Vector3(0.3, -0.45, 0)
-	if ov != null: rot = Vector3(ov[0], ov[1], ov[2])
-	elif s0.y <= s0.x and s0.y <= s0.z: rot = Vector3(1.15, 0, -0.25)
-	elif s0.x <= s0.y and s0.x <= s0.z: rot = Vector3(0.3, -1.2, 0)
-	obj.basis = Basis.from_euler(rot, EULER_ORDER_XYZ).scaled(obj.scale) if false else Basis.from_euler(rot, EULER_ORDER_XYZ) * Basis().scaled(obj.scale)
-	var bb := _aabb(obj, holder)
-	var sz := bb.size; var ct := bb.get_center()
-	var cam: Camera3D = icon_vp.get_node("cam")
-	var tn := tan(deg_to_rad(cam.fov) / 2)
-	var aspect := 1.5
-	var dist := maxf(sz.y, sz.x / aspect) / (2 * tn) * 1.08 + sz.z / 2
-	cam.transform = Transform3D(Basis(), ct + Vector3(0, 0, dist))
-	icon_vp.render_target_update_mode = SubViewport.UPDATE_ONCE
-	await RenderingServer.frame_post_draw
-	await RenderingServer.frame_post_draw
-	var img := icon_vp.get_texture().get_image()
-	var tex: Texture2D = ImageTexture.create_from_image(img) if img else null
-	_icons[id] = tex
-	_clear_holder(icon_vp)
-	_icon_busy = false
-	return tex
+	var no: int = ICON_REMAP.get(id, id)
+	var item := no
+	if item > 63: no -= 64
+	if item < 64:
+		if no != 0 and no < 4: no = no * 2 - 1
+		elif no < 33:
+			if no != 0: no += 4
+		elif no == 33 or no == 34: no += no - 33 + 4
+		else: no += 6
+	var k := 4 if item < 64 else 3
+	if not _icon_tex.has(k):
+		_icon_tex[k] = load("res://assets/inv/icons_%d.png" % k)
+	var t: Texture2D = _icon_tex[k]
+	if t == null:
+		_icons[id] = null; return null
+	var at := AtlasTexture.new(); at.atlas = t
+	var w := 68 if itemtype(id) & 0x100 else 34
+	at.region = Rect2((no % 7) * 34 * ICON_SCALE, (no / 7) * 24 * ICON_SCALE, w * ICON_SCALE, 24 * ICON_SCALE)
+	_icons[id] = at
+	return at
 
 # ---------- state ----------
 ## open / close with the original panel animation (8 frames slide, SE 7 when in place, SE 9 on close)
@@ -704,7 +729,7 @@ func heal(id: int) -> void:
 	player.hp = mini(HP_MAX, player.hp)
 
 func _cur() -> Variant:
-	return inv.slots[_sel]
+	return inv.slots[inv.head(_sel)]
 func _cur_name() -> String:
 	var s: Variant = _cur()
 	if _mode == "box" and _bside == "box": s = box[_bsel] if _bsel < box.size() else null
@@ -749,8 +774,12 @@ func render() -> void:
 		if on_equip_change.is_valid(): on_equip_change.call()
 	await _fill_slot(eq_slot, eqi, false, false, false)
 	await _fill_slot(st_slot, sti, false, false, false)
+	inv.sort()
+	_sel = inv.head(_sel)
+	if _cmb_a >= 0: _cmb_a = inv.head(_cmb_a)
 	for i in 8:
 		var s: Variant = inv.slots[i]
+		if Inventory.is_tail(s): s = null
 		var mark: bool = s != null and (s.id == equipped or s.id == standard)
 		await _fill_slot(list_slots[i], s, i == _sel and _mode != "menu" and _mode != "get" and not (_mode == "box" and _bside != "inv"), _mode == "comb" and i == _cmb_a, mark)
 	if _mode == "sub":
@@ -816,6 +845,7 @@ func _do_use() -> void:
 
 ## Combi_00 / herb mixing: item in slot a is combined into slot b
 func _combine(a: int, b: int) -> void:
+	a = inv.head(a); b = inv.head(b)
 	var A: Variant = inv.slots[a]; var B: Variant = inv.slots[b]
 	var e: Variant = null
 	if A != null and B != null and a != b:
@@ -1094,9 +1124,10 @@ func _update_box(L: bool, R: bool, Up: bool, D: bool) -> void:
 		audio.se("cursor"); _set_text(_cur_name()); render(); return
 	if not input.action: return
 	if _bside == "inv":
+		_sel = inv.head(_sel)
 		var it: Variant = inv.slots[_sel]
 		if it == null: return
-		inv.slots[_sel] = null
+		inv.slots[_sel] = null; inv.sort()
 		var merged := false
 		if Inventory.STACK.has(it.id):
 			for b in box:

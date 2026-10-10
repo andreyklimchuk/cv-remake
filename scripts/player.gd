@@ -15,6 +15,10 @@ const AR := 0.35
 const AH := 1.65
 const W_KNIFE := {"draw": "k00", "act": ["k01", "k04", "k07"], "stance": ["k03", "k06", "k09"], "drawT": 9.0 / 30.0, "actT": 24.0 / 30.0, "hitT": 8.0 / 30.0}
 const W_GUN := {"draw": "g00", "act": ["g01", "g03", "g05"], "stance": ["g02", "g04", "g06"], "drawT": 9.0 / 30.0, "actT": 16.0 / 30.0, "hitT": 1.0 / 30.0}
+## M-100P (pl00w09 bank, wpnr_no 9; slots 100+NN = clips pNN, tools/room_clips/claire.json): 100 draw (8 frames),
+## 101/106/111 shot forward/up/down (10 frames, PlMtnWpn[4] + 0/5/10), 104/109/114 aim stances (PlMtnWpn[1..3]);
+## the bank has no reload motion (116) — the M-100P is loaded by combining (combidata 142 + 143)
+const W_M100P := {"draw": "p00", "act": ["p01", "p06", "p11"], "stance": ["p04", "p09", "p14"], "drawT": 8.0 / 30.0, "actT": 10.0 / 30.0, "hitT": 0.0}
 const G_RELOAD := "g07"
 const G_RELOAD_T := 32.0 / 30.0
 ## PlFootSnd[0]: walk (m00) frames 10 / 28, run (m04) 8 / 18, walk back (m11) 10 / 28; left foot first
@@ -45,7 +49,12 @@ var lighter_on := false
 var _lighter: Node3D = null
 var _knife_hand: Node3D = null
 var _gun_hand: Node3D = null
+## M-100P: pl00w09_R (joint 9) and pl00w09_L (joint 13)
+var _m100_r: Node3D = null
+var _m100_l: Node3D = null
 var gun_on := false
+## the equipped gun item (9 handgun, 142 M-100P)
+var gun_id := 9
 var knife_on := false
 ## fire request (p, dir, aim) -> bool; reload request -> bool; can fire -> bool; empty click
 var on_fire: Callable
@@ -54,6 +63,7 @@ var can_fire: Callable
 var empty_click: Callable
 var on_slash: Callable
 var _skin_hand_r: Array = []   # [MeshInstance3D, surface, material]
+var _skin_hand_l: Array = []
 var _zippo_parts: Array[MeshInstance3D] = []
 ## health (player.c: 160 on Normal; Fine >= 120, Caution >= 30, Danger below 30)
 var hp := 160
@@ -94,6 +104,8 @@ func load_model() -> void:
 			var m: Material = mi.get_surface_override_material(s)
 			if m and m.resource_name.contains("handR"):
 				_skin_hand_r.append([mi, s, m])
+			if m and m.resource_name.contains("handL"):
+				_skin_hand_l.append([mi, s, m])
 	play("idle", 0)
 	for i in 4:
 		var b: int = bones.get("pt%d" % i, -1)
@@ -102,7 +114,7 @@ func load_model() -> void:
 	hair_reset()
 	_load_hands()
 
-func _load_hand(file: String) -> Node3D:
+func _load_hand(file: String, att: BoneAttachment3D = null) -> Node3D:
 	var m := Assets.scene(file)
 	if m == null:
 		return null
@@ -111,7 +123,7 @@ func _load_hand(file: String) -> Node3D:
 	m.visible = false
 	for mi in Assets.find_meshes(m):
 		mi.extra_cull_margin = 1.0
-	_attach.add_child(m)
+	(att if att != null else _attach).add_child(m)
 	return m
 
 func _load_hands() -> void:
@@ -126,6 +138,9 @@ func _load_hands() -> void:
 				_zippo_parts.append(mi)
 	_knife_hand = _load_hand("chars/hand_knife.glb")
 	_gun_hand = _load_hand("chars/hand_gun.glb")
+	_m100_r = _load_hand("chars/hand_m100p_R.glb")
+	var la := BoneAttachment3D.new(); la.bone_name = "b13"; skel.add_child(la)
+	_m100_l = _load_hand("chars/hand_m100p_L.glb", la)
 	# lighter flame: additive cone + core
 	_flame = Node3D.new()
 	var mat := StandardMaterial3D.new()
@@ -156,15 +171,18 @@ func set_knife(on: bool) -> void:
 	if not knife_on and not gun_on:
 		aiming = false; slash_t = -1
 
-func set_gun(on: bool) -> void:
-	gun_on = on and _gun_hand != null
+func set_gun(on: bool, id := 9) -> void:
+	if on and id != gun_id: _k_state = "none"
+	gun_id = id
+	gun_on = on and (_gun_hand != null if id != 142 else _m100_r != null)
 	if gun_on: knife_on = false
 	if not knife_on and not gun_on:
 		aiming = false; slash_t = -1
 	_k_state = "none"
 
 func _wpn() -> Dictionary:
-	return W_GUN if gun_on else W_KNIFE
+	if gun_on: return W_M100P if gun_id == 142 else W_GUN
+	return W_KNIFE
 
 func _update_hands() -> void:
 	var zippo := _arm_blend > 0.5
@@ -172,10 +190,15 @@ func _update_hands() -> void:
 	var gun := gun_on and not zippo
 	if _lighter: _lighter.visible = zippo
 	if _knife_hand: _knife_hand.visible = knife
-	if _gun_hand: _gun_hand.visible = gun
+	var m100 := gun and gun_id == 142
+	if _gun_hand: _gun_hand.visible = gun and not m100
+	if _m100_r: _m100_r.visible = m100
+	if _m100_l: _m100_l.visible = m100
 	var show_skin := not zippo and not knife and not gun
 	for e in _skin_hand_r:
 		(e[0] as MeshInstance3D).set_surface_override_material(e[1], e[2] if show_skin else Assets.hidden_mat)
+	for e in _skin_hand_l:
+		(e[0] as MeshInstance3D).set_surface_override_material(e[1], e[2] if not m100 else Assets.hidden_mat)
 
 ## damage level of the motions (player.c bhSetPlayer / bhCheckPlayerKegaMotion)
 func dmlvl() -> int:

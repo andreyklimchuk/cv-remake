@@ -56,6 +56,7 @@ func _ready() -> void:
 		"spawnwalk": await spawnwalk_test()
 		"snd": await snd_test()
 		"knock": await knock_test()
+		"m100p": await m100p_test()
 	print("DONE")
 	get_tree().quit()
 
@@ -708,3 +709,28 @@ func knock_test() -> void:
 		var o := []
 		for z in zs: o.append("z%d m%d/%d/%d/%d mtn %d:%d x40 %x p %.2f,%.2f" % [z.index, z.mode0, z.mode1, z.mode2, z.mode3, z.lo.no, z.lo.frm >> 16, z.x40, z.position.x, z.position.z])
 		print("T%.2f grab %s | %s" % [(k + 1) * 0.25, (g.grab.z.index if g.grab else -1), " | ".join(o)])
+
+## M-100P: -- m100p ROOM X Z ANG  (given 142 with 100 rounds + Calico bullets, equipped; aim + 6 shots; logs clip / count /
+## hands / inventory slots, then combines 143 into 142 in the item screen data)
+func m100p_test() -> void:
+	var a := OS.get_cmdline_user_args()
+	await g.enter_room(a[1], 0, null, false)
+	await wait_free()
+	P.place(float(a[2]), P.position.y, float(a[3]), float(a[4]))
+	P.hp = 100000
+	g.inv.add(5, "Handgun", 15)
+	g.inv.add(142, "M-100P", 100)
+	g.inv.add(143, "Calico Bullets", 100)
+	print("slots ", g.inv.slots.map(func(s): return "-" if s == null else str(s.id)))
+	g.inv_screen.equipped = 142; g._equip_changed()
+	print("equip gun_on %s id %d wpn %d" % [P.gun_on, P.gun_id, g.weapon()])
+	for k in 6:
+		await sim(0.4 if k == 0 else 0.05, ["KeyF"])
+		await sim(0.05, ["KeyF", "KeyE"])
+		for i in 4: await sim(0.1, ["KeyF"])
+		var g142: Variant = g.inv.find(142)
+		print("shot %d clip %s state %s count %d R %s L %s" % [k, P.cur, P._k_state, g142.count, P._m100_r.visible if P._m100_r else "-", P._m100_l.visible if P._m100_l else "-"])
+	await sim(0.5)
+	g.inv_screen._combine(g.inv.slots.find(g.inv.find(143)), g.inv.slots.find(g.inv.find(142)))
+	print("after combine 142 %d 143 %s" % [g.inv.find(142).count, g.inv.find(143).count if g.inv.find(143) else "gone"])
+	print("icon 142 ", g.inv_screen.icon(142).region if g.inv_screen.icon(142) else null, " icon 9 ", g.inv_screen.icon(9).region)

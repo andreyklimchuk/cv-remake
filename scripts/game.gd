@@ -15,7 +15,9 @@ const HANDGUN := 9
 const BULLETS := 12
 const MAG := 15
 ## WeaponSet numbers used by the scripts (ArmsItemCheck / WeaponSet)
-const WPN_NO := {55: 1, 8: 2, 9: 4}
+const M100P := 142
+## sub1.c equip: item -> plp->wpnr_no (142 M-100P -> 9)
+const WPN_NO := {55: 1, 8: 2, 9: 4, 142: 9}
 ## handgun damage against zombies (8 hit points)
 const GUN_DMG := 1.5
 ## probe distance in front of the player per trigger type (bhCheckExmAtari)
@@ -115,7 +117,9 @@ func _ready() -> void:
 	player.need_reload = func() -> bool:
 		var g: Variant = _gun()
 		var b: Variant = inv.find(BULLETS)
-		if g == null or int(g.count) > 0 or b == null:
+		# bhSearchBullet: only ammo whose combidata entry has the 0xF000 bits reloads in the field (handgun bullets);
+		# Calico bullets (143) are combined with the M-100P in the item screen
+		if g == null or int(g.id) != HANDGUN or int(g.count) > 0 or b == null:
 			return false
 		var n := mini(MAG, int(b.count)); g.count = int(g.count) + n; b.count = int(b.count) - n
 		if int(b.count) <= 0:
@@ -124,12 +128,13 @@ func _ready() -> void:
 		return true
 
 func _gun() -> Variant:
+	if inv_screen.equipped == M100P: return inv.find(M100P)
 	return inv.find(HANDGUN)
 
 func _equip_changed() -> void:
 	player.set_lighter(inv_screen.standard == LIGHTER)
 	player.set_knife(inv_screen.equipped == KNIFE)
-	player.set_gun(inv_screen.equipped == HANDGUN)
+	player.set_gun(inv_screen.equipped == HANDGUN or inv_screen.equipped == M100P, int(inv_screen.equipped) if inv_screen.equipped != null else 9)
 
 func start(save: Variant = null) -> void:
 	player.load_model()
@@ -559,6 +564,8 @@ func _item_screen_body(id: int, auto: bool) -> void:
 		if c != 0:
 			vm.cb &= ~0x8000 & EvtVM.M32; return
 	var count := MAG if id == BULLETS or id == HANDGUN else 1
+	# getbulletmax (item.c): M-100P 100 rounds, Calico bullets 100
+	if id == M100P or id == 143: count = int(Assets.data_json("itemdata.json").getbulletmax[id][0])
 	if vm.cb & 0x8000 and id == HANDGUN: count -= 3
 	if not inv.can_add(id):
 		vm.cb &= ~0x8000 & EvtVM.M32
@@ -736,7 +743,7 @@ func lose_item(id: int) -> void:
 	var i := -1
 	for k in inv.slots.size():
 		if inv.slots[k] != null and int(inv.slots[k].id) == id: i = k; break
-	if i >= 0: inv.slots[i] = null
+	if i >= 0: inv.slots[i] = null; inv.sort()
 	if inv_screen.equipped == id: inv_screen.equipped = null
 	if inv_screen.standard == id: inv_screen.standard = null
 	_equip_changed()
