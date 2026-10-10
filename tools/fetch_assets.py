@@ -47,10 +47,18 @@ for k, v in A.items():
     open(p, 'wb').write(data); n += 1
 print('assets:', len(A), 'written:', n)
 # assets converted only for the Godot port (not in the web build): tools/extra_assets/<path under assets>.b64
-for b in glob.glob(os.path.join(HERE, 'extra_assets', '**', '*.b64'), recursive=True):
-    p = os.path.join(OUT, os.path.relpath(b, os.path.join(HERE, 'extra_assets'))[:-4])
+# large files are split into <path>.b64.000, .001, ... (concatenated); payload may be gzip-compressed
+import gzip
+EX = {}
+for b in glob.glob(os.path.join(HERE, 'extra_assets', '**', '*.b64*'), recursive=True):
+    m = re.match(r'(.*)\.b64(?:\.(\d{3}))?$', os.path.relpath(b, os.path.join(HERE, 'extra_assets')))
+    if m: EX.setdefault(m.group(1), []).append((m.group(2) or '', b))
+for rel, parts in sorted(EX.items()):
+    p = os.path.join(OUT, rel)
     os.makedirs(os.path.dirname(p), exist_ok=True)
-    open(p, 'wb').write(base64.b64decode(open(b).read())); print('extra', os.path.relpath(p, OUT))
+    data = base64.b64decode(''.join(open(b).read().strip() for _, b in sorted(parts)))
+    if data[:2] == b'\x1f\x8b': data = gzip.decompress(data)
+    open(p, 'wb').write(data); print('extra', rel)
 # extra effect textures (system textures, tools/conv/syseff.py): add their counts to effects/index.json
 ix = os.path.join(OUT, 'effects', 'index.json')
 if os.path.exists(ix):

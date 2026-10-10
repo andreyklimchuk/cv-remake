@@ -5,7 +5,7 @@ extends Node
 ## Every voice plays on its own bus with a panner (pool), volume ramps run at 30 steps per second.
 
 const SE := ["door_knob", "door_open", "door_close", "typewriter", "gun_shot", "gun_shell", "gun_empty", "gun_rl1", "gun_rl2", "gun_rl3"]
-const ROOM_BANKS := ["000", "002", "003", "004", "005", "006", "007", "008", "009"]
+const ROOM_BANKS := ["000", "002", "003", "004", "005", "006", "007", "008", "009", "011"]
 const BG_BANKS := ["002", "003", "005", "008", "016"]
 const PC_BANKS := ["000_0", "003_0", "003_1", "005_0", "006_0", "007_0", "010_0", "014_0"]
 const PAN360 := [0, -2, -4, -6, -8, -10, -12, -14, -16, -18, -20, -22, -24, -26, -28, -30, -32, -32, -30, -28, -26, -24, -22, -20, -18, -16, -14, -12, -10, -8, -6, -4, -2, 0, 0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 32, 30, 28, 26, 24, 22, 20, 18, 16, 14, 12, 10, 8, 6, 4, 2, 0]

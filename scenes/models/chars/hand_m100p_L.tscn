@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="PackedScene" path="res://assets/chars/hand_m100p_L.glb" id="1_07kjm"]
+
+[node name="hand_m100p_L" type="Node3D"]
+
+[node name="glb" type="Node3D" parent="." instance=ExtResource("1_07kjm")]
