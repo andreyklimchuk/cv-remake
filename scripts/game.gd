@@ -3,7 +3,7 @@ extends Node3D
 ## Port of game.ts: room loading, the event system glue (EvtHost), enemies, items, saving and the main loop.
 
 ## rooms converted from the PS3 data (room file = rm_<stage><room><case>)
-const ROOMS := ["rm_0000", "rm_0010", "rm_0020", "rm_0021", "rm_0030", "rm_0031", "rm_0040", "rm_0050", "rm_0060", "rm_0070", "rm_0080", "rm_0090", "rm_0100", "rm_0110", "rm_0160", "rm_1120"]
+const ROOMS := ["rm_0000", "rm_0010", "rm_0020", "rm_0021", "rm_0030", "rm_0031", "rm_0040", "rm_0050", "rm_0060", "rm_0070", "rm_0080", "rm_0090", "rm_0100", "rm_0110", "rm_0160", "rm_1000", "rm_1120"]
 ## cutscene character models (enNNaVV)
 const NPC_MODELS := ["en91a00", "en93a00", "en98a00", "en62a00", "en68a00", "en69a00", "en87a00"]
 ## converted zombie models en01aNN (NN = model variant byte of the enemy record)

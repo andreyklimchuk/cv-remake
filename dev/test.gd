@@ -123,7 +123,7 @@ func act(i: int, label := "") -> bool:
 		var f := Vector2(-sin(h), -cos(h))
 		P.place(cx - f.x * d, P.position.y, cz - f.y * d, h)
 		await sim(0.05); g.sim(0.05, ["KeyE"]); await sleep(10); await sim(0.1)
-		if g.msg.active or g._dialog or g.busy or g._pending_door != null or g.in_cine:
+		if g.msg.active or g._dialog or g.busy or g._pending_door != null or g.in_cine or not P.kdn.is_empty():
 			await snap(label if label != "" else "etc%d" % i); await close_msgs(); return true
 	print("no reaction etc%d" % i)
 	return false
@@ -763,12 +763,12 @@ func prof_test() -> void:
 func tour_test() -> void:
 	var a := OS.get_cmdline_user_args()
 	vm.trace = OS.get_environment("TRACE") != ""
-	await g.enter_room(a[1], 0, null, false)
+	await g.enter_room(a[1], int(OS.get_environment("POS")) if OS.get_environment("POS") != "" else 0, null, false)
 	# WATCH=secs: the first seconds after entering (entry events), state every 0.25 s
 	for k in int(float(OS.get_environment("WATCH")) * 4) if OS.get_environment("WATCH") != "" else 0:
 		await sim(0.25); print("W%d y %.2f kdn %s %s" % [k, P.position.y, str(P.kdn.get("m3", "-")), stt()])
 		if OS.get_environment("WZ") != "":
-			print("   hp %d zombies %s" % [P.hp, " ".join(g.zombies.map(func(z): return "%d:%.2f,%.2f m%d/%d" % [z.index, z.position.x, z.position.z, z.mode0, z.mode1]))])
+			print("   hp %d zombies %s dogs %s" % [P.hp, " ".join(g.zombies.map(func(z): return "%d:%.2f,%.2f m%d/%d" % [z.index, z.position.x, z.position.z, z.mode0, z.mode1])), " ".join(g.dogs.map(func(z): return "d%d:%.2f,%.2f" % [z.index, z.position.x, z.position.z]))])
 	await wait_free(); print("IN ", stt()); list_etc()
 	for e in a.slice(2):
 		var i := int(e)

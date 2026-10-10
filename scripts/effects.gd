@@ -162,6 +162,7 @@ class O:
 
 var eff: Array[O] = []
 var _trs: Array = []
+var _opq: Array = []   # sys->ef_opq (bhEffBG), drawn after ef_trs
 var _fnc: Array = []
 var _trs2d: Array = []
 ## bhEff102 wind
@@ -377,7 +378,7 @@ func update(camera: Camera3D) -> void:
 	for op in _fnc:
 		if op.fn == 107:
 			for e in op.er: e.ay += 1
-	_trs.clear(); _fnc.clear(); _trs2d.clear()
+	_trs.clear(); _opq.clear(); _fnc.clear(); _trs2d.clear()
 	for i in 512:
 		var op := eff[i]
 		if not (op.flg & 1) or (op.stflg & 0x1000000):
@@ -411,6 +412,9 @@ func _run(op: O) -> void:
 		181: _e181(op)
 		182: _e182(op)
 		201: _e201(op)
+		123: _e123(op)
+		59: op.flg = 0   # bhEffDmy
+		93, 94, 95, 96, 97, 98, 99: _ebg(op)
 		18: _e018(op)
 		218: _e218(op)
 		234: _e234(op)
@@ -568,6 +572,38 @@ func _e119(op: O) -> void:
 		op.sx = 8 * op.sxb * uv.w; op.sy = 8 * op.syb * uv.h
 	_uv4(op, uv.u, uv.v, uv.u + uv.w, uv.v + uv.h)
 	op.ct0 += 1
+	_trs.append(op)
+
+## bhEffBG (effsub1.c, ids 93..99): a billboard picture of texture `id` (u 0..0.625, v 0..0.46875), blend 8/6, drawn in
+## the opaque list (ef_opq) after the translucent effects
+func _ebg(op: O) -> void:
+	if op.mode0 == 0:
+		op.flg = 0x4100001; op.tex = op.id
+		for v in op.tv: v.col = 0xFFFFFFFF
+		_uv4(op, 0.0, 0.0, 0.625, 0.46875)
+		op.bls = 8; op.bld = 6; op.mode0 = 1
+	_opq.append(op)
+
+## bhEff123 (effsub1.c): blinking lamp — every 20..30 frames (or on mode1) 4 frames of system texture 2 (row v 0.875),
+## colour by type, rotated by ct0 * 4096, additive 8/10
+const UV_123 := [[0.0, 0.875], [0.0625, 0.875], [0.125, 0.875], [0.1875, 0.875]]
+const COL_123 := {1: 0xFFFF0000, 2: 0xFF00FF00, 3: 0xFF0000FF, 4: 0xFF00FFFF, 5: 0xFFFFFF00}
+func _e123(op: O) -> void:
+	match op.mode0:
+		0:
+			op.tex = 2; op.flg |= 0x4100000; op.bls = 8; op.bld = 10; op.ani = 0; op.ct0 = 0; op.ct2 = 0; op.mode0 = 1
+		1:
+			op.ct1 += 1
+			if op.ct1 > op.ct2 or op.mode1 != 0:
+				op.ct1 = 0; op.ct2 = int(20.0 + 10.0 * randf()); op.mode1 = 0; op.mode0 = 2
+			return
+	var c: int = COL_123.get(op.type, 0xFFFFFFFF)
+	for v in op.tv: v.col = c
+	var uv: Array = UV_123[op.ct0]
+	op.az = op.ct0 * 4096
+	_uv4(op, uv[0], uv[1], uv[0] + 0.0625, uv[1] + 0.0625)
+	op.ct0 = (op.ct0 + 1) & 3
+	if op.ct0 == 0: op.mode0 = 1
 	_trs.append(op)
 
 # ---- sparks / explosion / smoke (effsub0.c)
@@ -823,7 +859,7 @@ func draw(camera: Camera3D) -> void:
 	var R := bs.x
 	var Up := bs.y
 	var order := 0
-	for op in _trs:
+	for op in _trs + _opq:
 		if (op.flg & 0x1000000) or (op.stflg & 0x1000000) or op.tex < 0 or not (op.flg & 1):
 			continue
 		var tk := "ef_%s_%d" % [U.pad(op.tex, 3), op.ani]
