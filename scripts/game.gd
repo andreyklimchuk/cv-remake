@@ -41,6 +41,8 @@ var inv_open := false
 var inv_screen: InventoryScreen
 var file_view: FileView
 var debug := false
+## TEMPORARY admin panel (F2), see admin_panel.gd
+var admin: Control
 var audio := GameAudio.new()
 var play_time := 0.0
 ## event script interpreter (story flags persist across rooms)
@@ -100,6 +102,7 @@ func _ready() -> void:
 	file_view = FileView.new(); file_view.audio = audio; file_view.input = input
 	file_view.ev_flag = func(n: int) -> bool: return vm.flag(1, n)
 	ui.add_layer(file_view, false)
+	admin = preload("res://scripts/admin_panel.gd").new(self); ui.add_layer(admin, false)
 	inv_screen.fileview = file_view
 	lights.lock_fn = func(f: int, n: int, l: Vector3, o: int) -> Variant: return lock_pos(f, n, l, o)
 	var cfg := ConfigFile.new()
@@ -1149,6 +1152,7 @@ func _unhandled_input(ev: InputEvent) -> void:
 
 func _process(dt: float) -> void:
 	if not running: return
+	if admin.visible: return   # paused by the admin panel
 	step(minf(dt, 0.1))
 	_render_prep()
 	input.end_frame()

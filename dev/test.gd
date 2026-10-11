@@ -59,6 +59,7 @@ func _ready() -> void:
 		"m100p": await m100p_test()
 		"prof": await prof_test()
 		"tour": await tour_test()
+		"admin": await admin_test()
 		"push": await push_test()
 		"push2": await push2_test()
 	print("DONE")
@@ -850,3 +851,18 @@ func push2_test() -> void:
 	for k in 10:
 		await sim(1.0); print("e flags 4/1 %s 4/2 %s 1/7f %s 1/bf %s 10/17 %s" % [vm.flag(4, 1), vm.flag(4, 2), vm.flag(1, 0x7f), vm.flag(1, 0xbf), vm.flag(10, 0x17)])
 		if k == 0: print("walls1 ", [54, 55, 133, 138, 139].map(func(i): return int(vm.wal[i].flg) & 1))
+
+## admin: the temporary admin panel (F2) — open, preset "Steve puzzle", flags / items checked, screenshot
+func admin_test() -> void:
+	print("admin start")
+	await g.enter_room("rm_1120", 0, null, false)
+	print("admin in room")
+	g.admin.toggle()
+	print("admin visible ", g.admin.visible, " items ", g.admin._item.item_count)
+	await snap("admin")
+	g.admin._preset(g.admin.PRESETS[1])
+	for i in 100:
+		await sleep(100)
+		if not g.busy: break
+	print("ADMIN room ", g.room_id, " ev146 ", vm.flag(1, 146), " it11 ", vm.flag(7, 11), " has53 ", g.inv.has(53), " visible ", g.admin.visible)
+	print("DONE")
