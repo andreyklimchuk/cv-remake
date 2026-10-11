@@ -48,10 +48,14 @@ def extract(donor, model, prefix):
 
 def merge(p):
     # room_clips/<model>.json, else the one of the model family (en01.json: every zombie variant, same 18-bone skeleton)
-    clips_p = os.path.join(HERE, 'room_clips', os.path.basename(p)[:-4] + '.json')
-    if not os.path.exists(clips_p): clips_p = os.path.join(HERE, 'room_clips', os.path.basename(p)[:4] + '.json')
-    if not os.path.exists(clips_p): return 0
-    clips = json.load(open(clips_p))
+    # large sets are split into <model>.NN.json parts (channel lists of a clip concatenated)
+    clips = {}
+    for base in (os.path.basename(p)[:-4], os.path.basename(p)[:4]):
+        ps = glob.glob(os.path.join(HERE, 'room_clips', base + '.json')) + sorted(glob.glob(os.path.join(HERE, 'room_clips', base + '.[0-9][0-9].json')))
+        for q in ps:
+            for k, v in json.load(open(q)).items(): clips.setdefault(k, []).extend(v)   # a clip's channels may span parts
+        if clips: break
+    if not clips: return 0
     j, B = load(p)
     have = {a['name'] for a in j['animations']}
     nodes = {n.get('name'): i for i, n in enumerate(j['nodes'])}
