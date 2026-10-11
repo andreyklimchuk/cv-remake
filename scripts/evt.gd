@@ -465,6 +465,18 @@ func _exec() -> int:
 		0x3b:
 			# bhDefModelSet: node v2 of the model of v0/v1 (0 player, 1 enemy, 2 object) hidden (v3 0, evalflags 8) / shown
 			if host.has_method("def_model"): host.def_model(_b(1), _b(2), _b(3), _b(4) == 0)
+		0x57: pass  # bhFixEventCamPly (gm_flg 0x20000: keep st 1 at the event end — the port ends the event camera only by CAMSET 1)
+		0xa1: pass  # bhTrapDamageSet (plp->stflg 0x1000 on v0 == 0; its use is in the undecompiled player code)
+		0x5c:
+			# bhMesDispEndSet: the message is taken off at once (mes_ct/tim/fls/sel = 0, st &= ~0x200), no close flags
+			mes_sel = 0; st &= ~0x200 & M32; pending_msg = null
+			if host.has_method("mes_disp_end"): host.mes_disp_end()
+		0x5d:
+			# bhPadCheck: false (0) while pad bit v0 is hit (v1: 0-2 one bit, 3-5 any button; 0xE000 held = never)
+			if host.has_method("pad_check") and host.pad_check(_b(1), _b(2)): r = 0
+		0xa5:
+			# bhEneRenderSet: enemy v0 not drawn (mdflg 0x200) on v1 == 0 / drawn
+			work(1, _b(1)).hidden = _b(2) == 0
 		0x6b: pass  # bhDelYakkyou (bhDeleteYakkyou: spent cartridge cases — not ported)
 		0x6a: pass  # bhEventSkipSet (gm_flg 0x40000000: event skip allowed / not) — the port does not limit skipping
 		0x2f: pass  # bhInitSetKage (bhSetShadow on an enemy: the round shadow, not ported)

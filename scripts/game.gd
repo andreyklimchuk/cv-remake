@@ -3,9 +3,9 @@ extends Node3D
 ## Port of game.ts: room loading, the event system glue (EvtHost), enemies, items, saving and the main loop.
 
 ## rooms converted from the PS3 data (room file = rm_<stage><room><case>)
-const ROOMS := ["rm_0000", "rm_0010", "rm_0020", "rm_0021", "rm_0030", "rm_0031", "rm_0040", "rm_0050", "rm_0060", "rm_0070", "rm_0080", "rm_0090", "rm_0100", "rm_0110", "rm_0160", "rm_1000", "rm_1020", "rm_1120", "rm_1130"]
+const ROOMS := ["rm_0000", "rm_0010", "rm_0020", "rm_0021", "rm_0030", "rm_0031", "rm_0040", "rm_0050", "rm_0060", "rm_0070", "rm_0080", "rm_0090", "rm_0100", "rm_0110", "rm_0160", "rm_1000", "rm_1020", "rm_1030", "rm_1040", "rm_1050", "rm_1060", "rm_1070", "rm_1080", "rm_1090", "rm_1100", "rm_1110", "rm_1120", "rm_1130", "rm_1140"]
 ## cutscene character models (enNNaVV)
-const NPC_MODELS := ["en91a00", "en93a00", "en98a00", "en62a00", "en68a00", "en69a00", "en87a00"]
+const NPC_MODELS := ["en91a00", "en93a00", "en94a00", "en98a00", "en62a00", "en68a00", "en69a00", "en87a00"]
 ## converted zombie models en01aNN (NN = model variant byte of the enemy record)
 const ZOMBIE_VARIANTS := [0, 1, 2, 3, 6, 9, 10, 32, 33]
 ## en01_PersonalType add_atk per model variant
@@ -615,12 +615,14 @@ func _room_message(idx: int) -> String:
 ## message box for a room message; the result goes back to the scripts
 func _show_message(idx: int, from_examine: bool) -> void:
 	var m := _room_message(idx)
-	var pg := Text.pages(m, vm.sb_id)
-	var ch := Text.has_choice(m)
+	var mc: Variant = Text.choices(m)
+	var pg := Text.pages(Text.strip_choices(m) if mc != null else m, vm.sb_id)
+	var ch := Text.has_choice(m) or mc != null
 	if from_examine: vm.st |= 0x200 | 0x2000
 	if pg.is_empty():
 		vm.message_closed.call_deferred(-1, from_examine); return
-	var sel: int = await msg.show(pg, [Text.yes(), Text.no()] if ch else null)
+	var sel: int = await msg.show(pg, mc.labels if mc != null else ([Text.yes(), Text.no()] if ch else null), mc.sel if mc != null else 0)
+	if sel == MessageBox.ABORTED: return
 	vm.message_closed(sel if ch else -1, from_examine)
 
 ## item screen (subscreenmode 8, GetItem): the status screen opens in "get" mode with the item model,
@@ -884,6 +886,13 @@ func set_weapon(n: int) -> void:
 		inv_screen.equipped = null; inv_screen.standard = null
 	_equip_changed()
 func message(idx: int) -> void: _show_message(idx, false)
+func mes_disp_end() -> void: msg.abort()
+## bhPadCheck: pad bit v0 (0x800 decide, 0x1000 cancel) hit for modes 0-2, any of them for 3-5
+func pad_check(bit: int, mode: int) -> bool:
+	var a := input.action; var c := input.cancel
+	if mode >= 3 and mode <= 5: return a or c
+	if mode <= 2: return (bit == 11 and a) or (bit == 12 and c)
+	return false
 func fade(argb: int, speed: int) -> void: ui.fade((argb >> 24) & 0xff >= 0x80, maxi(1, speed) * 1000.0 / 30.0)
 func cine(mode: int) -> void:
 	if mode == 1 or mode == 2 or mode == 4: cam.forced = -1
@@ -1162,6 +1171,11 @@ func step(dt: float) -> void:
 	var cine := in_cine
 	player.cine = false
 	if msg.active:
+		# bhControlMessage: st 0x1000 = the page is fully shown and waits for the button (cleared when it advances;
+		# after the last page it stays until the next message)
+		if msg.active:
+			if msg.page_done(): vm.st |= 0x1000
+			else: vm.st &= ~0x1000 & EvtVM.M32
 		msg.update(dt, inp.action, inp.hit(["KeyA", "ArrowLeft"]), inp.hit(["KeyD", "ArrowRight"]), inp.cancel)
 		player.frozen = true
 	elif file_view.active:

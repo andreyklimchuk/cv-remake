@@ -36,6 +36,29 @@ func ru() -> bool:
 func has_choice(msg: String) -> bool:
 	return _re_choice.search(msg) != null
 
+## a selection message other than Yes/No (bhControlMessage 0xff04 = selection point followed by its glyphs, 0xfe09 = the
+## initial cursor = the selection point that follows): rm_1050 "Push which switch? A B C D E F Decide".
+## Returns {"labels": [...], "sel": n} or null; glyph {4:XX} = character XX + 0x20.
+func choices(msg: String) -> Variant:
+	if has_choice(msg) or msg.find("{4:") < 0: return null
+	var last := msg.substr(msg.rfind("\f") + 1)
+	var labels: Array = []
+	var sel := 0
+	var re := RegEx.create_from_string("(\\{fe09\\})?\\{4:([0-9a-f]+)\\}([A-Za-z]*)")
+	for r in re.search_all(last):
+		if r.get_string(1) != "": sel = labels.size()
+		var t := String.chr(r.get_string(2).hex_to_int() + 0x20) + r.get_string(3)
+		if t.length() > 1 and ru(): t = RU.get(t, t)
+		labels.append(t)
+	return {"labels": labels, "sel": sel} if labels.size() > 2 else null
+
+## the text of a selection message without its selection line
+func strip_choices(msg: String) -> String:
+	var i := msg.find("{fe09}")
+	var j := msg.find("{4:")
+	if i < 0 or (j >= 0 and j < i): i = j
+	return msg.substr(0, i) if i >= 0 else msg
+
 ## Split an original message into pages (form-feed separated) and translate each page.
 ## {3:XX} is the name of item XX ({3:ffff} = the item in question, sb).
 func pages(msg: String, sb := 0) -> PackedStringArray:

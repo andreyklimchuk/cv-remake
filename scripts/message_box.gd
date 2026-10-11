@@ -19,10 +19,10 @@ var on_cursor: Callable
 func _init(ui: UIRoot) -> void:
 	_ui = ui
 
-func show(text: Variant, choices: Variant = null) -> int:
+func show(text: Variant, choices: Variant = null, sel0 := 0) -> int:
 	_queue = Array(text) if (text is Array or text is PackedStringArray) else Array(Text.pages(text))
 	if _queue.is_empty(): _queue = [""]
-	_choices = choices; _sel = 0
+	_choices = choices; _sel = sel0
 	active = true; _next()
 	_ui.msg_panel.visible = true
 	_gen += 1
@@ -70,11 +70,20 @@ func update(dt: float, action: bool, left: bool, right: bool, cancel: bool) -> v
 			if on_cursor.is_valid(): on_cursor.call()
 			_sel = (_sel + (1 if right else (_choices as Array).size() - 1)) % (_choices as Array).size(); _render()
 		if action: return _close(_sel)
-		if cancel: return _close((_choices as Array).size() - 1)
+		# Yes/No: cancel = No (port convenience); longer selections (bhControlMessage) only close on decide
+		if cancel and (_choices as Array).size() == 2: return _close(1)
 		return
 	if action or cancel:
 		if not _queue.is_empty(): _next()
 		else: _close(0)
+
+## bhMesDispEndSet: taken off without an answer (show() returns ABORTED)
+const ABORTED := -1000
+func abort() -> void:
+	if active: _close(ABORTED)
+
+func page_done() -> bool:
+	return active and _shown >= _full.length()
 
 func _close(v: int) -> void:
 	active = false; _ui.msg_panel.visible = false

@@ -381,3 +381,25 @@
   - rm_1130: враг en43 НЕ сконвертирован (в архиве комнаты только текстуры en43a00 — модель, видимо, в общем
     архиве); головоломка со стенами (переключение объектов скриптом), предметы Map, Steering Wheel, патроны, стрелы.
   - Регрессия `-- push` проходит.
+- 10.10 (5), rm_1030–rm_1110, rm_1140 (стадия 1: путь до Gold Lugers и спасение Стива):
+  - Ассеты/сцены через `/data/convroom.sh`; отсутствующее в веб-сборке — в `tools/extra_assets` (glb/ogg без сжатия,
+    json и сжимаемые glb — gzip). Банки bg_104_0…bg_110_0 по PCM идентичны bg_103_0 — их json ссылаются на
+    `bg_103_0/NN` (ogg не дублируются). ROOMS += rm_1030…1110, rm_1140; NPC_MODELS += en94a00 (Альфред, движения rm_1020);
+    музыка main02/03/10, sub_12/13/14 (audio/bgm.json); ролики mv_002 (rm_1050 соб. 0), mv_003 (rm_1090).
+  - Клипы NPC комнат: tools/room_clips/en91a00.json (rm_1050 r00–r09, rm_1020 r00–r02), en93a00.json (rm_1050 r00–r09);
+    fetch_assets сливает room_clips во все npc/en*.glb. Мимика: data/face/face_en94.json, fmt_rm_1020/1050.json.
+  - evtops: SUBLEN[0x64][0x81] = 12 (Player_controll case 129: 3×u16 + 4 байта; с 6 зависало событие 0 rm_1050).
+  - Меню выбора bhControlMessage (глиф {4:XX} = символ XX+0x20, {fe09} — начальный курсор): Text.choices/strip_choices,
+    message_box.show(text, choices, sel0); отмена закрывает только Yes/No (порт). st 0x1000 — пока страница показана целиком.
+  - Опкоды: 0x5c bhMesDispEndSet (сообщение снимается без флагов закрытия, `msg.abort`), 0x5d bhPadCheck (`game.pad_check`:
+    бит 11 = решение, 12 = отмена, режимы 3–5 — любая), 0xa5 bhEneRenderSet (work.hidden); заглушки 0x57 bhFixEventCamPly
+    (порт снимает камеру события только CAMSET 1), 0xa1 bhTrapDamageSet (plp->stflg 0x1000 — в недекомпилированном player.c).
+  - Проверено тестом: rm_1020 etc12 → rm_1070; rm_1070 etc2 → rm_1050; rm_1050 etc7 (кнопка, ролик mv_002, витрина) →
+    etc8 Gold Lugers (33) + ловушка (события 3–6) → etc8 «Replace?» (события 7–10); etc5 Steering Wheel (it[11]);
+    rm_1020 с it[11]: etc10 → события 10–14 → ev[146]; rm_1050 etc9 → головоломка переключателей (C, E, Decide) →
+    события 31, 12–17 (Стив/Клэр) → ev[15].
+  - НЕ портировано: враги en07 (летучие мыши rm_1030), en09 Бандерснатч (rm_1060/1090), en61 (rm_1090), en43 (rm_1140),
+    en16 (Альфред в катсцене rm_1020 событий 1–9); движения игрока из банка комнаты (0x19 b3=0); 0x69 subs
+    0x04/0x17/0x24/0x29/0x2a/0x2e/0x2f, 0x64 subs 0x34/0x82/0x83/0x96 (игнорируются), 0x42/0x6e/0xab/0xb1 (rm_1090),
+    туман 0xa8/0xa9, 0xb0 bhHEffectSet2, 0xca bhEffClearEvt; эффекты 31, 56, 59, 65, 72, 105, 110, 111, 162, 230, 233,
+    235, 414, 416, 418 (лог «effect id N not ported»).

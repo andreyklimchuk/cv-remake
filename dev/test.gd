@@ -92,11 +92,22 @@ func snap(t: String) -> void:
 func sim(s: float, k: Array = []) -> void:
 	g.sim(s, k); await sleep(5)
 
+## MSGKEYS="RRE RRE RRE": answers for selection messages (R / L = cursor, E = decide), one group per message
+var _mk: Array = []
 func close_msgs() -> void:
+	if _mk.is_empty() and OS.get_environment("MSGKEYS") != "" and not has_meta("mk"):
+		_mk = Array(OS.get_environment("MSGKEYS").split(" ", false)); set_meta("mk", 1)
 	for i in 20:
 		if not (g.msg.active or g._dialog or g.busy): return
 		if g.busy and not g.msg.active:
 			await sleep(200); continue
+		if g.msg.active and g.msg._choices != null and (g.msg._choices as Array).size() > 2 and g.msg.page_done() and g.msg._queue.is_empty() and not _mk.is_empty():
+			var grp: String = _mk.pop_front()
+			print("MSG choice ", g.msg._choices, " sel ", g.msg._sel, " keys ", grp)
+			for c in grp:
+				g.sim(0.05, ["KeyD" if c == "R" else ("KeyA" if c == "L" else "KeyE")]); await sleep(10); g.sim(0.05, []); await sleep(10)
+			await sleep(100); g.sim(0.5, []); await sleep(10)
+			continue
 		g.sim(0.4, ["KeyE"]); await sleep(10)
 
 func wait_free(mx := 60) -> bool:
@@ -107,8 +118,9 @@ func wait_free(mx := 60) -> bool:
 			if g.movie_playing(): Input.parse_input_event(_key(KEY_ESCAPE))
 			await sleep(200); continue
 		if not g.in_cine: return true
-		if vm.cb & 4: await sim(0.1, ["Escape"])
+		if vm.cb & 4 and OS.get_environment("NOSKIP") == "": await sim(0.1, ["Escape"])
 		await sim(1)
+		if OS.get_environment("VERB") != "": print("  cine ", stt())
 	return false
 
 func _key(k: Key) -> InputEventKey:
@@ -763,6 +775,11 @@ func prof_test() -> void:
 func tour_test() -> void:
 	var a := OS.get_cmdline_user_args()
 	vm.trace = OS.get_environment("TRACE") != ""
+	# FLAGS=146,15 (story flags ev[n]) and ITEMS=53,9 (inventory) before entering
+	for n in OS.get_environment("FLAGS").split(",", false): vm.f.ev[int(n) >> 5] |= 0x80000000 >> (int(n) & 31)
+	for n in OS.get_environment("ITEMS").split(",", false): g.inv.add(int(n), Text.ITEM_NAMES.get(int(n), ""))
+	# IT=11,... item-taken flags it[n]
+	for n in OS.get_environment("IT").split(",", false): vm.f.it[int(n) >> 5] |= 0x80000000 >> (int(n) & 31)
 	await g.enter_room(a[1], int(OS.get_environment("POS")) if OS.get_environment("POS") != "" else 0, null, false)
 	# WATCH=secs: the first seconds after entering (entry events), state every 0.25 s
 	for k in int(float(OS.get_environment("WATCH")) * 4) if OS.get_environment("WATCH") != "" else 0:
