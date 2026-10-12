@@ -71,6 +71,10 @@ if os.path.exists(ix):
 sys.path.insert(0, HERE); import fix_zombie_clips
 for p in sorted(glob.glob(os.path.join(OUT, 'enemies', 'en01a*.glb'))):
     if fix_zombie_clips.fix(p): print('zfix', os.path.relpath(p, OUT))
+# the dog's legs: skinned to the knee / paw bones (the web build binds them rigidly) -> fix_dog_skin.py (idempotent)
+import fix_dog_skin
+for p in sorted(glob.glob(os.path.join(OUT, 'enemies', 'en04a*.glb'))):
+    if fix_dog_skin.fix(p): print('dog skin', os.path.relpath(p, OUT))
 # room motions (rmt) the web build's zombie glbs lack (tools/room_clips, see add_room_clips.py) -> merged in (idempotent)
 import add_room_clips
 for p in sorted(glob.glob(os.path.join(OUT, 'enemies', 'en01a*.glb'))):

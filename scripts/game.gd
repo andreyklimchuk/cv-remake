@@ -859,10 +859,13 @@ func light(cmd: String, a: Array) -> void:
 		"param": lights.param(a[0], a[1], a[2], a[3], a[4], a[5], a[6])
 		"amb": lights.set_amb(a[0], a[1], a[2], a[3])
 
+## the cinema (bhCineSet: cb_flg 4) or an event driving Claire. st_flg 4 alone does not hold the player: the original
+## sets it during the player's own actions (stairs, doors...) and bhControlPlayerPad clears it every frame of free
+## control (player.c) — e.g. rm_1020 event 16 sets st 4 again after its stairs motion, after the cinema has ended
 var in_cine: bool:
 	get:
 		var w0: EvtVM.Work = vm.get_work(0, 0)
-		return bool(vm.st & 4) or (w0 != null and (w0.scripted or w0.gone))
+		return bool(vm.cb & 4) or (w0 != null and (w0.scripted or w0.gone))
 
 # ---- EvtHost
 func has_item(id: int) -> bool: return inv.has(id)
@@ -1194,6 +1197,9 @@ func step(dt: float) -> void:
 		if vm.cb & 4 and inp.hit(["Escape", "Enter", "Space"]): vm.cb |= 0x10000000
 	else:
 		player.frozen = false
+		# bhControlPlayerPad (the player's free control): sys->st_flg &= ~4
+		if player.sync == null and player.kdn.is_empty() and player.psh.is_empty() and player.dn.is_empty():
+			vm.st &= ~4 & EvtVM.M32
 		if player.sync != null: pass   # grabbed
 		elif inp.inventory: toggle_inv(true)
 		elif inp.cam_toggle: toggle_camera()

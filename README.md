@@ -7,7 +7,7 @@
 |---|---|
 | evt.ts / evtops.ts | evt.gd + data/evtops.json (VM скриптов событий) |
 | game.ts | game.gd (комнаты, EvtHost, осмотр/подбор/двери/сохранение, зомби/собаки, захваты) |
-| main.ts | main.gd + scenes/main.tscn (титульное меню) |
+| main.ts | main.gd + scenes/main.tscn (титульный экран adv.c: PRESS START, LOAD / NEW GAME / язык) |
 | room.ts, camera.ts, evcam.ts, light.ts | room.gd, camera_rig.gd, evcam.gd, light.gd |
 | player.ts, enemy.ts | player.gd, enemy_model.gd, zombie.gd, dog.gd |
 | effects.ts | effects.gd (O_WRK, спрайты, дождь, 2D-слой пролога, полосы кино) |

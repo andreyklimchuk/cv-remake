@@ -15,7 +15,12 @@ func _ready() -> void:
 		var m: Node = load("res://scenes/main.tscn").instantiate(); add_child(m)
 		await sleep(1500); await snap("title")
 		if args.size() > 1:
-			if args[1] == "load": Input.parse_input_event(_key(KEY_DOWN)); await sleep(200)
+			# PRESS START, then the game mode plate (cursor on NEW GAME without a save, LOAD GAME with one)
+			Input.parse_input_event(_key(KEY_ENTER)); await sleep(100)
+			var e0 := _key(KEY_ENTER); e0.pressed = false; Input.parse_input_event(e0); await sleep(800)
+			print("title mode %d sel %d plates %d" % [m._mode, m._sel, m._menu.size()])
+			if args[1] == "load": Input.parse_input_event(_key(KEY_UP)); await sleep(200)
+			elif m._sel == 0: Input.parse_input_event(_key(KEY_DOWN)); await sleep(200)
 			Input.parse_input_event(_key(KEY_ENTER)); await sleep(100)
 			var e := _key(KEY_ENTER); e.pressed = false; Input.parse_input_event(e)
 			for k in (int(args[2]) if args.size() > 2 else 12):
@@ -51,7 +56,6 @@ func _ready() -> void:
 		"case": await case_test()
 		"floor": await floor_test()
 		"walk": await walk_test()
-		"stairs": await stairs_test()
 		"cams": await cams_test()
 		"spawnwalk": await spawnwalk_test()
 		"snd": await snd_test()
@@ -60,6 +64,8 @@ func _ready() -> void:
 		"prof": await prof_test()
 		"tour": await tour_test()
 		"admin": await admin_test()
+		"kaidan": await kaidan_test()
+		"kaidan2": await kaidan2_test()
 		"push": await push_test()
 		"push2": await push2_test()
 	print("DONE")
@@ -866,3 +872,69 @@ func admin_test() -> void:
 		if not g.busy: break
 	print("ADMIN room ", g.room_id, " ev146 ", vm.flag(1, 146), " it11 ", vm.flag(7, 11), " has53 ", g.inv.has(53), " visible ", g.admin.visible)
 	print("DONE")
+
+## stairs ROOM [POS]: every stairs record (etc type 1): stand on it, take the stairs, then walk 1 s — prints the moves
+func kaidan_test() -> void:
+	var a := OS.get_cmdline_user_args()
+	await g.enter_room(a[1], int(a[2]) if a.size() > 2 else 0, null, false)
+	await wait_free()
+	for i in vm.etc.size():
+		var e: Dictionary = vm.etc[i]
+		if e.type != 1: continue
+		P.place(e.x + e.w * 0.5, e.y, e.z + e.d * 0.5, 0.0)
+		await sim(0.2)
+		if OS.get_environment("KREAL") != "":
+			P.heading = e.prm[1] * PI / 2.0
+			g.sim(0.05, ["KeyE"]); await sleep(10)
+			if P.kdn.is_empty():
+				P.heading += PI; g.sim(0.05, ["KeyE"]); await sleep(10)
+			if P.kdn.is_empty(): print("STAIRS etc%d no start attr %x flg %x flr %d/%d box %s" % [i, e.attr, e.flg, e.flr, g.room.floor_num(P.position.y), str([e.x, e.z, e.w, e.d]), ]); continue
+		else:
+			g._kaidan_flags(i, true); P.start_kaidan(e)
+		var t := 0
+		while not P.kdn.is_empty() and t < 300:
+			await sim(0.1, ["KeyW"] if OS.get_environment("KHOLD") != "" else []); t += 3
+		var p0 := P.position
+		await sim(1.0, ["KeyW"])
+		print("STAIRS etc%d prm %s y %.2f -> pos %s kdn %s moved %.2f state %s frozen %s st %x sp %x" % [i, str(e.prm), e.y, str(p0), str(P.kdn.is_empty()), (P.position - p0).length(), P.state, P.frozen, vm.st, vm.sp])
+	print("DONE")
+
+func _kd_log(t: String) -> void:
+	print("K2 %s pos %s y %.2f flr %d kdn %s state %s frozen %s cur %s busy %s" % [t, str(P.position), P.position.y, g.room.floor_num(P.position.y), str(P.kdn.get("m3", "-")), P.state, P.frozen, P.cur, g.busy])
+
+func kaidan2_test() -> void:
+	var a := OS.get_cmdline_user_args()
+	await g.enter_room(a[1], 0, null, false)
+	await wait_free()
+	var seq: Array = Array(a.slice(2))
+	_kd_log("start")
+	if OS.get_environment("KH") != "":
+		P.heading = float(OS.get_environment("KH")) * PI / 180.0; P.rotation.y = P.heading
+		for j in 16:
+			await sim(0.25, ["KeyW"]); _kd_log("w")
+		g.sim(0.05, ["KeyE"]); await sleep(10); _kd_log("E")
+		var last := ""
+		for j in 400:
+			await sim(1.0 / 30.0)
+			var cur := "st %x sp %x t2 %d@%x t1 %d@%x kdn %s y %.2f" % [vm.st, vm.sp, vm.tasks[2].status, vm.tasks[2].p, vm.tasks[1].status, vm.tasks[1].p, str(P.kdn.get("m3", "-")), P.position.y]
+			if cur != last: print("F%d %s" % [j, cur]); last = cur
+		for j in 4:
+			await sim(0.25, ["KeyW"]); _kd_log("w2")
+	for i in range(0, seq.size()):
+		var e: Dictionary = vm.etc[int(seq[i])]
+		if i == 0:
+			P.place(e.x + e.w * 0.5, e.y, e.z + e.d * 0.5, e.prm[1] * PI / 2.0); await sim(0.3)
+		_kd_log("before etc%s" % seq[i])
+		for tr in 4:
+			g.sim(0.05, ["KeyE"]); await sleep(10)
+			if not P.kdn.is_empty(): break
+			P.heading += PI / 2.0; P.rotation.y = P.heading
+		_kd_log("started")
+		var t := 0
+		while not P.kdn.is_empty() and t < 300:
+			await sim(0.1); t += 3
+		_kd_log("landed")
+		for j in 6:
+			await sim(0.25, ["KeyW"]); _kd_log("walk")
+		await sim(0.5, ["KeyS"]); _kd_log("back")
+		await sim(0.5, ["KeyS"]); _kd_log("back")
