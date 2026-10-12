@@ -691,6 +691,15 @@ func spawnwalk_test() -> void:
 		await wait_free()
 		var p0 := P.position
 		await sim(1.5, ["KeyW"])
+		var ms := Assets.find_meshes(g.room)
+		var tx := 0
+		for mi in ms:
+			for si in mi.mesh.get_surface_count():
+				var mt = mi.get_active_material(si)
+				if mt is BaseMaterial3D and mt.albedo_texture != null: tx += 1
+				elif mt is ShaderMaterial: tx += 1000
+		print("  meshes ", ms.size(), " tex ", tx, " ftri ", g.room._ftri.size() / 3, " fgrid ", g.room._fgrid.size(), " bbox ", g.room.bbox)
+		print("  ", stt(), " state ", P.state, " busy ", g.busy, " cine ", g.in_cine, " frozen ", P.frozen)
 		print("%s moved %.2f y %.2f flr %d inside %s" % [r, p0.distance_to(P.position), P.position.y, g.room.floor_num(P.position.y), g.room.resolve_pl(p0, P.AR, g.room.floor_num(p0.y), P.AH).distance_to(p0) > 0.001])
 
 ## -- cams ROOM x,z,y ...: camera cut chosen at each point (bhCheckCutArea) vs the old zone rule

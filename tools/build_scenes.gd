@@ -94,6 +94,9 @@ func _room(id: String) -> void:
 	var m := _inst("res://scenes/models/rooms/%s.tscn" % id)
 	if m:
 		m.name = "Model"; m.scale = Vector3.ONE * 0.1; _add(root, m, root)
+	else:
+		# without the model the room has no geometry / floor (Claire cannot walk): import the glbs first
+		push_error("no model scenes/models/rooms/%s.tscn — run the import (godot --headless --import) and rebuild" % id); return
 	# objects
 	var g := _group(root, "Objects")
 	var objs: Array = d.get("objects", [])
