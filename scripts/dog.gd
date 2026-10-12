@@ -351,6 +351,10 @@ func _save_world() -> void:
 func _obj(o: int) -> Vector3:
 	return _W[o].origin if o < _W.size() else position
 
+## en04.c: the shot capsule epw->watr — c1 = owP[1], c2 = owP[4], r 2.0 (game units)
+func gun_capsule() -> Array:
+	return [_obj(1), _obj(4), 2.0 * S]
+
 func _apply_pose() -> void:
 	_ay &= 0xFFFF
 	rotation.y = _ay * BAMS

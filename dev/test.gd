@@ -57,6 +57,8 @@ func _ready() -> void:
 		"case": await case_test()
 		"floor": await floor_test()
 		"walk": await walk_test()
+		"stairs": await stairs_test()
+		"fire": await fire_test()
 		"cams": await cams_test()
 		"spawnwalk": await spawnwalk_test()
 		"snd": await snd_test()
@@ -839,7 +841,11 @@ func tour_test() -> void:
 			g.sim(0.2, ["KeyQ" if k % 2 == 0 else "KeyE"]); await sleep(10); g.sim(0.5, []); await sleep(10)
 		if g.inv_open: print("INV OPEN ", g.inv_screen._mode); g.sim(0.1, ["KeyE"]); await sleep(10); g.sim(0.1, []); await sleep(10); await wait_free()
 		print("ETC ", i, " -> ", stt()); inv()
-		if g.room_id != a[1]: list_etc(); break
+		if g.room_id != a[1]:
+			list_etc()
+			# CHAIN=1: keep going in the new room (the next indices are its trigger records)
+			if OS.get_environment("CHAIN") == "": break
+			a[1] = g.room_id
 
 ## -- push: rm_0100 boxes (bhObj001): push box 7 north, climb it (dnu), walk on its top, step down (dnd)
 func push_test() -> void:
@@ -972,3 +978,31 @@ func kaidan2_test() -> void:
 			await sim(0.25, ["KeyW"]); _kd_log("walk")
 		await sim(0.5, ["KeyS"]); _kd_log("back")
 		await sim(0.5, ["KeyS"]); _kd_log("back")
+
+## -- fire ROOM DIST: Claire DIST m from the first visible enemy, shots at angle offsets (deg) from the line to it
+func fire_test() -> void:
+	var a := OS.get_cmdline_user_args()
+	await g.enter_room(a[1], 0, null, false)
+	await wait_free(); await sim(1.0)
+	var es: Array = (g.zombies + g.dogs).filter(func(z): return z.visible and z.hittable)
+	if es.is_empty(): print("no enemy"); return
+	var z = es[int(OS.get_environment("EI")) if OS.get_environment("EI") != "" else 0]
+	g.inv.add(g.HANDGUN, "handgun")
+	for dist in [float(a[2]), 2.0, 6.0, 12.0]:
+		for off in [0.0, 3.0, 6.0, 10.0, 20.0, 45.0, 90.0, 180.0]:
+			var ang := deg_to_rad(off)
+			var to: Vector2 = Vector2(z.position.x, z.position.z)
+			var hd := ang
+			# heading h faces (-sin h, -cos h); stand at to - dir(ang) * dist facing ang+off
+			var base := 0.3
+			var f := Vector2(-sin(base), -cos(base))
+			var pp: Vector2 = to - f * dist
+			P.place(pp.x, z.position.y, pp.y, base + hd)
+			await sim(0.05)
+			var hp0: float = z.hp
+			var gun = g._gun(); if gun != null: gun.count = 99
+			var fwd := P.forward()
+			var hit_before: float = z.hp
+			g.on_fire(P.position + Vector3(0, 1.2, 0) + fwd * 0.3, fwd, 0)
+			print("dist %.1f off %5.1f hit %s hittable %s z %s cap %s P %s" % [dist, off, z.hp < hp0, z.hittable, str(z.position), str(z.gun_capsule()), str(P.position)])
+			z.hp = 100.0

@@ -419,6 +419,12 @@ func _search(p: Vector3, dir: int, r: int) -> bool:
 func _obj_pos(o: int) -> Vector3:
 	return _prevW[o].origin if o < _prevW.size() else position
 
+## bhEne01_CalcEnemy: the shot capsule epw->watr — c1 = owP[10] * (0, 3, 0), c2 = owP[9], r 2.5 (game units)
+func gun_capsule() -> Array:
+	if _prevW.size() < 11: return [position + Vector3(0, 1.7, 0), position + Vector3(0, 1.0, 0), 2.5 * S]
+	var w: Transform3D = _prevW[10]
+	return [w.origin + w.basis.orthonormalized() * Vector3(0, 3.0 * S, 0), _prevW[9].origin, 2.5 * S]
+
 ## bhEne01_EatCheck mode 0: Claire's chest (owP[3]) against the zombie's head (owP[10]) within dist and +-rng
 func _eat_check(rng: int, dist: float) -> bool:
 	if x40 & 0x20000000 or not _free: return false

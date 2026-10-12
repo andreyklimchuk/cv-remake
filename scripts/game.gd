@@ -1021,6 +1021,9 @@ func _go_door(d: Dictionary) -> void:
 		return
 	audio.se("door")
 	await enter_room(id, d.pos, null, true, 1400)
+	# bhStartDoorDemo ddmd 1 (room.c): the door demo is over in the new room -> sys->cb_flg &= ~1
+	# (bhSetDoorDemo / DOORCALL set it; scripts such as rm_1000 scd1 skip their doors while it is set)
+	vm.cb &= ~1 & EvtVM.M32
 	audio.se("doorClose")
 	busy = false
 
@@ -1071,24 +1074,88 @@ func on_slash(p: Vector3) -> void:
 		var rt: Node3D = n.root
 		if n.hittable.call() and rt.position.distance_to(Vector3(p.x, rt.position.y, p.z)) < 0.6: n.hit.call()
 
-## handgun shot: the nearest zombie in the line of fire (auto-aim like the original)
+## handgun / M-100P shot — bhCPM2_act_atk + bhCheckGunAtari (weapon.c), WpnTab[4] / [9]: r 2, l 200, rn 0.4,
+## rmax 4 (game units). The shot is a capsule from 3 + r ahead of Claire at py + 11 along the weapon vector
+## (Ry(ay)·Rx(wax), wax ±8192 when aiming up / down); its radius grows with the distance from the muzzle
+## (r + min(rn·d, rmax), up / down: rn ×2, rmax ×1.2). The nearest enemy whose capsule (watr) touches it, in front
+## of Claire and without a wall between the hit point and the muzzle, is hit; a wall on the line shortens the shot.
 func on_fire(p: Vector3, d: Vector3, aim: int) -> bool:
 	var g: Variant = _gun()
 	if g == null or int(g.count) <= 0: return false
 	g.count = int(g.count) - 1; audio.se("shot")
-	var f := Vector2(d.x, d.z).normalized()
+	const S := 0.1
+	var r := 2.0 * S; var l := 200.0 * S; var rn := 0.4; var rmax := 4.0 * S
+	if aim != 0: rn *= 2.0; rmax *= 1.2
+	var h := Vector2(d.x, d.z).normalized()
+	var wax := 0.0 if aim == 0 else (PI / 4 if aim == 1 else -PI / 4)
+	var gv := Vector3(h.x * cos(wax), sin(wax), h.y * cos(wax))
+	var gpos := p
+	var P := player.position
+	var P0 := Vector3(P.x + h.x * (3.0 * S + r), P.y + 11.0 * S, P.z + h.y * (3.0 * S + r))
+	# bhCheckL2Wall from the muzzle: a wall shortens the shot (len = distance + 10 units)
+	var shot_len := l
+	var wh: Variant = _shot_wall(gpos, gpos + gv * l)
+	if wh != null: shot_len = float(wh) + 10.0 * S
 	var best: Variant = null
-	var bd := 12.0
+	var nr := 0.0
 	for z in zombies + dogs:
-		if not z.hittable: continue
-		var v := Vector2(z.position.x - p.x, z.position.z - p.z)
-		var dist := v.length()
-		if dist > bd or dist < 0.05: continue
-		var c := v.dot(f) / dist
-		if c < (0.94 if aim == 0 else 0.8): continue
-		best = z; bd = dist
+		if not z.hittable or not z.has_method("gun_capsule"): continue
+		var cap: Array = z.gun_capsule()
+		var c1: Vector3 = cap[0]; var c2: Vector3 = cap[1]; var cr: float = cap[2]
+		var ap := (c1 + c2) * 0.5
+		# njDistanceP2L: the nearest point of the shot line to the capsule centre
+		var ps := P0 + gv * gv.dot(ap - P0)
+		var gr := r + minf(rn * ps.distance_to(gpos), rmax)
+		var v1 := Vector2(ps.x - (P0.x - gv.x * r), ps.z - (P0.z - gv.z * r))
+		if v1.length() > 1e-6 and h.dot(v1.normalized()) < 0: continue
+		# npCollisionCheckCCEx: shot capsule against watr
+		var cp: Array = _seg_seg(P0, P0 + gv * shot_len, c1, c2)
+		var qa: Vector3 = cp[0]; var qb: Vector3 = cp[1]
+		if qa.distance_to(qb) > gr + cr: continue
+		# npDistanceP2C: the hit point on watr
+		var hp := qb + (qa - qb).normalized() * cr if qa.distance_to(qb) > 1e-6 else qb
+		# bhCheckC2WallN: no wall between the hit point and the muzzle
+		if _shot_wall(hp, gpos) != null: continue
+		var ll := gpos.distance_to(hp)
+		if ll >= shot_len + gr: continue
+		if best == null or ll < nr:
+			nr = ll; best = z
 	if best != null: hit_zombie(best, GUN_DMG)
 	return true
+
+## closest points of segments a0-a1 and b0-b1
+static func _seg_seg(a0: Vector3, a1: Vector3, b0: Vector3, b1: Vector3) -> Array:
+	var d1 := a1 - a0; var d2 := b1 - b0; var rr := a0 - b0
+	var a := d1.dot(d1); var e := d2.dot(d2); var f := d2.dot(rr)
+	var s := 0.0; var t := 0.0
+	if a <= 1e-9 and e <= 1e-9: return [a0, b0]
+	if a <= 1e-9:
+		t = clampf(f / e, 0, 1)
+	else:
+		var c := d1.dot(rr)
+		if e <= 1e-9:
+			s = clampf(-c / a, 0, 1)
+		else:
+			var b := d1.dot(d2); var den := a * e - b * b
+			s = clampf((b * f - c * e) / den, 0, 1) if den > 1e-9 else 0.0
+			t = (b * s + f) / e
+			if t < 0: t = 0; s = clampf(-c / a, 0, 1)
+			elif t > 1: t = 1; s = clampf((b - c) / a, 0, 1)
+	return [a0 + d1 * s, b0 + d2 * t]
+
+## bhCheckL2Wall / bhCheckC2WallN: distance along a-b to the first room wall (xz, 5 cm steps like the dogs' line
+## check), or null
+func _shot_wall(a: Vector3, b: Vector3) -> Variant:
+	if room == null: return null
+	var near := room.shapes_near(a, b, 0.02)
+	var list: Array = near.list
+	if list.is_empty(): return null
+	var L := Vector2(b.x - a.x, b.z - a.z).length()
+	var n := maxi(1, int(ceil(L / 0.05)))
+	for i in range(maxi(1, int(floor(float(near.t0) * n))), mini(n, int(ceil(float(near.t1) * n))) + 1):
+		var q := a.lerp(b, float(i) / n)
+		if room.resolve_in(q, 0.02, list).distance_to(q) > 0.001: return a.distance_to(q)
+	return null
 
 func hit_zombie(z: Variant, dmg: float) -> void:
 	z.hit(dmg)
