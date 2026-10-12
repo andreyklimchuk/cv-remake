@@ -164,6 +164,13 @@ var eff: Array[O] = []
 var _trs: Array = []
 ## bhGetGroundPosition(x, y, z) in game units (set by the game: the room floor below)
 var ground: Callable
+## rm_0150 poison gas (bhEff127): ev flag check (bhCkFlg(sys->ev_flg, n)), the player's head bone y in game units
+## (plp->mlwP->owP[5].mtx[13], null while there is no player) and plp->hp = -1
+var ev_flag: Callable
+var pl_head: Callable
+var pl_kill: Callable
+## sys->gas_py: height of the rising gas (game units)
+var gas_py := 0.0
 var _opq: Array = []   # sys->ef_opq (bhEffBG), drawn after ef_trs
 var _fnc: Array = []
 var _trs2d: Array = []
@@ -397,7 +404,7 @@ func _run(op: O) -> void:
 		15: _e015(op)
 		20: _e2d(op)
 		21: _e021(op)
-		32, 36, 39, 52, 54, 59, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 31, 33, 34, 35, 41, 45: op.flg = 0
+		32, 36, 39, 52, 54, 59, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 31, 33, 34, 35, 41, 43, 45: op.flg = 0
 		100: _e100(op)
 		101: _e101(op)
 		102: _e102(op)
@@ -423,6 +430,8 @@ func _run(op: O) -> void:
 		126: _e126(op)
 		249: _e249(op)
 		109: _e109(op)
+		127: _e127(op)
+		128: _e128(op)
 		64: op.flg = 0   # bhEffDmy (30..84 except 85)
 		93, 94, 95, 96, 97, 98, 99: _ebg(op)
 		18: _e018(op)
@@ -643,6 +652,86 @@ func _e126(op: O) -> void:
 	var q: Array = op.exp[op.ct0]
 	_uv4(op, q[0], q[1], q[0] + q[2], q[1] + q[2])
 	op.ct0 += 1
+	_trs.append(op)
+
+## bhEff127 (effsub1.c): poison gas of rm_0150. Type 0: a vent puffing a bhEff128 ring every 16 frames (growing to 4);
+## type 1: the gas layer rising 0.018 per frame up to 17 (sys->gas_py) with puffs every 8 frames, kills the player once
+## it is above the head bone + 1; type 2: a fixed layer at py. Off while mode1 is 0 or ev flag 2 is set (types 0 / 1)
+func _e127(op: O) -> void:
+	var off: bool = ev_flag.is_valid() and bool(ev_flag.call(2))
+	if (op.mode1 == 0 and op.type < 2) or (off and op.type < 2):
+		op.mode0 = 0; return
+	if op.mode0 == 0:
+		op.sx = 2.0
+		op.ct0 = (eff.find(op) & 3) * 4
+		gas_py = 0.0
+		var g: Variant = ground.call(op.px, op.py, op.pz) if ground.is_valid() else null
+		op.gpy = float(g) if g != null else 0.0
+		op.mode0 = 1; return
+	op.ct0 += 1
+	match op.type:
+		0:
+			if not (op.ct0 & 0xF):
+				_set_tb({"flg": 0x4000001, "id": 128, "type": 0, "flr": 0, "mdlver": op.lkono, "sx": op.sx, "sy": 0.0, "sz": op.sx,
+					"px": op.px, "py": op.py, "pz": op.pz, "ax": 0, "ay": 0})
+				if op.sx < 4.0: op.sx += 0.5
+		1:
+			if gas_py > 0.5 and not (op.ct0 & 0x7):
+				_e127_puff(op, gas_py, gas_py)
+			if gas_py < 17.0: gas_py += 0.018
+			var hy: Variant = pl_head.call() if pl_head.is_valid() else null
+			if hy != null and 1.0 + float(hy) < gas_py and pl_kill.is_valid(): pl_kill.call()
+		2:
+			if not (op.ct0 & 0xF):
+				_e127_puff(op, op.py, (op.py - op.gpy) - 0.1)
+
+## one bhEff128 puff of bhEff127 types 1 / 2: every 32 frames a layer sheet (type 1, quarter ct1 of 2) at top - 0.1 ct1,
+## else a rising cloud (type 2, quarter 2-3) at 0.1 + rnd * span; 30 x 30 around the emitter, size 50, spin rnd -1..1
+func _e127_puff(op: O, top: float, span: float) -> void:
+	var e := {"flg": 0x4000001, "id": 128, "mdlver": op.lkono, "sx": 50.0, "sz": 50.0, "ax": 0, "ay": 0}
+	if not (op.ct0 & 0x1F):
+		op.ct1 = (op.ct1 + 1) & 1
+		e.py = top - 0.1 * op.ct1; e.type = 1; e.flr = op.ct1
+	else:
+		e.py = 0.1 + span * randf(); e.type = 2; e.flr = int(2.0 * randf()) + 2
+	e.px = op.px + (30.0 * randf() - 15.0); e.pz = op.pz + (30.0 * randf() - 15.0)
+	e.sy = 2.0 * randf() - 1.0
+	_set_tb(e)
+
+## bhEff128 (effsub1.c): a flat gas quad on the xz plane. Type 0: vent ring (texture 2 / 1 cell, alpha 192 - 4 per frame,
+## growing by sx / 10); else a cloud cell (texture 43, quarter flr) spinning by sy deg per frame with alpha 160 sin(ct0)
+## over 64 frames. Colour 0xC8B440 (mdlver 0) / white (1), blend 8 / 6
+func _e128(op: O) -> void:
+	var t := op.tv
+	if op.mode0 == 0:
+		if op.type == 0:
+			op.tex = 2; op.ani = 1
+			_uv4(op, 0.1875, 0.3125, 0.375, 0.5)
+		else:
+			op.tex = 43; op.ani = 0
+			var x := 0.5 * (op.flr % 2); var y := 0.5 * (op.flr / 2)
+			_uv4(op, x, y, 0.5 + x, 0.5 + y)
+		t[0].x = -1.0; t[0].y = 0.0; t[0].z = -1.0
+		t[1].x = 1.0; t[1].y = 0.0; t[1].z = -1.0
+		t[2].x = -1.0; t[2].y = 0.0; t[2].z = 1.0
+		t[3].x = 1.0; t[3].y = 0.0; t[3].z = 1.0
+		op.xn = 0.1 * op.sx
+		op.bls = 8; op.bld = 6
+		op.ct1 = 192
+		op.mode0 = 1
+	if op.type == 0:
+		op.ct1 -= 4
+		if op.ct1 <= 0:
+			op.flg = 0; return
+		op.sx += op.xn; op.sz += op.xn
+	else:
+		op.ay = float((int(op.ay) + (int(182.04445 * op.sy) & 0xFFFF)) & 0xFFFF)
+		op.ct1 = int(160.0 * sin(op.ct0 * ANG))
+		op.ct0 = (op.ct0 + 512) & 0x7FFF
+		if op.ct0 == 0:
+			op.flg = 0; return
+	var argb := ((op.ct1 & 0xff) << 24) | (0xC8B440 if op.mdlver == 0 else 0xFFFFFF)
+	for v in t: v.col = argb
 	_trs.append(op)
 
 ## bhEff109 (effsub1.c): water ripples — every 16 frames (type 0) / lkono frames a bhEff108 ring on the water surface
@@ -987,7 +1076,7 @@ func draw(camera: Camera3D) -> void:
 			var rb := Basis.from_euler(Vector3(op.ax * ANG, op.ay * ANG, op.az * ANG), EULER_ORDER_ZYX)
 			for k in 4:
 				var t: Dictionary = op.tv[k]
-				var p := (Vector3(op.px, op.py, op.pz) + rb * Vector3(t.x * op.sx, t.y * op.sy, 0.0)) * 0.1
+				var p := (Vector3(op.px, op.py, op.pz) + rb * Vector3(t.x * op.sx, t.y * op.sy, float(t.get("z", 0.0)) * op.sz)) * 0.1
 				q.append([p, Vector2(t.u, t.v), _col(int(t.col))])
 			b.quads.append(q); continue
 		for k in 4:

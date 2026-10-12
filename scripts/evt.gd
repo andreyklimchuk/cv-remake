@@ -60,6 +60,8 @@ class Task:
 	var lcond := {}
 	var data := 0
 	var work: Work = null
+	## this task's event hid the player model (bhInitModelSet 0 .. 0) and has not shown it again (see evt_on)
+	var hid_pl := false
 	var cno := 0
 	var bp := [0, 0, 0]
 	var ba := [0, 0, 0]
@@ -70,7 +72,7 @@ class Task:
 	## Object.assign(t, newTask()) of evt.ts: the task object itself is reused (running references stay valid)
 	func reset() -> void:
 		elgt = []; status = 0; p = 0; scr = 0; loop = -1; cnt = {}; cnt2 = 0; cnt3 = 0; lstack = {}; lcond = {}; data = 0
-		work = null; cno = 0; bp = [0, 0, 0]; ba = [0, 0, 0]; addp = [0.0, 0.0, 0.0]; adda = [0.0, 0.0, 0.0]
+		work = null; hid_pl = false; cno = 0; bp = [0, 0, 0]; ba = [0, 0, 0]; addp = [0.0, 0.0, 0.0]; adda = [0.0, 0.0, 0.0]
 		ips = [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
 		ian = [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
 
@@ -228,6 +230,12 @@ func evt_on(task: int, evt: int) -> void:
 			task += 1
 	var t := tasks[task]
 	var keep := t.work
+	# PORT APPROXIMATION (HANDOFF 12.10): Event_init simply restarts a busy task. rm_0150 event 0 hides Claire for its
+	# close-up, requests the sword (item screen) and shows her 30 frames later, but the scd1 check that follows the item
+	# screen restarts task 0 with events 5-8 first; Claire would stay hidden. The killed event's hide is undone here.
+	if t.status != 0 and t.hid_pl:
+		var pw := work(0, 0)
+		if pw: pw.gone = false
 	t.reset(); t.work = keep
 	t.status = 1; t.scr = evt + 2; t.p = 0
 
@@ -415,6 +423,7 @@ func _exec() -> int:
 		0x24:
 			var w := _ent(_b(1), _b(2))
 			if w: w.gone = _b(3) == 0
+			if _b(1) == 0 and t: t.hid_pl = _b(3) == 0
 		0x25:
 			var a = etc[_b(1)] if _b(1) < etc.size() else null
 			if a:
@@ -424,6 +433,46 @@ func _exec() -> int:
 			var a = flr[_b(1)] if _b(1) < flr.size() else null
 			if a:
 				a.attr = _u16(2); a.prm = [_b(4), _b(5), _b(6), _b(7)]; a.type = _b(8)
+		0xb1:
+			# bhObjDposCk: turn object v0's ay (v4 0) or node v4 ang[0] of enemy v0 by v3 deg per call towards v2 deg
+			# (flag 2: v2 - 360 / -v2); 1 while turning, 0 once there (16-bit angle compares as in event.c)
+			var v1 := _b(2); var v2 := _b(3); var v3 := _b(4); var v4 := _b(5)
+			if v4 == 0:
+				if v1 & 2 and v2 != 0: v2 -= 360
+				var eay := int(v2 * (65536.0 / 360.0)); var eay2 := int(v3 * (65536.0 / 360.0))
+				var ow := work(2, _b(1))
+				var ay := int(round(ow.ay * 65536.0 / TAU)) & 0xffff
+				if ay >= 0x8000: ay -= 0x10000
+				r = 0
+				if eay != (ay & 0xffff):
+					if eay < (ay & 0xffff):
+						ay -= eay2
+						if eay >= (ay & 0xffff): ay = eay & 0xffff
+						else: r = 1
+					elif (ay & 0xffff) < eay:
+						ay += eay2
+						if eay <= (ay & 0xffff): ay = eay
+						else: r = 1
+				ow.ay = ay * TAU / 65536.0; ow.ang_set = true
+			else:
+				if v1 & 2: v2 = -v2
+				var eay := U.s16(int(v2 * (65536.0 / 360.0))); var eay2 := U.s16(int(v3 * (65536.0 / 360.0)))
+				var ew := work(1, _b(1))
+				if not ew.parts.has(v4): ew.parts[v4] = {}
+				var q: Dictionary = ew.parts[v4]
+				var a: Array = q.get("ang", [0.0, 0.0, 0.0])
+				var ax := U.s16(int(round(float(a[0]) * 65536.0 / TAU)))
+				r = 0
+				if eay != ax:
+					if eay < ax:
+						ax -= eay2
+						if eay >= ax: ax = eay
+						else: r = 1
+					else:
+						ax += eay2
+						if eay <= ax: ax = eay
+						else: r = 1
+				q.ang = [ax * TAU / 65536.0, a[1], a[2]]
 		0x8e:
 			# bhZombieUpDieCk: zombie whose lower body (cepw) is dead (bhEne01_DD00) -> rm flag
 			if host.has_method("zombie_dead") and host.zombie_dead(_b(1)): set_flag(4, _u16(2), true)

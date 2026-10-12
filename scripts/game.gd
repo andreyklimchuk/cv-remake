@@ -3,7 +3,7 @@ extends Node3D
 ## Port of game.ts: room loading, the event system glue (EvtHost), enemies, items, saving and the main loop.
 
 ## rooms converted from the PS3 data (room file = rm_<stage><room><case>)
-const ROOMS := ["rm_0000", "rm_0010", "rm_0020", "rm_0021", "rm_0030", "rm_0031", "rm_0040", "rm_0050", "rm_0060", "rm_0070", "rm_0080", "rm_0090", "rm_0100", "rm_0110", "rm_0160", "rm_1000", "rm_1020", "rm_1030", "rm_1040", "rm_1050", "rm_1060", "rm_1070", "rm_1080", "rm_1090", "rm_1100", "rm_1110", "rm_1120", "rm_1130", "rm_1140"]
+const ROOMS := ["rm_0000", "rm_0010", "rm_0020", "rm_0021", "rm_0030", "rm_0031", "rm_0040", "rm_0050", "rm_0060", "rm_0070", "rm_0080", "rm_0090", "rm_0100", "rm_0110", "rm_0120", "rm_0130", "rm_0140", "rm_0150", "rm_0160", "rm_1000", "rm_1020", "rm_1030", "rm_1040", "rm_1050", "rm_1060", "rm_1070", "rm_1080", "rm_1090", "rm_1100", "rm_1110", "rm_1120", "rm_1130", "rm_1140"]
 ## cutscene character models (enNNaVV)
 const NPC_MODELS := ["en91a00", "en93a00", "en94a00", "en98a00", "en62a00", "en68a00", "en69a00", "en87a00"]
 ## converted zombie models en01aNN (NN = model variant byte of the enemy record)
@@ -230,6 +230,9 @@ func enter_room(id: String, pos: int, at: Variant = null, fade := true, min_ms :
 	fx.ground = func(x: float, y: float, z: float) -> Variant:
 		var h: Variant = r.floor_at(x * 0.1, z * 0.1, y * 0.1, 0.0)
 		return float(h) * 10.0 if h != null else null
+	fx.ev_flag = func(n: int) -> bool: return vm.flag(1, n)
+	fx.pl_head = func() -> Variant: return player.bone_pos("b05").y * 10.0 if player != null else null
+	fx.pl_kill = player_die
 	fx.load_room(id, r.data.get("eft"))
 	lights.set_room(r.data.get("lgt"), r.data.get("evl"), r.data.get("amb"))
 	vm.init(ev.get("scripts", []))
@@ -897,7 +900,15 @@ func mes_disp_end() -> void: msg.abort()
 func pad_check(bit: int, mode: int) -> bool:
 	var a := input.action; var c := input.cancel
 	if mode >= 3 and mode <= 5: return a or c
-	if mode <= 2: return (bit == 11 and a) or (bit == 12 and c)
+	if mode <= 2:
+		# pad.c bit order: 0 up, 1 down, 2 left, 3 right (sticks set them too), 4 START, 11 decide, 12 cancel
+		match bit:
+			0: return input.fwd
+			1: return input.back
+			2: return input.left
+			3: return input.right
+			4: return input.has(["Escape", "Enter"])
+		return (bit == 11 and a) or (bit == 12 and c)
 	return false
 func fade(argb: int, speed: int) -> void: ui.fade((argb >> 24) & 0xff >= 0x80, maxi(1, speed) * 1000.0 / 30.0)
 func cine(mode: int) -> void:
@@ -1124,6 +1135,29 @@ func _inp_hit_dir() -> bool:
 func pony_reset() -> void:
 	player.hair_reset()
 
+## bhEff127 gas: plp->hp = -1 -> bhCPM0_die (player.c): voice 1025, mtn_no 25 (hokan 8) then 26 (hokan 4), then game over.
+## mtn_no is a slot of the pl00 motion bank (dread.c: size-prefixed entries, 0 = empty slot): slots 11-15 are empty,
+## so slot 25 / 26 = MTN blocks 20 / 21 = clips m20 (40-frame fall) / m21 (2-frame lying pose)
+## (ПРИБЛИЖЕНИЕ: без root-motion trsz и падения по bhGetGroundPosition)
+var _dying := false
+var _die_t := 0.0
+var _die_step := 0
+func player_die() -> void:
+	if _dying or _over_shown: return
+	_dying = true; player.hp = -1; _die_step = 1
+	audio.voice(1025)
+	player.play_sync("m20", false, 8 / 30.0)
+	_die_t = player.anim_length("m20")
+
+## frame-driven steps of player_die (the simulation clock, also under the test hook)
+func _update_die(dt: float) -> void:
+	_die_t -= dt
+	if _die_t > 0.0: return
+	if _die_step == 1:
+		_die_step = 2; player.play_sync("m21", true, 4 / 30.0); _die_t = 1.5
+	elif _die_step == 2:
+		_die_step = 3; game_over()
+
 func game_over() -> void:
 	if _over_shown: return
 	_over_shown = true; busy = true
@@ -1224,6 +1258,7 @@ func step(dt: float) -> void:
 		if not msg.active and not inv_open and not in_cine and not (busy and grab == null):
 			if grab != null: _update_grab(dt)
 			if dog_bite != null: _update_dog_bite(dt)
+			if _die_step in [1, 2]: _update_die(dt)
 			if dog_hurt > 0.0:
 				dog_hurt -= dt
 				if dog_hurt <= 0.0:

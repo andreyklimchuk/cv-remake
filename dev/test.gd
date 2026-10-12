@@ -51,6 +51,7 @@ func _ready() -> void:
 		"zmorph": await zmorph_test()
 		"zai": await zai_test()
 		"use": await use_test()
+		"gas": await gas_test()
 		"file": await file_test()
 		"tail": await tail_test()
 		"case": await case_test()
@@ -434,6 +435,20 @@ func zmorph_test() -> void:
 		cam.queue_free()
 		break
 
+## rm_0150 gas trap: -- gas SECS  (the sword taken at etc 3, then Claire waits there)
+func gas_test() -> void:
+	var a := OS.get_cmdline_user_args()
+	await g.enter_room("rm_0150", 0, null, false)
+	await wait_free()
+	P.place(5.9, P.position.y, 4.6, 0.0)
+	await sim(0.2)
+	g.sim(0.1, ["KeyE"]); await sleep(10)
+	for k in int(float(a[1]) / 0.5):
+		if g.msg.active: g.sim(0.3, ["KeyE"]); await sleep(10)
+		elif g.inv_open and g.inv_screen._mode == "get": g.sim(0.1, ["KeyE"]); await sleep(10); g.sim(0.1, []); await sleep(10)
+		await sim(0.5)
+		if k % 4 == 0 or P.hp < 0: print("T%.1f gas %.2f head %.2f hip %s hp %d anim %s over %s" % [(k + 1) * 0.5, g.fx.gas_py, P.bone_pos("b05").y * 10.0, P.bone_pos("b02") - P.global_position, P.hp, P.cur, g._over_shown])
+
 ## item use: -- use ROOM x z ang ITEM SECS [snap_every] [trace]  (Claire placed in an area, the item used from the inventory)
 func use_test() -> void:
 	var a := OS.get_cmdline_user_args()
@@ -441,6 +456,9 @@ func use_test() -> void:
 		vm.set_flag(int(fs.get_slice(":", 0)), int(fs.get_slice(":", 1)), true)
 	await g.enter_room(a[1], 0, null, false)
 	await wait_free()
+	# PREWAIT=secs: let the entry events play out first
+	if OS.get_environment("PREWAIT") != "":
+		await sim(float(OS.get_environment("PREWAIT"))); await wait_free()
 	P.place(float(a[2]), P.position.y, float(a[3]), float(a[4]))
 	var id := int(a[5])
 	g.inv.add(id, Text.ITEM_NAMES.get(id, ""))
@@ -456,6 +474,13 @@ func use_test() -> void:
 		await sim(0.25)
 		if a.size() > 7 and k % int(a[7]) == 0: await snap("use_%03d" % k)
 		elif k % 4 == 0: print("T%.2f %s" % [(k + 1) * 0.25, stt()])
+	# AFTER="Key:secs:watch": hold a key, then watch the state (e.g. rm_0150 events 30-34 wait for the pad)
+	var af := OS.get_environment("AFTER").split(":", false)
+	if af.size() > 2:
+		await sim(float(af[1]), [af[0]])
+		for k in int(float(af[2]) / 0.25):
+			await sim(0.25)
+			if k % 4 == 0: print("A%.2f %s" % [(k + 1) * 0.25, stt()])
 	# EX1="x z ang secs": the action button there before the USE2 steps (messages answered with the default choice)
 	var ex1 := OS.get_environment("EX1").split(" ", false)
 	if ex1.size() > 3:
