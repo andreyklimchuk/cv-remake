@@ -31,3 +31,8 @@ static func rel_xform(n: Node, top: Node) -> Transform3D:
 ## world rotation of a basis without scale
 static func rot_q(b: Basis) -> Quaternion:
 	return b.orthonormalized().get_rotation_quaternion()
+
+## 16-bit signed value of an int (Sint16 casts of the original)
+static func s16(v: int) -> int:
+	v &= 0xffff
+	return v - 0x10000 if v >= 0x8000 else v

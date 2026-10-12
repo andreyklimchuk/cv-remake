@@ -264,6 +264,9 @@ func head_pos() -> Vector3:
 		return bone_xform(bones.b05).origin
 	return position + Vector3(0, 1.5, 0)
 
+func anim_length(id: String) -> float:
+	return ap.get_animation(id).length if ap != null and ap.has_animation(id) else 0.0
+
 func play_sync(id: Variant, loop := false, fade := 0.08) -> void:
 	sync = id; aiming = false; _k_state = "none"
 	if id != null: _play_id(id, fade, loop)
