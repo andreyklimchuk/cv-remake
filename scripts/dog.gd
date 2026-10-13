@@ -18,8 +18,8 @@ const NB := 19
 const SLOT := [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21, 25, 26, 27, 28, 29, 30, 31, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49]
 const FLIP := [0, 1, 2, 3, 4, 5, 9, 10, 11, 6, 7, 8, 12, 16, 17, 18, 13, 14, 15]
 const HP_TBL := [60, 60, 60, 90, 90, 90, 90, 90, 90, 90, 90, 90, 90, 120, 120, 120]
-## en04_hp_tbl is on the scale of the original weapon damage; the port's handgun does 1.5 against the zombies' hp 8
-const HP_SCALE := 0.1
+## en04_hp_tbl and EneDam tables share the native (unscaled) hit-point units.
+const HP_SCALE := 1.0
 ## Claire's motions 100 + N from this bank (En04_PlyMtn_OffsetTbl[0] = 100): claire.glb dNN = bank slots 100..107
 const PLY_CLIP := {100: "d00", 101: "d01", 102: "d02", 103: "d03", 104: "d04"}
 const PLY_NF := {100: 30, 101: 33, 102: 52, 103: 71, 104: 71}

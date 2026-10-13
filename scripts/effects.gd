@@ -9,6 +9,8 @@ const S5 := 0.15625
 const S6 := 0.1875
 const S7 := 0.21875
 
+const EXP019 := [[[0.015625,0.0,0.15625,0.125],[0.015625,0.125,0.15625,0.15625],[0.015625,0.3125,0.15625,0.15625],[0.0,0.484375,0.1875,0.15625],[0.625,0.484375,0.1875,0.15625],[0.375,0.0,0.21875,0.1875],[0.375,0.1875,0.21875,0.1875],[0.375,0.40625,0.21875,0.1875],[0.625,0.265625,0.21875,0.1875],[0.640625,0.015625,0.1875,0.1875],[0.1875,0.0,0.1875,0.1875],[0.1875,0.1875,0.1875,0.15625],[0.1875,0.34375,0.1875,0.1875],[0.1875,0.5,0.1875,0.140625]],[[0.015625,0.0,0.15625,0.125],[0.015625,0.125,0.15625,0.15625],[0.015625,0.3125,0.15625,0.15625],[0.0,0.484375,0.1875,0.15625],[0.625,0.484375,0.1875,0.15625],[0.375,0.0,0.21875,0.1875],[0.375,0.1875,0.21875,0.1875],[0.375,0.40625,0.21875,0.1875],[0.625,0.265625,0.21875,0.1875],[0.0,0.640625,0.21875,0.21875],[0.21875,0.640625,0.21875,0.21875],[0.4375,0.640625,0.1875,0.15625],[0.625,0.65625,0.1875,0.15625],[0.8125,0.65625,0.1875,0.15625]],[[0.3125,0.875,0.09375,0.09375],[0.40625,0.875,0.09375,0.09375],[0.5,0.875,0.09375,0.09375],[0.59375,0.875,0.09375,0.09375],[0.6875,0.875,0.09375,0.09375],[0.78125,0.875,0.09375,0.09375],[0.875,0.875,0.09375,0.09375]]]
+
 static func _nsin(a: float) -> float: return sin(a * ANG)
 static func _ncos(a: float) -> float: return cos(a * ANG)
 static func _uvs(a: Array) -> Array:
@@ -440,6 +442,8 @@ func _run(op: O) -> void:
 		56, 64: op.flg = 0   # bhEffDmy (30..84 except 85)
 		93, 94, 95, 96, 97, 98, 99: _ebg(op)
 		18: _e018(op)
+		19: _e019(op)
+		130: _e130(op)
 		218: _e218(op)
 		234: _e234(op)
 		230: _e230(op)
@@ -1287,3 +1291,41 @@ func _e163(op: O) -> void:
 		-4: op.ct0 += 1; return
 	_effset(op, op.exp[op.ct0], 0)
 	op.ct0 += 1; _trs.append(op)
+
+## bhEff130 flight sprite. The 30 Hz projectile controller owns its position/lifetime.
+func _e130(op: O) -> void:
+	if op.mode0 == 0:
+		op.tex = 3; op.ani = 0; op.bls = 8; op.bld = 10
+		for t in op.tv: t.col = 0xffffffff
+		_uv4(op, 0.171875, 0.25, 0.265625, 0.34375)
+		op.mode0 = 1
+	_trs.append(op)
+
+## bhEff019: original explosion sprite sequences, drift and alpha.
+func _e019(op: O) -> void:
+	if op.mode0 == 0:
+		op.tex = 19; op.ani = 0; op.bls = 8; op.bld = 10
+		var color := 0xffffffff
+		match op.type:
+			0: op.yn = 1.0
+			1: color = 0x30ffffff; op.bls = 11; op.bld = 3; op.yn = 1.4; op.ct1 = 48
+			2: color = 0x40ffffff; op.bld = 6
+		for t in op.tv: t.col = color
+		op.ct0 = 0; op.mode0 = 1
+	if op.type in [0, 1]:
+		if op.type == 1:
+			op.ct1 = mini(255, op.ct1 + 24)
+			for t in op.tv: t.col = (op.ct1 << 24) | 0xffffff
+		op.py += op.yn; op.yn *= 0.9
+	elif op.type == 2:
+		op.sxb += 0.5; op.syb += 0.5
+	var seq: Array = EXP019[op.type]
+	if op.ct0 >= seq.size(): op.flg = 0; return
+	var uv: Array = seq[op.ct0]
+	op.sx = 8.0 * op.sxb * float(uv[2]); op.sy = 8.0 * op.syb * float(uv[3])
+	_uv4(op, uv[0], uv[1], uv[0] + uv[2], uv[1] + uv[3])
+	op.ct0 += 1; _trs.append(op)
+
+func weapon_explosion(p: Vector3) -> void:
+	for pair in [[0, 2.5], [2, 5.0]]:
+		_set_tb({"flg": 0x4100001, "id": 19, "type": pair[0], "px": p.x * 10, "py": p.y * 10, "pz": p.z * 10, "sx": pair[1], "sy": pair[1], "sz": pair[1], "ax": 0, "ay": 0})

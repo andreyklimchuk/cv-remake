@@ -46,7 +46,7 @@ var index := 0
 var mdlver := 0
 ## ENEMY type (bhEne01_InitType10 / type 10 clears the mouth morph flag EXP0_I(0x40) 0x10000000)
 var etype := 0
-var hp := 8.0
+var hp := 90.0
 var heading := 0.0:
 	set(v): heading = v; _ay = int(roundf(v / BAMS)) & 0xFFFF
 	get: return heading
@@ -111,6 +111,9 @@ func init(file: String, x: float, y: float, z: float, h: float, lying: bool) -> 
 	load_model(file)
 	if ap: ap.stop()
 	ptype = TYP_TBL.get(mdlver, 0)
+	var hp_table: Array = Assets.data_json("weapondata.json").en01_hp[0]
+	hp = float(hp_table[randi() % 16])
+	hp += int(hp * int(PERSONAL[ptype][3]) / 100)
 	for k in 18:
 		var bi := bone_index("b%02d" % k)
 		_bi.append(bi)
@@ -817,7 +820,7 @@ func _mv04() -> void:
 			ct0 -= 1
 			if ct0 < 0 or (x40 & 0x200000):
 				lo.add = 0x10000; up.add = 0x10000
-				# (the crawler change of mtn 15 with hp < 15 is not ported: hit points are not the original's)
+				# (the crawler change of mtn 15 with hp < 15 is not ported yet)
 				if lo.no == 15: mode3 = 3
 				else: mode3 = 2
 				ct1 = _rnd(10) + 10

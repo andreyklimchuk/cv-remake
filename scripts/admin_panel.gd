@@ -5,6 +5,9 @@ extends PanelContainer
 const FLAG_TYPES := [["ev (событие)", 1], ["it (предмет взят)", 7], ["ky", 2], ["ed", 3], ["mp (карта)", 8], ["ic", 9], ["ts", 12], ["rm (комната)", 4]]
 ## story presets: [label, room, pos, ev flags, it flags, items]
 const PRESETS := [
+	["Подлодка: руль и подсумка", "rm_1130", 0, [], [], [53]],
+	["Проверка арбалета и пороха", "rm_0040", 0, [6], [], [7, 18, 35]],
+	["Проверка четырёх снарядов GL", "rm_0040", 0, [6], [], [6, 15, 16, 17, 37]],
 	["rm_1020 → rm_1070 → rm_1050 (люгеры)", "rm_1050", 0, [], [], []],
 	["Головоломка Стива (rm_1050, руль взят)", "rm_1050", 0, [13, 146], [11], [53]],
 	["Катсцена Альфреда (rm_1020, Стив спасён)", "rm_1020", 0, [13, 146, 15], [11], [53]],
@@ -141,6 +144,9 @@ func _warp(id: String, pos: int) -> void:
 func _preset(p: Array) -> void:
 	for n in p[3]: g.vm.set_flag(1, n, true)
 	for n in p[4]: g.vm.set_flag(7, n, true)
+	g._sync_side_pack()
 	for id in p[5]:
-		if not g.inv.has(id): g.inv.add(id, Text.ITEM_NAMES.get(id, ""))
+		var count := 1
+		if id in [6, 7, 15, 16, 17, 18, 35, 36, 37, 130]: count = int(Assets.data_json("itemdata.json").getbulletmax[id][0])
+		if not g.inv.has(id): g.inv.add(id, Text.ITEM_NAMES.get(id, ""), count)
 	_warp(p[1], p[2])

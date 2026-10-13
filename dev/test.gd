@@ -67,6 +67,7 @@ func _ready() -> void:
 		"prof": await prof_test()
 		"tour": await tour_test()
 		"pack": await pack_test()
+		"weapons": await weapons_test()
 		"submarine": await submarine_test()
 		"admin": await admin_test()
 		"kaidan": await kaidan_test()
@@ -1114,3 +1115,108 @@ func submarine_test() -> void:
 	assert(g.room_id == "rm_4030" and g.inv.capacity == 10)
 	assert(P.ap.has_animation("rm_4030_r00"))
 	print("SUBMARINE PASS: wheel, platform, pack, lever, airport exit, original clips")
+
+## -- weapons: native ammo swaps/powder, sparse motions, models, trajectories and damage.
+func weapons_test() -> void:
+	var inv := Inventory.new()
+	assert(inv.add(6, Text.ITEM_NAMES[6], 6))
+	assert(inv.add(16, Text.ITEM_NAMES[16], 12))
+	assert(WeaponAmmo.combine(inv, 1, 0) == 1)
+	assert(inv.find(6).count == 12 and WeaponAmmo.loaded(inv.find(6)) == 16)
+	assert(inv.find(15).count == 6 and not inv.has(16))
+	assert(WeaponAmmo.combine(inv, 0, 1) == 1)
+	assert(inv.find(6).count == 6 and WeaponAmmo.loaded(inv.find(6)) == 15 and inv.find(16).count == 12)
+	for id in [17, 37]:
+		assert(inv.add(id, Text.ITEM_NAMES[id], 6))
+		assert(WeaponAmmo.combine(inv, inv.slots.find(inv.find(id)), inv.slots.find(inv.find(6))) == 1)
+		assert(WeaponAmmo.loaded(inv.find(6)) == id)
+	# A full inventory can exchange loads: no third slot is required.
+	while inv.free_count() > 0: assert(inv.add(21, Text.ITEM_NAMES[21]))
+	assert(WeaponAmmo.combine(inv, inv.slots.find(inv.find(16)), inv.slots.find(inv.find(6))) == 1)
+	assert(inv.free_count() == 0)
+	var saved: Dictionary = inv.find(6).duplicate(true)
+	var back := Inventory.new(); assert(back.add(saved.id, saved.name, saved.count, saved))
+	assert(WeaponAmmo.loaded(back.find(6)) == 16)
+	inv = Inventory.new(); assert(inv.add(7, Text.ITEM_NAMES[7], 30)); assert(inv.add(35, Text.ITEM_NAMES[35], 10))
+	assert(WeaponAmmo.combine(inv, 1, 0) == 1)
+	assert(inv.find(7).count == 10 and WeaponAmmo.loaded(inv.find(7)) == 36 and inv.find(18).count == 20)
+	inv = Inventory.new(); assert(inv.add(7, Text.ITEM_NAMES[7], 10)); assert(inv.add(130, Text.ITEM_NAMES[130], 30))
+	assert(WeaponAmmo.combine(inv, 0, 1) == 1)
+	assert(inv.find(7).count == 10 and inv.find(35).count == 20)
+	inv = Inventory.new(); assert(inv.add(18, Text.ITEM_NAMES[18], 30)); assert(inv.add(35, Text.ITEM_NAMES[35], 10))
+	assert(WeaponAmmo.combine(inv, 0, 1) == 1 and inv.find(36).count == 10 and inv.find(18).count == 20)
+	assert(inv.add(18, Text.ITEM_NAMES[18], 990))
+	assert(inv.slots.filter(func(x): return x != null and x.id == 18).size() == 2)
+	assert(inv.slots.filter(func(x): return x != null and x.id == 18).map(func(x): return x.count) == [999, 11])
+	inv = Inventory.new(); assert(inv.add(7, Text.ITEM_NAMES[7], 0)); assert(inv.add(35, Text.ITEM_NAMES[35], 30))
+	assert(WeaponAmmo.combine(inv, 1, 0) == 0 and inv.find(35).count == 30)
+	inv = Inventory.new(); assert(inv.add(35, Text.ITEM_NAMES[35], 30)); assert(inv.add(130, Text.ITEM_NAMES[130], 30))
+	assert(WeaponAmmo.combine(inv, 0, 1) == 1 and inv.find(35).count == 60)
+	print("WEAPONS AMMO PASS: four GL loads, both arrow kinds, powder, full-slot swaps, metadata, 999 cap")
+	for prefix in ["bg", "gl"]:
+		for slot in [0, 1, 4, 6, 9, 11, 14]: assert(P.ap.has_animation("%s%02d" % [prefix, slot]))
+	assert(P.ap.get_animation("gl00").length * 30 < 6.1)
+	assert(P.ap.get_animation("bg00").length * 30 < 10.1)
+	for item in [6, 7]:
+		P.set_lighter(false); P.set_gun(true, item); P._update_hands()
+		assert(P.gun_on and P._weapon_hands[item][0].visible and P._weapon_hands[item][1].visible)
+		assert(not P._gun_hand.visible and not P._m100_r.visible)
+	for item in [6, 7]:
+		assert(g.inv.add(item, Text.ITEM_NAMES[item], 6))
+		g.inv_screen.equipped = item; g._equip_changed()
+		var model := g.inv_screen._model(item)
+		assert(model != null); model.free()
+		for aim in [0, 1, 2]:
+			g.projectiles.clear(); P._k_state = "none"
+			var inp := GameInput.new(); inp.down = {"KeyF": true}
+			if aim == 1: inp.down.KeyW = true
+			if aim == 2: inp.down.KeyS = true
+			var before := int(g.inv.find(item).count)
+			for f in 35:
+				inp.pressed = {"KeyE": true} if f == 12 else {}
+				P._update_knife(1.0 / 30.0, inp); P._advance(1.0 / 30.0)
+			assert(int(g.inv.find(item).count) == before - 1)
+			assert(g.projectiles.shots.size() == (5 if item == 6 else 1))
+			assert(P.cur.begins_with("gl" if item == 6 else "bg"))
+	g.projectiles.clear()
+	print("WEAPONS MOTIONS PASS: sparse native slots, both hands, no handgun fallback")
+	for w in [10, 14, 15, 16, 17, 19]:
+		var wt: Array = Assets.data_json("weapondata.json").WpnTab[w]
+		var bank: Dictionary = g.audio._bank("arms_%03d" % int(wt[29]))
+		var entry: Dictionary = bank.lists[str(int(wt[31]) & 0xff)]
+		assert(int(entry.s) < bank.samples.size())
+		assert(g.audio._stream("audio/se/%s.ogg" % bank.samples[int(entry.s)].f) != null)
+	print("WEAPONS SOUNDS PASS: native sparse tone mapping and shot streams")
+	var dmg := WeaponDamage.new()
+	assert(dmg.base(1, 10, 0.1) == 12 and dmg.base(1, 10, 20) == 12)
+	assert(dmg.base(1, 19, 20) == 150)
+	assert(dmg.base(1, 14, 2, true) == 50 and dmg.base(4, 15, 2, true) == 80)
+	assert(dmg.base(1, 4, 0.1) == 18 and dmg.base(1, 4, 2) == 15 and dmg.base(1, 4, 5) == 12)
+	var z := Zombie.new(0); g.add_child(z); z.init("enemies/en01a00.glb", 0, 0, -1, 0, false)
+	assert(z.hp in [60.0, 90.0, 120.0])
+	var old_room := g.room; var old_zombies := g.zombies; var old_dogs := g.dogs
+	g.room = null; g.zombies = [z]; g.dogs = []
+	for weapon in [10, 19, 14, 15, 16, 17]:
+		g.projectiles.clear(); z.hp = 10000; z.mode0 = 1; z.mode2 = 1
+		z.position = Vector3(0, 0, -1); z._save_world()
+		g.projectiles.launch(weapon, Vector3(0, 1.3, 0), 0, 0)
+		assert(g.projectiles.shots.size() == (5 if weapon == 14 else 1))
+		if weapon == 10:
+			assert(g.projectiles.shots[0].mesh != null)
+		for f in 90: g.projectiles.frame()
+		assert(z.hp < 10000, "projectile must damage its target: %d" % weapon)
+		if weapon == 10: assert(z.hp == 9988)
+		if weapon == 19: assert(z.hp == 9850)
+		if weapon == 14: assert(z.hp == 9750)
+		if weapon == 15: assert(z.hp == 9880)
+		if weapon == 16: assert(z.hp == 9820)
+		print("WEAPON %d HIT damage %.0f" % [weapon, 10000 - z.hp])
+	# BOW Gas acts after 25 impact frames, also against enemies outside projectile range.
+	g.projectiles.clear(); z.hp = 1000; z.mode0 = 1; z.mode2 = 1
+	z.position = Vector3(40, 0, 40); z._save_world()
+	g.projectiles.launch(17, Vector3(0, 1.3, 0), 0, 0)
+	for f in 44: g.projectiles.frame()
+	assert(z.hp == 1000)
+	g.projectiles.frame(); assert(z.hp == 500)
+	g.projectiles.clear(); g.room = old_room; g.zombies = old_zombies; g.dogs = old_dogs; z.queue_free()
+	print("WEAPONS BALLISTICS PASS: regular/explosive arrows, 5 grenade fragments, acid/flame/gas, original HP/damage")

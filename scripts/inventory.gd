@@ -5,7 +5,7 @@ extends RefCounted
 ## sorted first like ItemSort, picking one up needs two free slots (ItemGet: num2 >= 2). The second slot holds a tail
 ## marker (id -1).
 
-const STACK := [12, 31]
+const STACK := [12, 15, 16, 17, 18, 31, 35, 36, 37, 130, 143]
 ## itemdata[id].type & 0x100 (item.c)
 const WIDE := [1, 2, 3, 33, 34, 142]
 var capacity := 8
@@ -32,13 +32,26 @@ func free_count() -> int:
 		if s == null: n += 1
 	return n
 
-func add(id: int, name_: String, count := 1) -> bool:
+func add(id: int, name_: String, count := 1, metadata := {}) -> bool:
+	if not can_add(id, count): return false
+	if count == 0:
+		if STACK.has(id): return false
+		var empty: Dictionary = metadata.duplicate(true)
+		empty.merge({"id": id, "name": name_, "count": 0}, true)
+		slots[slots.find(null)] = empty; sort(); return true
+	var remaining := count
 	if STACK.has(id):
 		for s in slots:
 			if s != null and s.id == id:
-				s.count += count; return true
-	if free_count() < (2 if is_wide(id) else 1): return false
-	slots[slots.find(null)] = {"id": id, "name": name_, "count": count}
+				var n := mini(999 - int(s.count), remaining)
+				s.count += n; remaining -= n
+				if remaining == 0: return true
+	while remaining > 0:
+		var n := mini(999, remaining) if STACK.has(id) else remaining
+		var item: Dictionary = metadata.duplicate(true)
+		item.merge({"id": id, "name": name_, "count": n}, true)
+		slots[slots.find(null)] = item
+		remaining -= n
 	sort()
 	return true
 
@@ -55,8 +68,12 @@ func sort() -> void:
 	slots = out.slice(0, capacity)
 
 ## room for one more of this item
-func can_add(id: int) -> bool:
-	if STACK.has(id) and has(id): return true
+func can_add(id: int, count := 1) -> bool:
+	if STACK.has(id):
+		var room := free_count() * 999
+		for s in slots:
+			if s != null and int(s.id) == id: room += maxi(0, 999 - int(s.count))
+		return room >= count
 	return free_count() >= (2 if is_wide(id) else 1)
 
 func has(id: int) -> bool:

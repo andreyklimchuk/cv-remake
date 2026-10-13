@@ -333,6 +333,11 @@ func player_voice(se_no: int, pos: Variant = null) -> void:
 	_play_list("core_000", se_no & 0xff, "pvoice", {"pos": pos})
 
 ## player action SE (CallPlayerActionSe)
+## CallPlayerWeaponSeEx uses request bank 1, chosen by WpnTab.snd_wpno.
+func weapon(w: int, se_no: int, pos: Variant = null) -> void:
+	var table: Array = Assets.data_json("weapondata.json").WpnTab[w]
+	_play_list("arms_%03d" % int(table[29]), se_no & 0xff, "weapon", {"pos": pos})
+
 func action(se_no: int, pos: Variant = null) -> void:
 	_play_list(_pc_bank, se_no & 0xff, "act", {"pos": pos})
 

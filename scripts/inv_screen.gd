@@ -22,7 +22,7 @@ const DESC := {
 	104: {"en": "Medicine that is\nused to stop\nbleeding.\fIt should be used\non someone who\nis wounded.", "ru": "Лекарство,\nостанавливающее\nкровотечение.\fЕго нужно применить\nк раненому."},
 	133: {"en": "A board clip holding\nsome papers.", "ru": "Планшет-зажим\nс бумагами."},
 }
-const WEAPONS := [8, 9, 142]
+const WEAPONS := [6, 7, 8, 9, 142]
 ## icon orientation overrides for models lying in another pose
 const ICON_ROT := {9: [-1.15, 0, 0.25]}
 const STANDARD := [55]
@@ -37,7 +37,7 @@ const COMBI := {
 	21: [[21, 24, 6], [22, 25, 6], [23, 26, 6], [24, 28, 6], [26, 27, 6]], 22: [[21, 25, 6], [26, 29, 6]],
 	23: [[21, 26, 6], [24, 27, 6], [25, 29, 6]], 24: [[21, 28, 6], [23, 27, 6]], 25: [[23, 29, 6]], 26: [[21, 27, 6], [22, 29, 6]],
 }
-const AMMO := [12, 143]
+const AMMO := [12, 15, 16, 17, 18, 36, 37, 143]
 const BULLET_MAX := {9: 15, 10: 15, 12: 15, 142: 100}
 ## panel groups slide in from these offsets (640x480 units): 1 top menu, 2 status, 3 equipment, 5 item list, 6 message
 const CEN_OFF := {1: [0, -120], 2: [-448, 0], 3: [288, 0], 5: [208, 0], 6: [0, 152]}
@@ -736,7 +736,7 @@ func _cur_name() -> String:
 	var s: Variant = _cur()
 	if _mode == "box" and _bside == "box": s = box[_bsel] if _bsel < box.size() else null
 	if _mode == "box" and s == null: return T("boxHint")
-	return Text.item_name(s.name) if s != null else ""
+	return WeaponAmmo.label(s) if s != null else ""
 
 func _set_text(t: Variant) -> void:
 	_pages = Array(t) if (t is Array or t is PackedStringArray) else Array(String(t).split("\f"))
@@ -856,6 +856,11 @@ func _do_use() -> void:
 func _combine(a: int, b: int) -> void:
 	a = inv.head(a); b = inv.head(b)
 	var A: Variant = inv.slots[a]; var B: Variant = inv.slots[b]
+	var native := WeaponAmmo.combine(inv, a, b)
+	if native >= 0:
+		audio.se("menu" if native == 1 else "cancel")
+		if native == 1 and on_equip_change.is_valid(): on_equip_change.call()
+		_set_text(_cur_name() if native == 1 else Text.pages(Text.SYSMES[156])); return
 	var e: Variant = null
 	if A != null and B != null and a != b:
 		for x in COMBI.get(int(B.id), []):
@@ -1140,7 +1145,7 @@ func _update_box(L: bool, R: bool, Up: bool, D: bool) -> void:
 		var merged := false
 		if Inventory.STACK.has(it.id):
 			for b in box:
-				if b.id == it.id: b.count += it.count; merged = true; break
+				if b.id == it.id and int(b.count) + int(it.count) <= 999: b.count += it.count; merged = true; break
 		if not merged: box.append(it)
 		if equipped == it.id or standard == it.id:
 			if equipped == it.id: equipped = null
@@ -1149,10 +1154,10 @@ func _update_box(L: bool, R: bool, Up: bool, D: bool) -> void:
 	else:
 		if _bsel >= box.size(): return
 		var it: Dictionary = box[_bsel]
-		if not inv.can_add(it.id):
+		if not inv.can_add(it.id, it.count):
 			audio.se("cancel"); _set_text(Text.pages(Text.SYSMES.get(154, ""))); render(); return
 		box.remove_at(_bsel)
-		inv.add(it.id, it.name, it.count)
+		inv.add(it.id, it.name, it.count, it)
 	audio.se("menu"); _set_text(_cur_name()); render()
 
 func _combine_then_render(a: int, b: int) -> void:

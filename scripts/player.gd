@@ -19,6 +19,9 @@ const W_GUN := {"draw": "g00", "act": ["g01", "g03", "g05"], "stance": ["g02", "
 ## 101/106/111 shot forward/up/down (10 frames, PlMtnWpn[4] + 0/5/10), 104/109/114 aim stances (PlMtnWpn[1..3]);
 ## the bank has no reload motion (116) — the M-100P is loaded by combining (combidata 142 + 143)
 const W_M100P := {"draw": "p00", "act": ["p01", "p06", "p11"], "stance": ["p04", "p09", "p14"], "drawT": 8.0 / 30.0, "actT": 10.0 / 30.0, "hitT": 0.0}
+## Native sparse slots 100/101/106/111/104/109/114 (dread.c); both banks use 20-frame attacks.
+const W_BOW := {"draw": "bg00", "act": ["bg01", "bg06", "bg11"], "stance": ["bg04", "bg09", "bg14"], "drawT": 10.0 / 30.0, "actT": 20.0 / 30.0, "hitT": 0.0}
+const W_GL := {"draw": "gl00", "act": ["gl01", "gl06", "gl11"], "stance": ["gl04", "gl09", "gl14"], "drawT": 6.0 / 30.0, "actT": 20.0 / 30.0, "hitT": 0.0}
 const G_RELOAD := "g07"
 const G_RELOAD_T := 32.0 / 30.0
 ## PlFootSnd[0]: walk (m00) frames 10 / 28, run (m04) 8 / 18, walk back (m11) 10 / 28; left foot first
@@ -52,6 +55,7 @@ var _gun_hand: Node3D = null
 ## M-100P: pl00w09_R (joint 9) and pl00w09_L (joint 13)
 var _m100_r: Node3D = null
 var _m100_l: Node3D = null
+var _weapon_hands := {} # item id -> original R/L meshes, joints 9/13
 var gun_on := false
 ## the equipped gun item (9 handgun, 142 M-100P)
 var gun_id := 9
@@ -158,6 +162,9 @@ func _load_hands() -> void:
 	_m100_r = _load_hand("chars/hand_m100p_R.glb")
 	var la := BoneAttachment3D.new(); la.bone_name = "b13"; skel.add_child(la)
 	_m100_l = _load_hand("chars/hand_m100p_L.glb", la)
+	for item in [6, 7]:
+		var stem := "launcher" if item == 6 else "bowgun"
+		_weapon_hands[item] = [_load_hand("chars/hand_%s_R.glb" % stem), _load_hand("chars/hand_%s_L.glb" % stem, la)]
 	# lighter flame: additive cone + core
 	_flame = Node3D.new()
 	var mat := StandardMaterial3D.new()
@@ -191,14 +198,25 @@ func set_knife(on: bool) -> void:
 func set_gun(on: bool, id := 9) -> void:
 	if on and id != gun_id: _k_state = "none"
 	gun_id = id
-	gun_on = on and (_gun_hand != null if id != 142 else _m100_r != null)
+	var hand: Variant = _weapon_hands.get(id)
+	gun_on = on and (hand[0] != null if hand != null else (_gun_hand != null if id != 142 else _m100_r != null))
 	if gun_on: knife_on = false
 	if not knife_on and not gun_on:
 		aiming = false; slash_t = -1
 	_k_state = "none"
 
+## WpnTab.wp_fps1 transformed by the original right-wrist matrix.
+func weapon_muzzle(w: int) -> Vector3:
+	var t: Array = Assets.data_json("weapondata.json").WpnTab[w]
+	var bi: int = bones.get("b09", -1)
+	if bi < 0: return head_pos()
+	return skel.global_transform * skel.get_bone_global_pose(bi) * (Vector3(float(t[12]), float(t[13]), float(t[14])) * 0.1)
+
 func _wpn() -> Dictionary:
-	if gun_on: return W_M100P if gun_id == 142 else W_GUN
+	if gun_on:
+		if gun_id == 6: return W_GL
+		if gun_id == 7: return W_BOW
+		return W_M100P if gun_id == 142 else W_GUN
 	return W_KNIFE
 
 func _update_hands() -> void:
@@ -208,14 +226,18 @@ func _update_hands() -> void:
 	if _lighter: _lighter.visible = zippo
 	if _knife_hand: _knife_hand.visible = knife
 	var m100 := gun and gun_id == 142
-	if _gun_hand: _gun_hand.visible = gun and not m100
+	if _gun_hand: _gun_hand.visible = gun and gun_id == 9
 	if _m100_r: _m100_r.visible = m100
 	if _m100_l: _m100_l.visible = m100
+	for item in _weapon_hands:
+		for mesh in _weapon_hands[item]:
+			if mesh: mesh.visible = gun and gun_id == int(item)
+	var two_hand := gun and gun_id in [6, 7, 142]
 	var show_skin := not zippo and not knife and not gun
 	for e in _skin_hand_r:
 		(e[0] as MeshInstance3D).set_surface_override_material(e[1], e[2] if show_skin else Assets.hidden_mat)
 	for e in _skin_hand_l:
-		(e[0] as MeshInstance3D).set_surface_override_material(e[1], e[2] if not m100 else Assets.hidden_mat)
+		(e[0] as MeshInstance3D).set_surface_override_material(e[1], e[2] if not two_hand else Assets.hidden_mat)
 
 ## damage level of the motions (player.c bhSetPlayer / bhCheckPlayerKegaMotion)
 func dmlvl() -> int:

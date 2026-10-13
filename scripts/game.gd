@@ -17,9 +17,7 @@ const MAG := 15
 ## WeaponSet numbers used by the scripts (ArmsItemCheck / WeaponSet)
 const M100P := 142
 ## sub1.c equip: item -> plp->wpnr_no (142 M-100P -> 9)
-const WPN_NO := {55: 1, 8: 2, 9: 4, 142: 9}
-## handgun damage against zombies (8 hit points)
-const GUN_DMG := 1.5
+const WPN_NO := {55: 1, 8: 2, 9: 4, 142: 9, 6: 14, 7: 10}
 ## probe distance in front of the player per trigger type (bhCheckExmAtari)
 const EXM_DIST := [0.45, 0.075, 0.45, 0.6, 0.2]
 const SAVE_PATH := "user://save.json"
@@ -44,6 +42,8 @@ var debug := false
 ## TEMPORARY admin panel (F2), see admin_panel.gd
 var admin: Control
 var audio := GameAudio.new()
+var projectiles := WeaponProjectiles.new(self)
+var weapon_damage := WeaponDamage.new()
 var play_time := 0.0
 ## event script interpreter (story flags persist across rooms)
 var vm: EvtVM
@@ -112,7 +112,10 @@ func _ready() -> void:
 	player.can_fire = func() -> bool:
 		var g: Variant = _gun()
 		return g != null and int(g.count) > 0
-	player.empty_click = func() -> void: audio.se("empty")
+	player.empty_click = func() -> void:
+		var gun: Variant = _gun()
+		if gun != null and int(gun.id) in [6, 7]: audio.weapon(WeaponAmmo.weapon_no(gun), 260, player.position)
+		else: audio.se("empty")
 	player.on_action_se = func(n: int) -> void: audio.action(n, player.position)
 	player.on_psh_frame = func() -> void: _box_frame()
 	player.on_kaidan_end = func(a: Dictionary) -> void:
@@ -136,13 +139,12 @@ func _ready() -> void:
 		return true
 
 func _gun() -> Variant:
-	if inv_screen.equipped == M100P: return inv.find(M100P)
-	return inv.find(HANDGUN)
+	return inv.find(int(inv_screen.equipped)) if inv_screen.equipped != null and int(inv_screen.equipped) in [6, 7, 9, 142] else null
 
 func _equip_changed() -> void:
 	player.set_lighter(inv_screen.standard == LIGHTER)
 	player.set_knife(inv_screen.equipped == KNIFE)
-	player.set_gun(inv_screen.equipped == HANDGUN or inv_screen.equipped == M100P, int(inv_screen.equipped) if inv_screen.equipped != null else 9)
+	player.set_gun(inv_screen.equipped in [6, 7, HANDGUN, M100P], int(inv_screen.equipped) if inv_screen.equipped != null else 9)
 
 func start(save: Variant = null) -> void:
 	player.load_model()
@@ -200,6 +202,7 @@ func enter_room(id: String, pos: int, at: Variant = null, fade := true, min_ms :
 	if room:
 		room.queue_free(); remove_child(room); vm.room_change()
 	_link_base.clear()
+	projectiles.clear(); weapon_damage.reset()
 	var r := Room.load_room(id)
 	var ev: Variant = Assets.json("evt/%s.json" % id, {"scripts": []})
 	if ev == null: ev = {"scripts": []}
@@ -412,7 +415,7 @@ func _spawn_enemies(r: Room) -> void:
 			z.voice_cb = func(no: int) -> void: audio.player_voice(no)
 			npcs.append({"root": z, "hittable": func() -> bool:
 				var ww: EvtVM.Work = vm.get_work(1, idx)
-				return z.visible and z.hittable and not (ww != null and ww.scripted), "hit": func() -> void: hit_zombie(z, 1)})
+				return z.visible and z.hittable and not (ww != null and ww.scripted), "hit": func() -> void: weapon_hit(z, 2, player.position, player.position)})
 		elif eid == 4:
 			var d := Dog.new(i)
 			d.player = player; d.flr = vm.flr; d.on_rm_flag = func(b: int) -> void: vm.rm |= b
@@ -423,7 +426,7 @@ func _spawn_enemies(r: Room) -> void:
 				if no < 0: return audio.enemy_se_playing(di)
 				audio.enemy_se(di, 4, d.global_position, no); return null
 			d.voice_cb = func(no: int) -> void: audio.player_voice(no)
-			npcs.append({"root": d, "hittable": func() -> bool: return d.visible and d.hittable, "hit": func() -> void: hit_zombie(d, 1)})
+			npcs.append({"root": d, "hittable": func() -> bool: return d.visible and d.hittable, "hit": func() -> void: weapon_hit(d, 2, player.position, player.position)})
 		elif NPC_MODELS.has(mdl):
 			# cutscene characters (Rodrigo, Steve, ...): original model, driven by the room motions of the scripts
 			var m := EnemyModel.new(); m.load_model("npc/%s.glb" % mdl)
@@ -805,9 +808,9 @@ func _item_screen_body(id: int, auto: bool) -> void:
 			vm.cb &= ~0x8000 & EvtVM.M32; return
 	var count := MAG if id == BULLETS or id == HANDGUN else 1
 	# getbulletmax (item.c): M-100P 100 rounds, Calico bullets 100
-	if id == M100P or id == 143: count = int(Assets.data_json("itemdata.json").getbulletmax[id][0])
+	if id in [6, 7, 15, 16, 17, 18, 35, 36, 37, 130, M100P, 143]: count = int(Assets.data_json("itemdata.json").getbulletmax[id][0])
 	if vm.cb & 0x8000 and id == HANDGUN: count -= 3
-	if not inv.can_add(id):
+	if not inv.can_add(id, count):
 		vm.cb &= ~0x8000 & EvtVM.M32
 		# recovery items can be used on the spot (message 153), anything else: 154
 		if id == 20 or id == 21 or id == 23:
@@ -966,6 +969,8 @@ func _evt_frame() -> void:
 	if _st8_frames > 0:
 		_st8_frames -= 1
 		if _st8_frames == 0: vm.st &= ~8 & EvtVM.M32
+	weapon_damage.frame()
+	projectiles.frame()
 	fx.update(cam.cam)
 	cam.ev.step()
 	_apply_works()
@@ -1031,11 +1036,15 @@ func lose_item(id: int) -> void:
 	_equip_changed()
 func weapon() -> int:
 	if inv_screen.standard == LIGHTER: return 1
+	var w: Variant = _gun()
+	if w != null and int(w.id) in [6, 7]: return WeaponAmmo.weapon_no(w)
 	return WPN_NO.get(inv_screen.equipped if inv_screen.equipped != null else -1, 0)
 func set_weapon(n: int) -> void:
 	var id: Variant = null
 	for k in WPN_NO:
 		if WPN_NO[k] == n: id = k
+	if n in [15, 16, 17]: id = 6
+	if n == 19: id = 7
 	if id == LIGHTER:
 		if inv.has(LIGHTER): inv_screen.standard = LIGHTER; inv_screen.equipped = null
 	elif id != null:
@@ -1233,7 +1242,14 @@ func on_slash(p: Vector3) -> void:
 func on_fire(p: Vector3, d: Vector3, aim: int) -> bool:
 	var g: Variant = _gun()
 	if g == null or int(g.count) <= 0: return false
-	g.count = int(g.count) - 1; audio.se("shot")
+	g.count = int(g.count) - 1
+	if int(g.id) in [6, 7]:
+		var w := WeaponAmmo.weapon_no(g)
+		var pos := player.weapon_muzzle(w)
+		audio.weapon(w, int(weapon_damage.table.WpnTab[w][31]), pos)
+		projectiles.launch(w, pos, player.heading, aim)
+		return true
+	audio.se("shot")
 	const S := 0.1
 	var r := 2.0 * S; var l := 200.0 * S; var rn := 0.4; var rmax := 4.0 * S
 	if aim != 0: rn *= 2.0; rmax *= 1.2
@@ -1271,7 +1287,7 @@ func on_fire(p: Vector3, d: Vector3, aim: int) -> bool:
 		if ll >= shot_len + gr: continue
 		if best == null or ll < nr:
 			nr = ll; best = z
-	if best != null: hit_zombie(best, GUN_DMG)
+	if best != null: weapon_hit(best, 9 if int(g.id) == M100P else 4, gpos, gpos)
 	return true
 
 ## closest points of segments a0-a1 and b0-b1
@@ -1307,6 +1323,12 @@ func _shot_wall(a: Vector3, b: Vector3) -> Variant:
 		var q := a.lerp(b, float(i) / n)
 		if room.resolve_in(q, 0.02, list).distance_to(q) > 0.001: return a.distance_to(q)
 	return null
+
+func weapon_hit(z: Variant, w: int, p: Vector3, origin: Vector3, fly := false, far := false, override := -1) -> void:
+	var cap: Array = z.gun_capsule()
+	var distance: float = p.distance_to(origin) if fly else ((cap[0] + cap[1]) * 0.5).distance_to(origin)
+	var damage := weapon_damage.amount(z, w, distance, fly, far, override)
+	if damage > 0: hit_zombie(z, damage)
 
 func hit_zombie(z: Variant, dmg: float) -> void:
 	z.hit(dmg)
