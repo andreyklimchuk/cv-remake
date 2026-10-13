@@ -16,6 +16,7 @@ var dla: Array = []
 var grand: Array = []
 static var _grand_db: Dictionary = {}
 var wall_shapes: Array = []      # per collision record (null = no shape)
+var obj_players := {}            # object index -> manually driven room AnimationPlayer
 var obj_meshes := {}             # object index -> Node3D
 var outside := {}                # object indices placed outside the room bounds
 ## objects further than this outside the room mesh bounds are not drawn (port heuristic, not in the original: rm_0020/0021
@@ -72,6 +73,7 @@ func _build_scene(rs: RoomScene) -> void:
 			outside[po.get_index()] = true; po.visible = false
 		Assets.to_lambert(po, "obj")
 		obj_meshes[po.get_index()] = po
+		_obj_player(po.get_index(), po)
 	_add_hands()
 	_build_walls()
 
@@ -99,8 +101,15 @@ func _build() -> void:
 		o.transform = U.trs(p, U.euler(ob.rot[0], ob.rot[2], ob.rot[1], EULER_ORDER_ZYX), 0.1)
 		o.name = "obj%d_%s" % [i, ob.model]
 		add_child(o); obj_meshes[i] = o
+		_obj_player(i, o)
 	_add_hands()
 	_build_walls()
+
+func _obj_player(i: int, o: Node3D) -> void:
+	var ap := Assets.find_type(o, "AnimationPlayer") as AnimationPlayer
+	if ap and ap.get_animation_list().size():
+		ap.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
+		obj_players[i] = ap
 
 func _add_hands() -> void:
 	# object rows 0/1 without a model of their own: the events link them to Claire's hands (bhObjLinkSetPly bones 9 / 13)

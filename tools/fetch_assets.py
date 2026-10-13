@@ -87,6 +87,10 @@ if k: print('player clips', k)
 for p in sorted(glob.glob(os.path.join(OUT, 'npc', 'en*.glb'))):
     k = add_room_clips.merge(p)
     if k: print('room clips', os.path.relpath(p, OUT), k)
+# Scripted object room motions (platforms, doors): the same stable node-name merge as item clips.
+for p in sorted(glob.glob(os.path.join(OUT, 'objects', 'ob_*.glb'))):
+    k = add_room_clips.merge(p)
+    if k: print('object clips', os.path.relpath(p, OUT), k)
 # material alpha of Ninja BLEND materials the web glbs drop (tools/mat_alpha.json) -> baseColorFactor (idempotent)
 import fix_mat_alpha
 for r in fix_mat_alpha.run(OUT): print('mat alpha', r)

@@ -3,9 +3,9 @@ extends Node3D
 ## Port of game.ts: room loading, the event system glue (EvtHost), enemies, items, saving and the main loop.
 
 ## rooms converted from the PS3 data (room file = rm_<stage><room><case>)
-const ROOMS := ["rm_0000", "rm_0010", "rm_0020", "rm_0021", "rm_0030", "rm_0031", "rm_0040", "rm_0050", "rm_0060", "rm_0070", "rm_0080", "rm_0090", "rm_0100", "rm_0110", "rm_0120", "rm_0130", "rm_0140", "rm_0150", "rm_0160", "rm_1000", "rm_1020", "rm_1030", "rm_1040", "rm_1050", "rm_1060", "rm_1070", "rm_1080", "rm_1090", "rm_1100", "rm_1110", "rm_1120", "rm_1130", "rm_1140"]
+const ROOMS := ["rm_0000", "rm_0010", "rm_0020", "rm_0021", "rm_0030", "rm_0031", "rm_0040", "rm_0050", "rm_0060", "rm_0070", "rm_0080", "rm_0090", "rm_0100", "rm_0110", "rm_0120", "rm_0130", "rm_0140", "rm_0150", "rm_0160", "rm_1000", "rm_1020", "rm_1030", "rm_1040", "rm_1050", "rm_1060", "rm_1070", "rm_1080", "rm_1090", "rm_1100", "rm_1110", "rm_1120", "rm_1130", "rm_1140", "rm_4050", "rm_4030", "rm_4000", "rm_4010", "rm_4020"]
 ## cutscene character models (enNNaVV)
-const NPC_MODELS := ["en91a00", "en93a00", "en94a00", "en98a00", "en62a00", "en68a00", "en69a00", "en87a00"]
+const NPC_MODELS := ["en91a00", "en93a00", "en94a00", "en98a00", "en62a00", "en68a00", "en69a00", "en87a00", "en43a00"]
 ## converted zombie models en01aNN (NN = model variant byte of the enemy record)
 const ZOMBIE_VARIANTS := [0, 1, 2, 3, 6, 9, 10, 32, 33]
 ## en01_PersonalType add_atk per model variant
@@ -165,6 +165,7 @@ func start(save: Variant = null) -> void:
 		play_time = float(save.get("t", 0))
 		if save.get("evt") != null:
 			vm.f = _int_flags(save.evt.f); vm.rcase = int(save.evt.rcase)
+		_sync_side_pack()
 		await enter_room(save.room, int(save.get("pos", 0)), {"x": float(save.x), "y": float(save.y), "z": float(save.z), "h": float(save.h)}, false)
 	else:
 		# Claire starts with her lighter (rm_0000 scripts check it with PlItemCheck / ArmsItemCheck)
@@ -553,6 +554,7 @@ func _apply_works() -> void:
 		if w.pos_set: o.position = Vector3(w.px, w.py, w.pz); w.pos_set = false
 		if w.ang_set: _set_rot(o, w); w.ang_set = false
 		if not w.parts.is_empty(): _apply_parts(o, w)
+		if w.mtn_kind == 2 and w.mtn >= 0: _node_motion(r.obj_players.get(i), w, true)
 	# WORK 4 n: effect works moved by the script (metres here, game units = 0.1 m in O_WRK)
 	for w in vm.works.values():
 		if w.kind == 4 and w.pos_set:
@@ -789,6 +791,7 @@ func _file_screen(id: int) -> void:
 ## item box request (cb 0x40000; the security boxes of rm_0090 add 0x80000 = box A / 0x100000 = box B).
 ## Both boxes share one storage, so what is left in box A is taken out of box B past the metal detector.
 func _box_screen() -> void:
+	_sync_side_pack()
 	vm.cb &= ~(0x40000 | 0x80000 | 0x100000) & EvtVM.M32
 	vm.st |= 8
 	inv_open = true
@@ -925,7 +928,7 @@ func _room_motion(m: EnemyModel, w: EvtVM.Work) -> void:
 	m.ap.seek(minf(w.frm / 65536.0 / 30.0, a.length), true)
 
 ## rmt clip on a plain node hierarchy (items): time = frm_no (16.16)
-func _node_motion(ap: AnimationPlayer, w: EvtVM.Work) -> void:
+func _node_motion(ap: AnimationPlayer, w: EvtVM.Work, loop := false) -> void:
 	if ap == null: return
 	var nm := "%s_r%s" % [room_id, U.pad(w.mtn, 2)]
 	if not ap.has_animation(nm): return
@@ -934,9 +937,19 @@ func _node_motion(ap: AnimationPlayer, w: EvtVM.Work) -> void:
 		a.loop_mode = Animation.LOOP_NONE
 		ap.play(nm, 0.0)
 	ap.speed_scale = 0
-	ap.seek(minf(w.frm / 65536.0 / 30.0, a.length), true)
+	# Motion.c bhSetMotion wraps at frm_num, not at the final key (frm_num - 1).
+	var tm := w.frm / 65536.0 / 30.0
+	if loop: tm = fposmod(tm, (round(a.length * 30.0) + 1.0) / 30.0)
+	ap.seek(minf(tm, a.length), true)
 
 ## one 30 Hz frame of the event system
+## player.c bhCheckSubPack: Claire owns the pack when ev[6] is set.
+func _sync_side_pack() -> void:
+	var on := vm.flag(1, 6)
+	if on: vm.f.gm = int(vm.f.gm) | 0x8000000
+	else: vm.f.gm = int(vm.f.gm) & ~0x8000000
+	inv.set_side_pack(on)
+
 func _evt_frame() -> void:
 	_sync_player_work()
 	# bhControlPlayer: stflg 0x1000 (bhTrapDamageSet, rm_1050 heat) -> hp - 1 every 31 frames, never below 0
@@ -949,6 +962,7 @@ func _evt_frame() -> void:
 	if player.psh.is_empty(): _box_frame()
 	_statue_frame()
 	vm.tick()
+	_sync_side_pack()
 	if _st8_frames > 0:
 		_st8_frames -= 1
 		if _st8_frames == 0: vm.st &= ~8 & EvtVM.M32
@@ -1186,6 +1200,7 @@ static func load_save() -> Variant:
 ## st 8: set when the subscreen opens (system.c) and again when it returns; ItemTaskCheck clears it once the game
 ## runs again -> one event frame after the close
 func toggle_inv(open: bool) -> void:
+	_sync_side_pack()
 	if open:
 		vm.st |= 8
 		inv_open = true; await inv_screen.show_screen(true)

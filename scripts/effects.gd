@@ -54,6 +54,7 @@ var OILH: Array
 var SPLASH: Array
 var EFF218: Array
 var F018: Dictionary
+const BUB163 := [[[0.0,0.0625,0.03125,0.03125],[0.03125,0.0625,0.03125,0.03125],[0.0,0.0,0.0625,0.0625],[0.0625,0.0,0.0625,0.0625],[0.125,0.0,0.0625,0.0625],[0.1875,0.0,0.0625,0.0625],[0.25,0.0,0.09375,0.09375],[0.34375,0.0,0.09375,0.09375],[0.4375,0.0,0.09375,0.09375],[0.53125,0.0,0.09375,0.09375],[0.625,0.0,0.09375,0.09375],[0.71875,0.0,0.09375,0.09375],[-3.0,6.0,0.0,0.0],[0.5625,0.09375,0.09375,0.09375],[0.65625,0.09375,0.09375,0.09375],[0.75,0.09375,0.09375,0.09375],[0.84375,0.09375,0.09375,0.09375],[-1.0,0.0,0.0,0.0]],[[0.0,0.1875,0.125,0.125],[0.125,0.1875,0.125,0.125],[0.25,0.1875,0.125,0.125],[0.375,0.1875,0.125,0.125],[0.5,0.1875,0.125,0.125],[0.625,0.1875,0.125,0.125],[0.75,0.1875,0.125,0.125],[0.875,0.1875,0.125,0.125],[-4.0,0.0,0.0,0.0],[-4.0,0.0,0.0,0.0],[-4.0,0.0,0.0,0.0],[-4.0,0.0,0.0,0.0],[-4.0,0.0,0.0,0.0],[-2.0,0.0,0.0,0.0]]]
 
 func _init_tables() -> void:
 	HIBANA = [
@@ -418,6 +419,8 @@ func _run(op: O) -> void:
 		155: _e155(op)
 		158: _e158(op)
 		159: _e159(op)
+		162: _e162(op)
+		163: _e163(op)
 		164: _e164(op)
 		165: _e165(op)
 		179: _e179(op)
@@ -434,11 +437,12 @@ func _run(op: O) -> void:
 		110: _e110(op)
 		127: _e127(op)
 		128: _e128(op)
-		64: op.flg = 0   # bhEffDmy (30..84 except 85)
+		56, 64: op.flg = 0   # bhEffDmy (30..84 except 85)
 		93, 94, 95, 96, 97, 98, 99: _ebg(op)
 		18: _e018(op)
 		218: _e218(op)
 		234: _e234(op)
+		230: _e230(op)
 		_:
 			# not ported (camera filters 90..99, other rooms' effects): left alive but not drawn
 			if not unknown.has(op.id):
@@ -1232,3 +1236,54 @@ func _draw_splash(op: O, R: Vector3, Up: Vector3) -> void:
 				var x: float = tv[k][0]; var y: float = -tv[k][1]
 				q.append([(Vector3(e.px, e.py, e.pz) + R * x + Up * y) * 0.1, Vector2(us[k], vs[k]), Color(0.5, 0.5, 0.5, 0.5)])
 			b.quads.append(q)
+
+## bhEff230 (effsub5.c): cabin indicator atlas, six original colour pages, four animation rows.
+func _e230(op: O) -> void:
+	if op.type == 0 and op.mode1 != 0: op.type = op.mode1
+	if op.type == 0:
+		op.flg |= 0x1000000; return
+	op.flg &= ~0x1000000
+	var row := op.lkono % 4
+	if op.mode0 == 0:
+		op.flg |= 0x4080000; op.tex = 414; op.bls = 8; op.bld = 6; op.ct0 = 0
+		for t in op.tv: t.col = 0xFFFFFFFF
+		op.mode0 = 1
+	else: op.ct0 = (op.ct0 + 1) % (3 if row == 3 else 8)
+	op.ani = (op.type - 1) % 6
+	var u := op.ct0 * 32.0; var v := 0.0 if row == 3 else (row + 1) * 32.0
+	_uv4(op, u / 256.0, v / 256.0, (u + 31) / 256.0, (v + 31) / 256.0)
+	_trs.append(op)
+
+## bhEff162 / bhEff163 (effsub0.c): cabin bubble manager and the original 18-/14-frame UV programs.
+func _e162(op: O) -> void:
+	op.flg |= 0x1000000
+	if op.type == 0 and op.mode1 != 0: op.type = op.mode1
+	if op.type != 0:
+		_setentry(163, op.type - 1, op); op.mode1 = 0; op.type = 0
+
+func _e163(op: O) -> void:
+	if op.mode0 == 0:
+		op.tex = 56; _effinit(op)
+		if op.type == 1:
+			op.exp = _uvs(BUB163[1])
+			var rb := Basis.from_euler(Vector3(0, op.ay * ANG, -op.ax * ANG), EULER_ORDER_ZYX)
+			for t in op.tv:
+				var v := rb * Vector3(t.x, t.y, 0)
+				t.x = v.x; t.y = v.y; t.z = v.z
+		else:
+			op.exp = _uvs(BUB163[0]); op.type = 0
+			var v := Basis.from_euler(Vector3(op.ax * ANG, op.ay * ANG, 0), EULER_ORDER_ZYX) * Vector3(0, 0.5, 0)
+			op.xn = v.x; op.yn = v.y; op.zn = v.z
+		op.ct1 = int(op.sz); op.mode0 = 1
+	if op.type == 0 and op.ct0 < 13:
+		op.px += op.xn; op.py += op.yn; op.pz += op.zn
+	var uv: Dictionary = op.exp[op.ct0]
+	match int(uv.u):
+		-1: op.flg = 0; return
+		-2: op.ct0 = 0
+		-3:
+			op.ct1 -= 1
+			op.ct0 = int(uv.v) if op.ct1 > 0 else op.ct0 + 1
+		-4: op.ct0 += 1; return
+	_effset(op, op.exp[op.ct0], 0)
+	op.ct0 += 1; _trs.append(op)

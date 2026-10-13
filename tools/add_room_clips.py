@@ -57,7 +57,7 @@ def merge(p):
         if clips: break
     if not clips: return 0
     j, B = load(p)
-    have = {a['name'] for a in j['animations']}
+    have = {a['name'] for a in j.setdefault('animations', [])}
     nodes = {n.get('name'): i for i, n in enumerate(j['nodes'])}
     n = 0
     for name, chs in clips.items():

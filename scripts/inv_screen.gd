@@ -132,6 +132,8 @@ var menu_btns: Array = []
 var eq_slot: Control
 var st_slot: Control
 var list_slots: Array = []
+var list_outer: Deco
+var list_inner: Deco
 var msgtx: RichTextLabel
 var sub: Deco
 var sub_box: VBoxContainer
@@ -231,9 +233,9 @@ func _ready() -> void:
 	chk_box.add_child(chk_hint)
 	# item list
 	var g5: Control = groups[5]
-	_deco(g5, "olive", 658, 162, 214, 300)
-	_deco(g5, "blue", 667, 170, 200, 263)
-	for i in 8:
+	list_outer = _deco(g5, "olive", 658, 162, 214, 300)
+	list_inner = _deco(g5, "blue", 667, 170, 200, 263)
+	for i in 10:
 		list_slots.append(_slot(g5, 667 + (i % 2) * 100, 170 + (i / 2) * 65.5))
 		list_slots[-1].set_meta("wide_ok", true)
 	lbl.list = _deco(g5, "bar", 667, 437, 200, 20); lbl.list.font = f_black; lbl.list.font_size = 13
@@ -742,6 +744,13 @@ func _set_text(t: Variant) -> void:
 	if msgtx: msgtx.text = _esc(_text)
 
 func render() -> void:
+	# SidePackSet moves the lower border down 48 original screen units (one item row).
+	var extra := 65.5 if inv.capacity == 10 else 0.0
+	list_outer.size.y = 300 + extra; list_outer.queue_redraw()
+	list_inner.size.y = 263 + extra; list_inner.queue_redraw()
+	lbl.list.position.y = 437 + extra
+	for i in list_slots.size(): list_slots[i].visible = i < inv.capacity
+	_sel = clampi(_sel, 0, inv.capacity - 1)
 	var names: Array = T("menu")
 	for i in 4:
 		var b: Deco = menu_btns[i]
@@ -777,7 +786,7 @@ func render() -> void:
 	inv.sort()
 	_sel = inv.head(_sel)
 	if _cmb_a >= 0: _cmb_a = inv.head(_cmb_a)
-	for i in 8:
+	for i in inv.capacity:
 		var s: Variant = inv.slots[i]
 		if Inventory.is_tail(s): s = null
 		var mark: bool = s != null and (s.id == equipped or s.id == standard)
@@ -1069,7 +1078,7 @@ func update(dt: float) -> bool:
 		var d := 0
 		if L and _sel % 2 == 1: d = -1
 		if R and _sel % 2 == 0: d = 1
-		if D and _sel < 6: d = 2
+		if D and _sel < inv.capacity - 2: d = 2
 		if Up and _sel >= 2: d = -2
 		if d:
 			_sel += d; audio.se("cursor"); _set_text(_cur_name()); render()
@@ -1079,11 +1088,11 @@ func update(dt: float) -> bool:
 		elif input.cancel:
 			_mode = "list"; _cmb_a = -1; audio.se("cancel"); render()
 		return true
-	# item list (2 columns x 4 rows)
+	# item list (2 columns x 4 or 5 rows)
 	var dd := 0
 	if L and _sel % 2 == 1: dd = -1
 	if R and _sel % 2 == 0: dd = 1
-	if D and _sel < 6: dd = 2
+	if D and _sel < inv.capacity - 2: dd = 2
 	if Up:
 		if _sel >= 2: dd = -2
 		else:
@@ -1105,7 +1114,7 @@ func _update_box(L: bool, R: bool, Up: bool, D: bool) -> void:
 		if L and c > 0: _bsel -= 1; moved = true
 		elif R:
 			if c < BOX_COLS - 1 and _bsel < box.size(): _bsel += 1
-			else: _bside = "inv"; _sel = clampi(((_bsel / BOX_COLS - _bscroll) / 2) * 2, 0, 6)
+			else: _bside = "inv"; _sel = clampi(((_bsel / BOX_COLS - _bscroll) / 2) * 2, 0, inv.capacity - 2)
 			moved = true
 		elif Up and _bsel >= BOX_COLS: _bsel -= BOX_COLS; moved = true
 		elif D and _bsel + BOX_COLS <= box.size(): _bsel += BOX_COLS; moved = true
@@ -1119,7 +1128,7 @@ func _update_box(L: bool, R: bool, Up: bool, D: bool) -> void:
 			moved = true
 		elif R and _sel % 2 == 0: _sel += 1; moved = true
 		elif Up and _sel >= 2: _sel -= 2; moved = true
-		elif D and _sel < 6: _sel += 2; moved = true
+		elif D and _sel < inv.capacity - 2: _sel += 2; moved = true
 	if moved:
 		audio.se("cursor"); _set_text(_cur_name()); render(); return
 	if not input.action: return

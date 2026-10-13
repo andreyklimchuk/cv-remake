@@ -1,6 +1,6 @@
 class_name Inventory
 extends RefCounted
-## Port of inventory.ts: 8 slots of {id, name, count}; ammo (12) and ink ribbons (31) stack.
+## Port of inventory.ts: 8 slots (10 with Claire's Side Pack) of {id, name, count}; ammo (12) and ink ribbons (31) stack.
 ## Items with itemdata type 0x100 (sub1.c: rocket launcher, rifles, Gold Lugers, SMG, M-100P) take two slots side by side:
 ## sorted first like ItemSort, picking one up needs two free slots (ItemGet: num2 >= 2). The second slot holds a tail
 ## marker (id -1).
@@ -8,7 +8,17 @@ extends RefCounted
 const STACK := [12, 31]
 ## itemdata[id].type & 0x100 (item.c)
 const WIDE := [1, 2, 3, 33, 34, 142]
+var capacity := 8
 var slots: Array = [null, null, null, null, null, null, null, null]
+
+## bhCheckSubPack / ItemSort: capacity follows ev[6] for Claire. Never drop occupied slots.
+func set_side_pack(on: bool) -> void:
+	var target := 10 if on else 8
+	if target < slots.size():
+		for i in range(target, slots.size()):
+			if slots[i] != null: return
+	capacity = target
+	slots.resize(capacity)
 
 static func is_wide(id: int) -> bool:
 	return WIDE.has(id)
@@ -41,8 +51,8 @@ func sort() -> void:
 			out.append(s); out.append({"id": -1, "name": "", "count": 0})
 	for s in slots:
 		if s != null and not is_tail(s) and not is_wide(int(s.id)): out.append(s)
-	while out.size() < 8: out.append(null)
-	slots = out.slice(0, 8)
+	while out.size() < capacity: out.append(null)
+	slots = out.slice(0, capacity)
 
 ## room for one more of this item
 func can_add(id: int) -> bool:
@@ -64,7 +74,7 @@ func head(i: int) -> int:
 	return i - 1 if i > 0 and i < slots.size() and is_tail(slots[i]) else i
 
 func take(id: int) -> bool:
-	for i in 8:
+	for i in slots.size():
 		var s: Variant = slots[i]
 		if s != null and s.id == id:
 			s.count -= 1
