@@ -66,6 +66,8 @@ func _ready() -> void:
 		"m100p": await m100p_test()
 		"prof": await prof_test()
 		"tour": await tour_test()
+		"pack": await pack_test()
+		"submarine": await submarine_test()
 		"admin": await admin_test()
 		"kaidan": await kaidan_test()
 		"kaidan2": await kaidan2_test()
@@ -842,9 +844,23 @@ func tour_test() -> void:
 			print("head %s " % str(P.bone_pos("b05")), "E%d clip %s sync %s spd %.2f hp %d trap %s eff0 id %d m0 %d spd %.2f flg %x st %x m1 %d warp %s col %.0f %s" % [k, P.cur, str(P.sync), P.ap.speed_scale, P.hp, g._trap_dmg, e0.id, e0.mode0, e0.spd, e0.flg, e0.stflg, e0.mode1, g.fx._warp_on, g.fx._warp_col, stt()])
 	if OS.get_environment("SHOWF") != "": for n in OS.get_environment("SHOWF").split(",", false): print("flag ev ", n, " = ", vm.flag(1, int(n)))
 	for e in a.slice(2):
-		var i := int(e)
+		if e.begins_with("w"):
+			await sim(float(e.substr(1))); continue
+		var use := e.begins_with("u")
+		var parts := e.substr(1).split(":") if use else PackedStringArray([e])
+		var i := int(parts[0])
 		if i >= vm.etc.size(): continue
-		await act(i)
+		if use:
+			var ar: Dictionary = vm.etc[i]
+			for h in [0.0, PI / 2, PI, -PI / 2]:
+				var f := Vector2(-sin(h), -cos(h))
+				P.place(ar.x + ar.w / 2 - f.x * 0.45, P.position.y, ar.z + ar.d / 2 - f.y * 0.45, h)
+				await sim(0.3)
+				if vm.cb & 0x200: break
+			vm.st |= 8
+			print("USE ", parts[1], " -> ", g.use_item(int(parts[1])), " cb200 ", bool(vm.cb & 0x200))
+			await sim(1)
+		else: await act(i)
 		await wait_free(); await sim(1); await wait_free()
 		for k in 60:
 			if not g.file_view.active: break
@@ -852,6 +868,7 @@ func tour_test() -> void:
 			g.sim(0.2, ["KeyQ" if k % 2 == 0 else "KeyE"]); await sleep(10); g.sim(0.5, []); await sleep(10)
 		if g.inv_open: print("INV OPEN ", g.inv_screen._mode); g.sim(0.1, ["KeyE"]); await sleep(10); g.sim(0.1, []); await sleep(10); await wait_free()
 		print("ETC ", i, " -> ", stt()); inv()
+		print("capacity ", g.inv.capacity, " pack ", vm.flag(1, 6), " airport ", vm.flag(1, 19))
 		if g.room_id != a[1]:
 			list_etc()
 			# CHAIN=1: keep going in the new room (the next indices are its trigger records)
@@ -1033,3 +1050,67 @@ func statue_test() -> void:
 	for k in int(float(OS.get_environment("SECS")) * 4) if OS.get_environment("SECS") != "" else 40:
 		await sim(0.25, [] if OS.get_environment("REL") != "" and k >= int(OS.get_environment("REL")) else ["KeyW"])
 		print("t%d st %s rp %s f %s statue m%d ay %d pl %.2f,%.2f h %.1f ev2 %s clip %s" % [k, P.state, str(P.rp.get("m3", "-")), str(P.rp.get("f", "-")), st.mode0, g._s16(int(st.ay)), P.position.x, P.position.z, rad_to_deg(P.heading), vm.flag(1, 2), P.cur])
+
+## -- pack: original rm_1140 Side Pack event, ten slots, wide items, tenth slot removal and save round trip.
+func pack_test() -> void:
+	assert(g.inv.capacity == 8)
+	await g.enter_room("rm_1140", 0, null, false)
+	await wait_free()
+	await act(1); await wait_free(); await sim(1)
+	assert(vm.flag(1, 6), "Side Pack event must set ev[6]")
+	assert(vm.flag(7, 186), "Side Pack event must set item-taken flag")
+	assert(g.inv.capacity == 10 and g.inv.slots.size() == 10)
+	assert(not g.inv.has(57), "Side Pack is an upgrade, not an occupied item slot")
+	g.inv.slots.fill(null)
+	assert(g.inv.add(142, "M-100P", 100))
+	for id in [55, 8, 9, 21, 22, 23, 31, 53]: assert(g.inv.add(id, str(id)))
+	assert(g.inv.free_count() == 0 and not g.inv.can_add(95))
+	assert(g.inv.take(53), "take must reach the tenth slot")
+	assert(g.inv.add(95, "Medicine"))
+	await g.inv_screen.render()
+	assert(g.inv_screen.list_slots[9].visible)
+	g.inv_screen._mode = "list"; g.inv_screen._sel = 7
+	g.input.end_frame(); g.input.pressed["KeyS"] = true
+	g.inv_screen.is_open = true; g.inv_screen.update(0.05)
+	assert(g.inv_screen._sel == 9, "cursor must reach fifth row")
+	g.input.end_frame(); g.inv_screen.is_open = false
+	var decoded: Variant = JSON.parse_string(JSON.stringify({"inv": g.inv.slots, "evt": {"f": vm.f}}))
+	var restored := Inventory.new(); restored.slots = decoded.inv
+	assert(restored.slots.size() == 10)
+	restored.set_side_pack(true); restored.sort()
+	assert(restored.has(95) and restored.slots.size() == 10)
+	print("PACK PASS: event flags, ten slots, wide item, slot ten, cursor, save payload")
+
+## -- submarine: full original route with the wheel, Side Pack and lever; verifies both animation banks.
+func submarine_test() -> void:
+	g.inv.add(53, "Steering Wheel")
+	await g.enter_room("rm_1130", 0, null, false); await wait_free()
+	assert(P.ap.has_animation("rm_1130_r00"))
+	assert(g.room.obj_players.has(5))
+	var platform: AnimationPlayer = g.room.obj_players[5]
+	assert(platform.has_animation("rm_1130_r01") and platform.has_animation("rm_1130_r02"))
+	var ar: Dictionary = vm.etc[2]
+	for h in [0.0, PI / 2, PI, -PI / 2]:
+		var f := Vector2(-sin(h), -cos(h))
+		P.place(ar.x + ar.w / 2 - f.x * 0.45, P.position.y, ar.z + ar.d / 2 - f.y * 0.45, h)
+		await sim(0.3)
+		if vm.cb & 0x200: break
+	vm.st |= 8
+	assert(g.use_item(53) == -1)
+	await sim(1); await wait_free(); await sim(1); await wait_free()
+	assert(not g.inv.has(53))
+	assert(platform.current_animation == "rm_1130_r02")
+	await sim(3)
+	assert(platform.current_animation_position < 2.0, "platform idle must loop at 60 frames")
+	await act(4); await wait_free(); await sim(1); await wait_free()
+	assert(g.room_id == "rm_1140")
+	assert(P.ap.has_animation("rm_1140_r00"))
+	await act(1); await wait_free(); await sim(1)
+	assert(g.inv.capacity == 10 and vm.flag(1, 6))
+	await act(3); await wait_free(); await sim(1); await wait_free()
+	assert(g.room_id == "rm_4050")
+	assert(P.ap.has_animation("rm_4050_r00"))
+	await act(0); await wait_free(); await sim(1); await wait_free()
+	assert(g.room_id == "rm_4030" and g.inv.capacity == 10)
+	assert(P.ap.has_animation("rm_4030_r00"))
+	print("SUBMARINE PASS: wheel, platform, pack, lever, airport exit, original clips")
