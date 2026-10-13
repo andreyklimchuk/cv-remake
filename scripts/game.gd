@@ -193,6 +193,8 @@ static func _int_flags(f: Variant) -> Dictionary:
 func enter_room(id: String, pos: int, at: Variant = null, fade := true, min_ms := 0) -> void:
 	busy = true
 	var t0 := Time.get_ticks_msec()
+	# Com_ExecRoomFadeOut: a StopBgm2 / PlayBgm2 request of this room fades the BGM out with the door
+	audio.room_fade_out()
 	if fade: await ui.fade(true, 350)
 	if room:
 		room.queue_free(); remove_child(room); vm.room_change()
@@ -244,6 +246,8 @@ func enter_room(id: String, pos: int, at: Variant = null, fade := true, min_ms :
 	cam.update(player.position, player.head_pos(), player.heading, true)
 	var wait := min_ms - (Time.get_ticks_msec() - t0)
 	if wait > 0: await get_tree().create_timer(wait / 1000.0).timeout
+	# Com_ExecRoomFadeIn: the init script's PlayBgm2 starts (or keeps) the room's BGM
+	audio.room_fade_in()
 	if fade: await ui.fade(false, 350)
 	busy = false
 
@@ -979,7 +983,8 @@ func snd(cmd: String, a: Array, w: Variant = null) -> void:
 	var A := audio
 	match cmd:
 		"bgm": A.bgm(a[0], a[1], a[2])
-		"bgm2": A.bgm(a[0], 100, a[1])
+		"bgm2": A.bgm2(a[0], a[1])
+		"bgmOff2": A.bgm_off2()
 		"bgmOff": A.bgm_off(a[0])
 		"voice": A.voice(a[0], a[2] if a[1] == 1 else 0)
 		"voiceOff": A.voice_off(a[0])

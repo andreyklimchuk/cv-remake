@@ -564,7 +564,7 @@ func _exec() -> int:
 		0xa6: _snd("bgm", [_b(1), _b(2) * 10, -_b(3)])
 		0x95: _snd("bgm2", [_b(1), -45])
 		0xa7: _snd("bgm2", [_b(1), -_b(2)])
-		0x93: _snd("bgmOff", [100])
+		0x93: _snd("bgmOff2", [])
 		0x17: _snd("se", [_b(1), _b(2), _b(3), _u16(4), _b(6)])
 		0x18: _snd("seOff", [_b(1)])
 		0x1c: _snd("bgSe", [_b(1), _u16(2), _b(4) * 10])

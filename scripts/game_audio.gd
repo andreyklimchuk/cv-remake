@@ -336,17 +336,26 @@ func player_voice(se_no: int, pos: Variant = null) -> void:
 func action(se_no: int, pos: Variant = null) -> void:
 	_play_list(_pc_bank, se_no & 0xff, "act", {"pos": pos})
 
-## BGM (sound/bgm, bgm_all.stq request numbers). vol in ADX units (default -45), fade in 1/100 s
+## BGM (sound/bgm, bgm_all.stq request numbers), one ADX slot like the original (sdfunc.c / adxwrap.c).
+## Volumes in ADX units (default -45); fades are Timer values of RequestAdxFadeFunction (event bytes x10).
+## _bgm_no / _bgm_vol = CurrentBgmNo / CurrentBgmVolume, _req_fade = ReqFadeBgmNo.
+var _req_fade := 0
+
+## RequestAdxFadeFunction2: FadeCntMax = ((T / 100) * 30 + (T % 100) * 6 / 10) / 2 ticks of ExecAdxFadeManager,
+## which runs from the vsync callback (bhControlVSync, 60 Hz); at least one tick
+static func fade_secs(t: float) -> float:
+	var ti := int(t)
+	return maxi(1, (int(ti / 100) * 30 + int((ti % 100) * 6 / 10)) / 2) / 60.0
+
+## PlayBgmEx2: a playing BGM stops at once, the new one starts (fade in from -127 when FadeInRate + 1 != 0)
 func bgm(no: int, fade_in := 0.0, vol := -45.0) -> void:
-	if no == _bgm_no and not _bgm.is_empty():
-		if vol != _bgm_vol:
-			_bgm_vol = int(vol); _bgm.target = db_gain(units_db(vol)); _bgm.ramp = 0.3
-		return
-	bgm_off(fade_in if fade_in else 0.0)
+	if OS.get_environment("BGMLOG") != "": print("BGM play %d fade %s vol %s (cur %d)" % [no, fade_in, vol, _bgm_no])
+	_bgm_stop_now()
 	_bgm_no = no; _bgm_vol = int(vol)
 	if _bgm_idx == null: _bgm_idx = Assets.json("audio/bgm.json", {})
 	var e: Variant = _bgm_idx.get(str(no))
 	if e == null:
+		if OS.get_environment("BGMLOG") != "": print("BGM %d: no track" % no)
 		return
 	var st := _stream("audio/bgm/%s.ogg" % e.f)
 	if st == null:
@@ -356,25 +365,62 @@ func bgm(no: int, fade_in := 0.0, vol := -45.0) -> void:
 		(st as AudioStreamOggVorbis).loop = true
 		(st as AudioStreamOggVorbis).loop_offset = float(e.loop[0])
 	var p := AudioStreamPlayer.new(); p.stream = st; add_child(p)
-	var target := db_gain(units_db(vol))
-	_bgm = {"p": p, "gain": 0.0 if fade_in else target, "target": target, "lin_rate": (target / (fade_in / 100.0)) if fade_in else 0.0, "ramp": 0.0, "stop": false, "loop_end": float(e.loop[1]) if e.has("loop") else -1.0, "loop_start": float(e.loop[0]) if e.has("loop") else 0.0}
-	p.volume_db = linear_to_db(maxf(_bgm.gain, 1e-6))
+	_bgm = {"p": p, "u": float(vol), "last": float(vol), "speed": 0.0, "stop": false, "loop_end": float(e.loop[1]) if e.has("loop") else -1.0, "loop_start": float(e.loop[0]) if e.has("loop") else 0.0}
+	if fade_in > 0: _bgm_fade(-127.0, float(vol), fade_secs(fade_in + 1))
+	p.volume_db = linear_to_db(maxf(db_gain(units_db(_bgm.u)), 1e-6))
 	p.play()
 
-func bgm2(no: int) -> void:
-	bgm(no, 100)
+## ADX volume ramp (ExecAdxFadeManager: linear in driver units); to -127 = fade out and stop
+func _bgm_fade(from: float, to: float, secs: float) -> void:
+	if _bgm.is_empty(): return
+	_bgm.u = from; _bgm.last = to; _bgm.speed = (to - from) / maxf(secs, 1e-3); _bgm.stop = to <= -127.0
+
+func _bgm_stop_now() -> void:
+	if not _bgm.is_empty(): (_bgm.p as AudioStreamPlayer).queue_free()
+	_bgm = {}
+	for b in _bgm_fading: (b.p as AudioStreamPlayer).queue_free()
+	_bgm_fading.clear()
+
+## PlayBgm2 (bhBgmOn2 / bhBgmOn2Ex): only a request — applied by room_fade_in
+func bgm2(no: int, vol := -45.0) -> void:
+	if OS.get_environment("BGMLOG") != "": print("BGM bgm2 %d vol %s (cur %d)" % [no, vol, _bgm_no])
+	if _bgm_no != no:
+		_bgm_no = no; _req_fade = 8
+	elif _bgm_vol != int(vol):
+		_req_fade = 2
+	_bgm_vol = int(vol)
+
+## StopBgm2 (bhBgmOff2): the BGM fades out with the next room fade-out (door)
+func bgm_off2() -> void:
+	if OS.get_environment("BGMLOG") != "": print("BGM off2 (cur %d)" % _bgm_no)
+	_req_fade = 1; _bgm_no = -1; _bgm_vol = -127
+
+## Com_ExecRoomFadeOut (start of the door demo): RequestSoundFade(2, 0xA3 | 0x40 when ReqFadeBgmNo != 0, 400)
+func room_fade_out() -> void:
+	if _req_fade != 0 and not _bgm.is_empty():
+		if OS.get_environment("BGMLOG") != "": print("BGM room fade out")
+		_bgm_fade(_bgm.u, -127.0, fade_secs(400))
+	_req_fade = 0
+
+## Com_ExecRoomFadeIn (after the new room's init script): PlayBgmEx(CurrentBgmNo, 120, CurrentBgmVolume) for a new
+## number, RequestAdxFadeFunctionEx(0, -1, CurrentBgmVolume, 42) for a new volume
+func room_fade_in() -> void:
+	if OS.get_environment("BGMLOG") != "": print("BGM room fade in req %d cur %d" % [_req_fade, _bgm_no])
+	if _req_fade & 8:
+		bgm(_bgm_no, 120, _bgm_vol)
+	elif _req_fade & 2 and not _bgm.is_empty():
+		_bgm_fade(_bgm.u, float(_bgm_vol), 42 / 60.0)
+	_req_fade = 0
 
 var _bgm_fading: Array = []
+## StopBgm: fade out (RequestAdxFadeFunction(0, 2, T)) or stop at once
 func bgm_off(fade_out := 0.0) -> void:
-	_bgm_no = -1
+	if OS.get_environment("BGMLOG") != "": print("BGM off fade %s (cur %d)" % [fade_out, _bgm_no])
+	_bgm_no = -1; _bgm_vol = -127
 	if _bgm.is_empty():
 		return
-	var b := _bgm; _bgm = {}
-	if fade_out > 0:
-		b.stop = true; b.out_rate = b.gain / (fade_out / 100.0)
-		_bgm_fading.append(b)
-	else:
-		(b.p as AudioStreamPlayer).queue_free()
+	if fade_out > 0: _bgm_fade(_bgm.u, -127.0, fade_secs(fade_out))
+	else: _bgm_stop_now()
 
 ## cutscene voice (PlayVoice, sound/voice request = VoiceNo)
 func voice(no: int, fade_in := 0.0) -> void:
@@ -444,22 +490,16 @@ func _process(dt: float) -> void:
 	if not _bgm.is_empty():
 		var b := _bgm
 		var p: AudioStreamPlayer = b.p
-		if b.lin_rate > 0:
-			b.gain = minf(b.target, b.gain + b.lin_rate * dt)
-			if b.gain >= b.target: b.lin_rate = 0.0
-		elif b.ramp > 0:
-			b.gain += (b.target - b.gain) * (1.0 - exp(-dt / b.ramp))
-		p.volume_db = linear_to_db(maxf(b.gain, 1e-6))
+		if b.speed != 0.0:
+			b.u += b.speed * dt
+			if (b.speed > 0 and b.u >= b.last) or (b.speed < 0 and b.u <= b.last):
+				b.u = b.last; b.speed = 0.0
+		p.volume_db = linear_to_db(maxf(db_gain(units_db(b.u)), 1e-6))
 		# loop end inside the file (AudioStreamOggVorbis loops at the end of the file)
 		if b.loop_end > 0 and p.playing and p.get_playback_position() >= b.loop_end:
 			p.seek(b.loop_start + (p.get_playback_position() - b.loop_end))
-		if not p.playing and not (p.stream as AudioStreamOggVorbis).loop:
+		if (b.stop and b.speed == 0.0) or (not p.playing and not (p.stream as AudioStreamOggVorbis).loop):
 			p.queue_free(); _bgm = {}
-	for b in _bgm_fading.duplicate():
-		b.gain = maxf(0.0, b.gain - b.out_rate * dt)
-		(b.p as AudioStreamPlayer).volume_db = linear_to_db(maxf(b.gain, 1e-6))
-		if b.gain <= 0:
-			(b.p as AudioStreamPlayer).queue_free(); _bgm_fading.erase(b)
 	if not _voice.is_empty() and _voice.rate > 0:
 		_voice.gain = minf(1.0, _voice.gain + _voice.rate * dt)
 		(_voice.p as AudioStreamPlayer).volume_db = linear_to_db(maxf(_voice.gain, 1e-6))
