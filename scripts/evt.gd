@@ -515,7 +515,7 @@ func _exec() -> int:
 			# bhDefModelSet: node v2 of the model of v0/v1 (0 player, 1 enemy, 2 object) hidden (v3 0, evalflags 8) / shown
 			if host.has_method("def_model"): host.def_model(_b(1), _b(2), _b(3), _b(4) == 0)
 		0x57: pass  # bhFixEventCamPly (gm_flg 0x20000: keep st 1 at the event end — the port ends the event camera only by CAMSET 1)
-		0xa1: pass  # bhTrapDamageSet (plp->stflg 0x1000 on v0 == 0; its use is in the undecompiled player code)
+		0xa1: host.trap_damage(_b(1) == 0)  # bhTrapDamageSet: plp->stflg 0x1000 on v0 == 0, else off
 		0x5c:
 			# bhMesDispEndSet: the message is taken off at once (mes_ct/tim/fls/sel = 0, st &= ~0x200), no close flags
 			mes_sel = 0; st &= ~0x200 & M32; pending_msg = null
@@ -739,7 +739,11 @@ func _common(t: Task) -> void:
 			q.ang = [a[0] + sg.call(t.adda[0], t.ba[0]), a[1] + sg.call(t.adda[1], t.ba[1]), a[2] + sg.call(t.adda[2], t.ba[2])]
 		0x18, 0x22, 0x19, 0x23:
 			w.add = MTN_ADD.get(_b(2), 0x10000)
-			if sub == 0x18 or sub == 0x22:
+			if w.kind == 0:
+				# the player (pl_smove08, mode0 7 / mode2 8 with b3 0): 0x18 = room bank (rmthp) motion mode1, 0x19 = player bank
+				# (plmthp) where mode1 42 is PlMtnAct[..][0] = the stance; ct0 0 -> played once, then held
+				if _b(3) == 0: host.player_motion(sub == 0x18 or sub == 0x22, _b(4), w.add, 0 if _b(7) == 6 else 8)
+			elif sub == 0x18 or sub == 0x22:
 				w.paused = false; w.mtn_kind = _b(3); w.mtn = _b(4); w.frm = 0
 				if sub == 0x22: w.frm = _u16(8) << 16
 			elif _b(3) == 1:

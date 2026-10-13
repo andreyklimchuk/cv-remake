@@ -208,6 +208,7 @@ func enter_room(id: String, pos: int, at: Variant = null, fade := true, min_ms :
 	for n in actors: n.queue_free()
 	for c in chars: c.m.queue_free()
 	chars = []; zombies = []; dogs = []; npcs = []; actors = []; grab = null; dog_bite = null; dog_hurt = 0.0
+	_trap_dmg = false   # bhInitRoomChangePlayer: plp->stflg &= 0x78280000
 	# a grab / bite motion of the previous room must not carry over
 	if player.sync != null: player.play_sync(null)
 	# player position first (the scripts read it)
@@ -225,6 +226,7 @@ func enter_room(id: String, pos: int, at: Variant = null, fade := true, min_ms :
 	vm.flr = (r.data.get("areas", []) as Array).map(EvtVM.atr_from)
 	vm.posp = r.data.get("spawns", []); vm.evt_posno = [0, 0, 0, 0, 0, 0, 0, 0]
 	_init_boxes(r)
+	_init_statues(r)
 	_sync_player_work()
 	cam.forced = -1; _wall_sig = ""; _hid_sig = ""
 	audio.room(vm.stg, vm.room, vm.rcase); audio.listener = cam.cam
@@ -261,6 +263,88 @@ func _init_boxes(r: Room) -> void:
 		var ex: String = o.get("ex", "000000000000")
 		if not (String(o.flags).hex_to_int() & 1) or ex.substr(2, 2).hex_to_int() != 1 or not r.obj_meshes.has(i): continue
 		boxes.append(PushBox.new(i, r.obj_meshes[i], int(o.get("r3", 0)), ex.substr(0, 2).hex_to_int(), ex.substr(4, 2).hex_to_int(), r, vm.etc, vm.flr))
+
+## objitm.c bhObj007 (ETTY object type 7, rm_0150 statue): active while the object is raised (op->py >= 1.0 unit);
+## mode0 1: Claire touching the arm along the object's back (ay + 32768, at most 10 units) is held at plp->ar from it;
+## facing it (inner < -0.7, closer than 8.4 units) and walking forward for more than 5 frames starts rpsh (mode2 22)
+## with azp = ay + 16384 (mode0 2) or ay - 16384 (mode0 3), spd = the arm length; while Claire pushes (mode3 5) the
+## object turns by 182.04 * sin(frm * 819) BAMS per frame and places her; |ay| < 182 -> ay 0, mode3 6, ev[2].
+## Metres here (10 units = 1 m).
+var statues: Array = []
+func _init_statues(r: Room) -> void:
+	statues = []
+	var objs: Array = r.data.get("objects", [])
+	for i in objs.size():
+		var o: Dictionary = objs[i]
+		var ex: String = o.get("ex", "000000000000")
+		if not (String(o.flags).hex_to_int() & 1) or ex.substr(2, 2).hex_to_int() != 7 or not r.obj_meshes.has(i): continue
+		statues.append({"i": i, "node": r.obj_meshes[i], "mode0": 0, "ct0": 0, "spd": 0.0, "ay": 0})
+
+static func _bsin(a: int) -> float: return sin(float(a & 0xFFFF) * TAU / 65536.0)
+static func _bcos(a: int) -> float: return cos(float(a & 0xFFFF) * TAU / 65536.0)
+
+func _statue_frame() -> void:
+	for st in statues:
+		var n: Node3D = st.node
+		if n.position.y < 0.1 or int(st.mode0) == 4: continue
+		var c := Vector2(n.position.x, n.position.z)
+		var pp := Vector2(player.position.x, player.position.z)
+		var ar := Player.AR
+		match int(st.mode0):
+			0:
+				st.ct0 = 0; st.mode0 = 1
+			1:
+				var ay := int(round(n.rotation.y / TAU * 65536.0)) & 0xFFFF
+				st.ay = ay
+				var v := Vector2(-_bsin(ay + 32768), -_bcos(ay + 32768))
+				var proj := c + v * (pp - c).dot(v)
+				var ps2 := proj
+				var len0 := (proj - c).length()
+				if len0 > 1.0:
+					len0 = 1.0; ps2 = c + v * 1.0
+				var len1 := (pp - c).length()
+				var inn := v.dot((pp - c).normalized())
+				var d2 := pp - ps2
+				var len2 := d2.length()
+				var u2 := d2.normalized()
+				if inn > 0 and len0 + ar >= len1 and len2 < ar and player.rp.is_empty() and player.psh.is_empty():
+					var np := ps2 + u2 * ar
+					player.position.x = np.x; player.position.z = np.y
+					var fw := Vector2(-sin(player.heading), -cos(player.heading))
+					if len0 < 0.84 and u2.dot(fw) < -0.7 and input.fwd and not player.frozen:
+						if player.state in ["walk", "run"]:
+							st.ct0 = int(st.ct0) + 1
+							if int(st.ct0) > 5:
+								var side := Vector2(-_bsin(ay + 16384), -_bcos(ay + 16384))
+								var azp := ay + 16384 if side.dot(fw) > 0 else ay - 16384
+								st.mode0 = 2 if side.dot(fw) > 0 else 3
+								st.spd = len0
+								player.start_rpsh(azp, room_id)
+					else:
+						st.ct0 = 0
+			2, 3:
+				var sg := 1 if int(st.mode0) == 2 else -1
+				if not player.rp.is_empty() and int(player.rp.m3) == 5:
+					if not input.fwd:
+						st.mode0 = 1; st.ct0 = 0; continue
+					var ay := int(st.ay)
+					ay = (ay - sg * (int(182.04445 * _bsin((int(player.rp.f) * 819) & 0x7FFF)) & 0xFFFF)) & 0xFFFF
+					st.ay = ay
+					n.rotation.y = _s16(ay) * TAU / 65536.0
+					player.heading = (_s16((ay + sg * 16384) & 0xFFFF)) * TAU / 65536.0
+					var p0 := c - float(st.spd) * Vector2(_bsin(ay + 32768), _bcos(ay + 32768))
+					var np := p0 - ar * Vector2(_bsin(ay - sg * 16384), _bcos(ay - sg * 16384))
+					player.position.x = np.x; player.position.z = np.y
+					if absi(_s16(ay)) < 182:
+						st.ay = 0; n.rotation.y = 0.0
+						player.rp.m3 = 6; st.mode0 = 4
+						vm.set_flag(1, 2, true)
+				elif player.rp.is_empty():
+					st.mode0 = 1; st.ct0 = 0
+
+static func _s16(a: int) -> int:
+	a &= 0xFFFF
+	return a - 0x10000 if a >= 0x8000 else a
 
 ## one frame of the boxes (bhObj001 mode0 1); a stop request ends the push (plp->mode3 = 6)
 func _box_frame() -> void:
@@ -369,6 +453,46 @@ func _sync_player_work() -> void:
 		w.px = player.position.x; w.py = player.position.y; w.pz = player.position.z
 	if not w.ang_set:
 		w.ay = player.heading
+
+var _trap_dmg := false
+var _dm_ct := 0
+func trap_damage(on: bool) -> void:
+	_trap_dmg = on
+
+## Common_controll 0x18 / 0x19 on the player work: room motion rNN (rmt of the room, mtn_add speed) or the stance (42)
+func player_motion(room_bank: bool, no: int, add: int, hokan: int) -> void:
+	if room_bank:
+		var c := "%s_r%s" % [room_id, U.pad(no, 2)]   # glb clip rm_XXXX/rNN (the importer turns "/" into "_")
+		if not player.ap.has_animation(c): return
+		player.play_sync(c, false, hokan / 30.0); player.ap.speed_scale = add / 65536.0
+		# rm_1050 r00-r02 are authored in a frame of their own: root b00 at a constant ~(5.2, 0, 1.9) m, hips b01 turned
+		# ~170 deg. Applied to the work placement (0.5, 1.2, -90 deg) that puts Claire outside the room, away from camera
+		# cut 4 (chosen by the work position). Approximation: the clip's first-frame frame is mapped onto the work placement
+		# (b00 keys re-framed once, so the hokan blend from the stance stays in place).
+		var a := player.ap.get_animation(c)
+		if not a.has_meta("reframed"):
+			a.set_meta("reframed", true)
+			var t0 := Vector3.ZERO; var yaw0 := 0.0; var pt := -1; var rt := -1
+			for i in a.get_track_count():
+				var tp := String(a.track_get_path(i))
+				if a.track_get_type(i) == Animation.TYPE_POSITION_3D and tp.ends_with("b00"): pt = i; t0 = a.position_track_interpolate(i, 0.0)
+				if a.track_get_type(i) == Animation.TYPE_ROTATION_3D and tp.ends_with("b00"): rt = i
+				if a.track_get_type(i) == Animation.TYPE_ROTATION_3D and tp.ends_with("b01"):
+					var z := Basis(a.rotation_track_interpolate(i, 0.0)) * Vector3(0, 0, 1)
+					yaw0 = atan2(z.x, z.z)
+			if pt >= 0 and Vector2(t0.x, t0.z).length() > 1.0:
+				var q := Quaternion(Vector3.UP, -yaw0)
+				if rt < 0:
+					# the importer drops b00's constant identity rotation track
+					rt = a.add_track(Animation.TYPE_ROTATION_3D); a.track_set_path(rt, a.track_get_path(pt))
+					a.rotation_track_insert_key(rt, 0.0, Quaternion.IDENTITY)
+				for k in a.track_get_key_count(pt):
+					var v: Vector3 = a.track_get_key_value(pt, k)
+					a.track_set_key_value(pt, k, q * Vector3(v.x - t0.x, v.y, v.z - t0.z))
+				for k in a.track_get_key_count(rt):
+					a.track_set_key_value(rt, k, q * (a.track_get_key_value(rt, k) as Quaternion))
+	elif no == 42:
+		player.sync = null; player.play("idle", hokan / 30.0)
 
 static func _set_rot(o: Node3D, w: EvtVM.Work) -> void:
 	o.rotation_order = EULER_ORDER_ZYX
@@ -815,8 +939,15 @@ func _node_motion(ap: AnimationPlayer, w: EvtVM.Work) -> void:
 ## one 30 Hz frame of the event system
 func _evt_frame() -> void:
 	_sync_player_work()
+	# bhControlPlayer: stflg 0x1000 (bhTrapDamageSet, rm_1050 heat) -> hp - 1 every 31 frames, never below 0
+	if _trap_dmg:
+		_dm_ct += 1
+		if _dm_ct > 30:
+			_dm_ct = 0
+			if player.hp > 0: player.hp -= 1
 	_floor_check()
 	if player.psh.is_empty(): _box_frame()
+	_statue_frame()
 	vm.tick()
 	if _st8_frames > 0:
 		_st8_frames -= 1

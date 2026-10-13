@@ -340,6 +340,7 @@ func _e021(op: O) -> void:
 
 ## draw the 2D layer (640x480 coordinates scaled to the stage)
 func draw_2d() -> void:
+	_draw_warp()
 	var sz := layer.size
 	if sz.x <= 0:
 		sz = Vector2(1024, 768)
@@ -390,7 +391,7 @@ func update(camera: Camera3D) -> void:
 	for op in _fnc:
 		if op.fn == 107:
 			for e in op.er: e.ay += 1
-	_trs.clear(); _opq.clear(); _fnc.clear(); _trs2d.clear()
+	_trs.clear(); _opq.clear(); _fnc.clear(); _trs2d.clear(); _warp_on = false
 	for i in 512:
 		var op := eff[i]
 		if not (op.flg & 1) or (op.stflg & 0x1000000):
@@ -430,6 +431,7 @@ func _run(op: O) -> void:
 		126: _e126(op)
 		249: _e249(op)
 		109: _e109(op)
+		110: _e110(op)
 		127: _e127(op)
 		128: _e128(op)
 		64: op.flg = 0   # bhEffDmy (30..84 except 85)
@@ -653,6 +655,91 @@ func _e126(op: O) -> void:
 	_uv4(op, q[0], q[1], q[0] + q[2], q[1] + q[2])
 	op.ct0 += 1
 	_trs.append(op)
+
+## bhEff110 (effsub1.c): heat haze over the whole screen (rm_1050). The frame is rendered to a texture (sys->gm_flg 0x100) and
+## drawn as a 16 x 16 vertex grid over 640 x 480 (sys->rpb, uv = rest position): row y is stretched by |spd sin ct1|, vertex (x, y)
+## by |spd cos ct2| vertically (ct1 = ct0 + y 4096, ct2 = ct1 + x 4096, ct0 + 256 per frame), offset colour red spd * 2.
+## Type 0: mode1 1 -> spd 0 + 0.25 per frame up to 20; mode1 2 -> spd - 0.2 down to 0; mode1 3 -> off; mode1 4 -> removed.
+## Type 1 uses sx / sy. (The njSetAspect 1.25 of the render-to-texture pass is not reproduced.)
+var _warp := PackedVector2Array()
+var _warp_col := 0.0
+var _warp_on := false
+var _warp_el: Control = null
+func _e110(op: O) -> void:
+	op.flg |= 0x1000000
+	match op.mode1:
+		1: op.mode1 = 0; op.mode0 = 10
+		2: op.mode1 = 0; op.mode0 = 12
+		3: op.mode1 = 0; op.mode0 = 1
+		4: op.mode1 = 0; op.flg = 0; return
+	match op.mode0:
+		0: op.mode0 = 1
+		10:
+			if op.type == 0: op.spd = 0; op.mode0 = 11
+			elif op.type == 1: op.mode0 = 14
+			_warp_col = 0.0
+		11, 12, 13, 14:
+			_warp_on = true
+			var ax := op.spd if op.mode0 != 14 else op.sx
+			var ay := op.spd if op.mode0 != 14 else op.sy
+			_warp.resize(256)
+			op.ct1 = op.ct0
+			for y in 16:
+				op.ct2 = op.ct1
+				var xn := absf(ax * _nsin(op.ct1))
+				var px := -xn; xn = 640.0 + 2.0 * xn
+				for x in 16:
+					var yn := absf(ay * _ncos(op.ct2))
+					var py := -yn; yn = 480.0 + 2.0 * yn
+					_warp[y * 16 + x] = Vector2(px + x * (xn / 15.0), py + y * (yn / 15.0))
+					op.ct2 = (op.ct2 + 4096) & 0xFFFF
+				op.ct1 = (op.ct1 + 4096) & 0xFFFF
+			op.ct0 = (op.ct0 + 256) & 0xFFFF
+			if op.mode0 == 11:
+				if op.spd < 20.0:
+					op.spd += 0.25; _warp_col = float(int(op.spd) * 2)
+				else: op.mode0 = 13
+			elif op.mode0 == 12:
+				op.spd -= 0.2
+				if op.spd < 0: op.mode0 = 13; op.spd = 0; op.ct3 = 4
+				_warp_col = float(int(op.spd) * 2)
+
+const _WARP_SH := """shader_type canvas_item;
+uniform sampler2D scr : hint_screen_texture, filter_linear;
+uniform vec4 rect;
+uniform float red;
+void fragment() { vec3 c = textureLod(scr, rect.xy + UV * rect.zw, 0.0).rgb; COLOR = vec4(min(c + vec3(red, 0.0, 0.0), vec3(1.0)), 1.0); }"""
+
+func _draw_warp() -> void:
+	if not _warp_on:
+		if _warp_el: _warp_el.visible = false
+		return
+	if _warp_el == null:
+		_warp_el = Control.new(); _warp_el.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var sh := Shader.new(); sh.code = _WARP_SH
+		var m := ShaderMaterial.new(); m.shader = sh; _warp_el.material = m
+		_warp_el.draw.connect(_warp_draw)
+		layer.add_child(_warp_el)
+	layer.move_child(_warp_el, 0)
+	_warp_el.size = layer.size; _warp_el.visible = true
+	var vp := layer.get_viewport_rect().size
+	var xf := layer.get_global_transform_with_canvas()
+	var p0: Vector2 = xf * Vector2.ZERO; var p1: Vector2 = xf * layer.size
+	var m: ShaderMaterial = _warp_el.material
+	m.set_shader_parameter("rect", Vector4(p0.x / vp.x, p0.y / vp.y, (p1.x - p0.x) / vp.x, (p1.y - p0.y) / vp.y))
+	m.set_shader_parameter("red", _warp_col / 255.0)
+	_warp_el.queue_redraw()
+
+func _warp_draw() -> void:
+	if _warp.size() < 256: return
+	var k := layer.size / Vector2(640, 480)
+	for y in 15:
+		for x in 15:
+			var i := y * 16 + x
+			var pts := PackedVector2Array([_warp[i] * k, _warp[i + 1] * k, _warp[i + 17] * k, _warp[i + 16] * k])
+			var uv := PackedVector2Array([Vector2(x / 15.0, y / 15.0), Vector2((x + 1) / 15.0, y / 15.0),
+					Vector2((x + 1) / 15.0, (y + 1) / 15.0), Vector2(x / 15.0, (y + 1) / 15.0)])
+			_warp_el.draw_polygon(pts, PackedColorArray([Color.WHITE]), uv)
 
 ## bhEff127 (effsub1.c): poison gas of rm_0150. Type 0: a vent puffing a bhEff128 ring every 16 frames (growing to 4);
 ## type 1: the gas layer rising 0.018 per frame up to 17 (sys->gas_py) with puffs every 8 frames, kills the player once

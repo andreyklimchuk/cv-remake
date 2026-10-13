@@ -247,7 +247,7 @@ func forward() -> Vector3:
 func place(x: float, y: float, z: float, h: float) -> void:
 	position = Vector3(x, y, z); heading = h; rotation.y = h; _last_pos = position; _last_head = h
 	if not kdn.is_empty() and on_kaidan_end.is_valid(): on_kaidan_end.call(kdn.a)
-	kdn = {}; psh = {}; dn = {}; ps.push = false; ps.ct = 0; ps.box = null; _hold_y = false; _fix_t = -1.0
+	kdn = {}; psh = {}; dn = {}; rp = {}; ps.push = false; ps.ct = 0; ps.box = null; _hold_y = false; _fix_t = -1.0
 	if model: model.position = Vector3.ZERO
 	hair_reset()
 
@@ -279,6 +279,14 @@ func update(dt: float, inp: GameInput, room: Room, cam_yaw: Variant = null) -> v
 			_kdn_acc = minf(_kdn_acc + dt, 0.25)
 			while _kdn_acc >= 1.0 / 30.0 and not kdn.is_empty():
 				_kdn_acc -= 1.0 / 30.0; _kdn_tick(room)
+		rotation.y = heading
+		_update_tail(dt); _update_lighter(dt); _update_hands(); return
+	if not rp.is_empty() and sync == null:
+		state = "rpsh"; aiming = false; _k_state = "none"
+		if not frozen:
+			_kdn_acc = minf(_kdn_acc + dt, 0.25)
+			while _kdn_acc >= 1.0 / 30.0 and not rp.is_empty():
+				_kdn_acc -= 1.0 / 30.0; _rp_tick(inp)
 		rotation.y = heading
 		_update_tail(dt); _update_lighter(dt); _update_hands(); return
 	if (not psh.is_empty() or not dn.is_empty()) and sync == null:
@@ -507,7 +515,7 @@ func _quad_turn(k: Dictionary) -> bool:
 	var bams := _bams_of(heading)
 	match int(k.m3):
 		0:
-			k.ayp = (bams + 8192) & 0xC000
+			k.ayp = int(k.azp) if k.has("azp") else (bams + 8192) & 0xC000
 			_play_id(KDN_TURN[lv], 4.0 / 30.0, true)
 			k.m3 = 2 if _s16(int(k.ayp) - _s16(bams)) >= 0 else 1
 			ap.speed_scale = 1.0 if int(k.m3) == 2 else -1.0
@@ -579,6 +587,53 @@ func _psh_tick(room: Room, inp: GameInput) -> void:
 	position = room.resolve_pl(position + forward() * spd, AR, room.floor_num(position.y), AH, false, ps)
 	var y: Variant = room.floor_at(position.x, position.z, position.y)
 	if y != null and absf(y - position.y) < 0.5 and not dansa: position.y = y
+
+## ---- lever statue: bhCPM2_act_rpsh (mode2 22, started by objitm.c bhObj007 with azp = the object's ay +- 16384): turn to
+## azp (PlMtnAct[1], 7.2 deg * rtspd per frame), room motion 0 (sys->rmthp: into the pose, hokan 4), at its last frame
+## room motion 1 looped (SE 530 + vibration at each last frame) while forward is held - the object turns and places
+## Claire meanwhile; forward released (or the object done: mode3 6) -> motion 0 backwards from its end, then mode0 1
+var rp := {}
+var rp_room := ""
+func start_rpsh(azp: int, room_id: String) -> void:
+	rp = {"m3": 0, "azp": azp & 0xFFFF, "f": 0}; rp_room = room_id
+	_kdn_acc = 0.0
+
+func _rp_tick(inp: GameInput) -> void:
+	var k := rp
+	var c0 := "%s_r00" % rp_room
+	var c1 := "%s_r01" % rp_room
+	match int(k.m3):
+		0, 1, 2:
+			_quad_turn(k)
+		3:
+			_play_id(c0, 4.0 / 30.0, false, 1.0, true)
+			heading = _bams(int(k.azp))
+			k.m3 = 4
+		4:
+			ap.advance(1.0 / 30.0)
+			if not ap.has_animation(c0) or ap.current_animation_position >= ap.get_animation(c0).length - 0.001:
+				_play_id(c1, 4.0 / 30.0, true, 1.0, true)
+				k.f = 0; k.m3 = 5
+				if on_action_se.is_valid(): on_action_se.call(530)
+		5:
+			var n := roundi(ap.get_animation(c1).length * 30.0) + 1 if ap.has_animation(c1) else 40
+			if int(k.f) >= n - 1 and on_action_se.is_valid(): on_action_se.call(530)
+			if not inp.fwd:
+				k.m3 = 6
+			else:
+				ap.advance(1.0 / 30.0)
+				k.f = (int(k.f) + 1) % n
+		6:
+			_play_id(c0, 4.0 / 30.0, false, -1.0, true)
+			if ap.has_animation(c0): ap.seek(ap.get_animation(c0).length, true)
+			k.m3 = 7
+		7:
+			ap.advance(1.0 / 30.0)
+			if ap.current_animation_position <= 0.001:
+				rp = {}
+				_play_id(KDN_STAND[dmlvl()], 4.0 / 30.0, true, 1.0, true)
+				cur = KDN_STAND[dmlvl()]
+				state = "idle"
 
 ## ---- box climb: bhCheckExmAtari ETC type 2 -> mode2 16 (dnu, up: motion 21 = clip m16, steps at frames 15 / 29,
 ## py += 9) / 17 (dnd, down: motion 22 = m17, frames 13 / 16, py -= 9); the floor number changes at mode3 4

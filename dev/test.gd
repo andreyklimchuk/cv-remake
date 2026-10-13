@@ -69,6 +69,7 @@ func _ready() -> void:
 		"admin": await admin_test()
 		"kaidan": await kaidan_test()
 		"kaidan2": await kaidan2_test()
+		"statue": await statue_test()
 		"push": await push_test()
 		"push2": await push2_test()
 	print("DONE")
@@ -830,6 +831,16 @@ func tour_test() -> void:
 		if OS.get_environment("WZ") != "":
 			print("   hp %d zombies %s dogs %s" % [P.hp, " ".join(g.zombies.map(func(z): return "%d:%.2f,%.2f m%d/%d" % [z.index, z.position.x, z.position.z, z.mode0, z.mode1])), " ".join(g.dogs.map(func(z): return "d%d:%.2f,%.2f" % [z.index, z.position.x, z.position.z]))])
 	await wait_free(); print("IN ", stt()); list_etc()
+	# EVT=task:evt -> start a room event directly, then EW seconds of state (player clip, hp, effect 0)
+	if OS.get_environment("EVT") != "":
+		var te := OS.get_environment("EVT").split(":")
+		vm.evt_on(int(te[0]), int(te[1]))
+		for k in int(float(OS.get_environment("EW")) * 2):
+			await sim(0.5)
+			if str(k) in OS.get_environment("ESNAP").split(",", false): await snap("evt_%d" % k)
+			var e0 = g.fx.eff[0]
+			print("head %s " % str(P.bone_pos("b05")), "E%d clip %s sync %s spd %.2f hp %d trap %s eff0 id %d m0 %d spd %.2f flg %x st %x m1 %d warp %s col %.0f %s" % [k, P.cur, str(P.sync), P.ap.speed_scale, P.hp, g._trap_dmg, e0.id, e0.mode0, e0.spd, e0.flg, e0.stflg, e0.mode1, g.fx._warp_on, g.fx._warp_col, stt()])
+	if OS.get_environment("SHOWF") != "": for n in OS.get_environment("SHOWF").split(",", false): print("flag ev ", n, " = ", vm.flag(1, int(n)))
 	for e in a.slice(2):
 		var i := int(e)
 		if i >= vm.etc.size(): continue
@@ -1006,3 +1017,19 @@ func fire_test() -> void:
 			g.on_fire(P.position + Vector3(0, 1.2, 0) + fwd * 0.3, fwd, 0)
 			print("dist %.1f off %5.1f hit %s hittable %s z %s cap %s P %s" % [dist, off, z.hp < hp0, z.hittable, str(z.position), str(z.gun_capsule()), str(P.position)])
 			z.hp = 100.0
+
+## -- statue: rm_0150 bhObj007 (raised by hand here), Claire pushes its arm with forward held
+func statue_test() -> void:
+	await g.enter_room("rm_0150", 0, null, false)
+	await wait_free()
+	print("statues ", g.statues.size())
+	if g.statues.is_empty(): return
+	var st: Dictionary = g.statues[0]
+	var n: Node3D = st.node
+	n.position.y = 1.0
+	print("statue at ", n.position, " rot ", n.rotation.y)
+	var sx := float(OS.get_environment("SX")) if OS.get_environment("SX") != "" else 0.42
+	P.place(n.position.x + sx, 0.0, n.position.z - 0.6, PI / 2 if sx > 0 else -PI / 2)
+	for k in int(float(OS.get_environment("SECS")) * 4) if OS.get_environment("SECS") != "" else 40:
+		await sim(0.25, [] if OS.get_environment("REL") != "" and k >= int(OS.get_environment("REL")) else ["KeyW"])
+		print("t%d st %s rp %s f %s statue m%d ay %d pl %.2f,%.2f h %.1f ev2 %s clip %s" % [k, P.state, str(P.rp.get("m3", "-")), str(P.rp.get("f", "-")), st.mode0, g._s16(int(st.ay)), P.position.x, P.position.z, rad_to_deg(P.heading), vm.flag(1, 2), P.cur])
